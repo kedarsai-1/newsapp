@@ -40,6 +40,36 @@ const getMailer = () => {
   return _mailer;
 };
 
+const getEmailProvider = () =>
+  (process.env.EMAIL_PROVIDER || 'smtp').trim().toLowerCase();
+
+const sendViaResend = async ({ to, subject, html }) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL || process.env.SMTP_USER;
+
+  if (!apiKey) throw new Error('Resend not configured: RESEND_API_KEY is missing');
+  if (!from) throw new Error('Resend not configured: RESEND_FROM_EMAIL is missing');
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `NewsNow <${from}>`,
+      to: [to],
+      subject,
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend send failed: status=${res.status} body=${body}`);
+  }
+};
+
 // ── SMS via Twilio ─────────────────────────────────────────────────────────────
 
 let _twilioClient;
@@ -80,7 +110,13 @@ const sendEmailOtp = async (email, code, purpose) => {
     </div>
   `;
 
+  const provider = getEmailProvider();
   try {
+    if (provider === 'resend') {
+      await sendViaResend({ to: email, subject, html });
+      return;
+    }
+
     await getMailer().sendMail({
       from: `"NewsNow" <${process.env.SMTP_USER}>`,
       to: email,
@@ -90,6 +126,7 @@ const sendEmailOtp = async (email, code, purpose) => {
   } catch (err) {
     // Include transport metadata for easier production debugging.
     const details = [
+      `provider=${provider}`,
       `code=${err.code || 'n/a'}`,
       `command=${err.command || 'n/a'}`,
       `responseCode=${err.responseCode || 'n/a'}`,

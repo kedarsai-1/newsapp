@@ -18,10 +18,20 @@ const generateCode = () => {
 let _mailer;
 const getMailer = () => {
   if (_mailer) return _mailer;
+  const secure = String(process.env.SMTP_SECURE || 'false') === 'true';
   _mailer = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
+    secure,
+    // Render/cloud can occasionally have slow SMTP handshakes; keep sane timeouts.
+    connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || '20000'),
+    greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || '15000'),
+    socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || '30000'),
+    family: 4, // Prefer IPv4 for providers with flaky IPv6 routing.
+    requireTLS: !secure,
+    tls: {
+      minVersion: 'TLSv1.2',
+    },
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
@@ -70,12 +80,23 @@ const sendEmailOtp = async (email, code, purpose) => {
     </div>
   `;
 
-  await getMailer().sendMail({
-    from: `"NewsNow" <${process.env.SMTP_USER}>`,
-    to: email,
-    subject,
-    html,
-  });
+  try {
+    await getMailer().sendMail({
+      from: `"NewsNow" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject,
+      html,
+    });
+  } catch (err) {
+    // Include transport metadata for easier production debugging.
+    const details = [
+      `code=${err.code || 'n/a'}`,
+      `command=${err.command || 'n/a'}`,
+      `responseCode=${err.responseCode || 'n/a'}`,
+      `message=${err.message || 'unknown'}`,
+    ].join(' | ');
+    throw new Error(`Email OTP send failed: ${details}`);
+  }
 };
 
 // ── Send OTP SMS via Twilio ────────────────────────────────────────────────────

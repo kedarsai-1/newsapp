@@ -1,6 +1,55 @@
 const NewsPost = require('../models/NewsPost');
 const User = require('../models/User');
 const Comment = require('../models/Comment');
+const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
+const { extractReadableArticle } = require('../services/articleExtractionService');
+
+function cleanTextForClient(input) {
+  return String(input || '')
+    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sanitizeStoryTextFields(post) {
+  const o = post && typeof post.toObject === 'function' ? post.toObject() : post;
+  if (!o || typeof o !== 'object') return o;
+  if (typeof o.body === 'string') {
+    o.body = cleanTextForClient(stripNewsWireTruncationMarkers(o.body));
+  }
+  if (typeof o.summary === 'string') {
+    o.summary = cleanTextForClient(stripNewsWireTruncationMarkers(o.summary));
+  }
+  return o;
+}
+
+// GET /api/news/extract?url=https://...
+// Extract readable content from publisher pages (best-effort).
+const extractArticle = async (req, res) => {
+  try {
+    const target = req.query.url;
+    if (!target || typeof target !== 'string') {
+      return res.status(400).json({ success: false, message: 'Missing url' });
+    }
+    const out = await extractReadableArticle(target, {
+      timeoutMs: process.env.EXTRACT_TIMEOUT_MS,
+      maxBytes: process.env.EXTRACT_MAX_BYTES,
+      cacheTtlMs: process.env.EXTRACT_CACHE_TTL_MS,
+    });
+    if (!out.success) {
+      return res.status(502).json(out);
+    }
+    return res.json(out);
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Extraction failed.' });
+  }
+};
 
 // GET /api/news/feed  — paginated, filterable by category and city
 const getFeed = async (req, res) => {
@@ -11,20 +60,101 @@ const getFeed = async (req, res) => {
       category,
       city,
       search,
+      language,
       breaking,
       featured,
+      days,
+      sourceTypes,
     } = req.query;
 
     const query = { status: 'approved' };
     if (category) query.category = category;
     if (city) query['location.city'] = new RegExp(city, 'i');
+
+    const langParam =
+      language && String(language).toLowerCase() !== 'all'
+        ? String(language).toLowerCase()
+        : null;
+    if (langParam && langParam !== 'en') {
+      query.language = langParam;
+    }
+
     if (breaking === 'true') query.isBreaking = true;
     if (featured === 'true') query.isFeatured = true;
-    if (search) {
-      query.$or = [
-        { title: new RegExp(search, 'i') },
-        { body: new RegExp(search, 'i') },
-        { tags: new RegExp(search, 'i') },
+
+    // Restrict feed to specific sources (e.g. NewsAPI + reporter/manual).
+    // Example: ?sourceTypes=api,manual
+    if (sourceTypes) {
+      const allowed = new Set(['api', 'manual', 'rss', 'html']);
+      const list = String(sourceTypes)
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .filter((s) => allowed.has(s));
+      if (list.length) {
+        // Treat missing/null sourceType as "manual" (older docs may not have it).
+        if (list.includes('manual')) {
+          query.$and = [
+            ...(query.$and || []),
+            {
+              $or: [
+                { sourceType: { $in: list } },
+                { sourceType: { $exists: false } },
+                { sourceType: null },
+              ],
+            },
+          ];
+        } else {
+          query.sourceType = { $in: list };
+        }
+      }
+    }
+
+    const searchOr = search
+      ? [
+          { title: new RegExp(search, 'i') },
+          { body: new RegExp(search, 'i') },
+          { tags: new RegExp(search, 'i') },
+        ]
+      : null;
+
+    const langEnOr =
+      langParam === 'en'
+        ? [
+            { language: 'en' },
+            { language: { $exists: false } },
+            { language: null },
+          ]
+        : null;
+
+    if (searchOr && langEnOr) {
+      query.$and = [{ $or: searchOr }, { $or: langEnOr }];
+    } else if (searchOr) {
+      query.$or = searchOr;
+    } else if (langEnOr) {
+      query.$or = langEnOr;
+    }
+
+    // Optional freshness window.
+    // IMPORTANT: For "manual" posts we typically want to keep them visible even if older.
+    // So when days is set, apply cutoff only to non-manual sources (e.g. NewsAPI).
+    const daysNum = Number(days);
+    if (Number.isFinite(daysNum) && daysNum > 0) {
+      const cutoff = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000);
+      query.$and = [
+        ...(query.$and || []),
+        {
+          $or: [
+            // Manual (reporter) posts: no cutoff.
+            { sourceType: 'manual' },
+            { sourceType: { $exists: false } },
+            { sourceType: null },
+            // Ingested sources: use published time when available, otherwise createdAt.
+            { sourcePublishedAt: { $gte: cutoff } },
+            { sourcePublishedAt: null, createdAt: { $gte: cutoff } },
+            { sourcePublishedAt: { $exists: false }, createdAt: { $gte: cutoff } },
+          ],
+        },
       ];
     }
 
@@ -35,7 +165,8 @@ const getFeed = async (req, res) => {
       .populate('reporter', 'name avatar')
       .populate('category', 'name slug icon color')
       .select('-likedBy -rejectionReason')
-      .sort({ createdAt: -1 })
+      // Prefer actual article publish time; fall back to insert time.
+      .sort({ sourcePublishedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -44,7 +175,7 @@ const getFeed = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      posts,
+      posts: posts.map(sanitizeStoryTextFields),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -63,7 +194,7 @@ const getPost = async (req, res) => {
     // Increment view count (fire and forget)
     NewsPost.findByIdAndUpdate(post._id, { $inc: { views: 1 } }).exec();
 
-    res.json({ success: true, post });
+    res.json({ success: true, post: sanitizeStoryTextFields(post) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -72,6 +203,9 @@ const getPost = async (req, res) => {
 // POST /api/news/:id/like
 const toggleLike = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Login required to like posts.' });
+    }
     const post = await NewsPost.findById(req.params.id);
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
@@ -96,6 +230,9 @@ const toggleLike = async (req, res) => {
 // POST /api/news/:id/bookmark
 const toggleBookmark = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Login required to bookmark posts.' });
+    }
     const user = req.user;
     const postId = req.params.id;
     const isBookmarked = user.bookmarks.includes(postId);
@@ -115,6 +252,9 @@ const toggleBookmark = async (req, res) => {
 // GET /api/news/bookmarks — user's saved posts
 const getBookmarks = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.json({ success: true, bookmarks: [] });
+    }
     const user = await User.findById(req.user._id)
       .populate({
         path: 'bookmarks',
@@ -125,7 +265,11 @@ const getBookmarks = async (req, res) => {
         match: { status: 'approved' },
       });
 
-    res.json({ success: true, bookmarks: user.bookmarks });
+    const marks = user.bookmarks || [];
+    res.json({
+      success: true,
+      bookmarks: marks.filter(Boolean).map(sanitizeStoryTextFields),
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -147,6 +291,9 @@ const getComments = async (req, res) => {
 // POST /api/news/:id/comments
 const addComment = async (req, res) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Login required to comment.' });
+    }
     const { text } = req.body;
     if (!text) return res.status(400).json({ success: false, message: 'Comment text required.' });
 
@@ -163,4 +310,114 @@ const addComment = async (req, res) => {
   }
 };
 
-module.exports = { getFeed, getPost, toggleLike, toggleBookmark, getBookmarks, getComments, addComment };
+/** Public image proxy so the app can show hotlinked thumbnails (many sites block non-browser clients). */
+const getProxyImage = async (req, res) => {
+  const target = req.query.url;
+  const refererOpt = req.query.referer;
+  if (!target || typeof target !== 'string') {
+    return res.status(400).type('text/plain').send('Missing url');
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(target);
+  } catch {
+    return res.status(400).type('text/plain').send('Invalid url');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    return res.status(400).type('text/plain').send('Invalid scheme');
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === 'localhost'
+    || host.endsWith('.local')
+    || host === 'metadata.google.internal'
+    || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)
+  ) {
+    return res.status(403).type('text/plain').send('Forbidden host');
+  }
+
+  let referer = `${parsed.protocol}//${parsed.host}/`;
+  if (refererOpt && typeof refererOpt === 'string') {
+    try {
+      const r = new URL(refererOpt);
+      if (['http:', 'https:'].includes(r.protocol)) referer = r.href;
+    } catch { /* keep default */ }
+  }
+
+  const ac = new AbortController();
+  const to = setTimeout(() => ac.abort(), 15000);
+  try {
+    const baseHeaders = {
+      'User-Agent':
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+
+    // Attempt 1: include Referer (many CDNs require it)
+    let upstream = await fetch(parsed.href, {
+      redirect: 'follow',
+      signal: ac.signal,
+      headers: {
+        ...baseHeaders,
+        Referer: referer,
+        Origin: referer,
+      },
+    });
+
+    // Attempt 2: some hosts *block* unknown referers; retry without it for 403/401.
+    if (!upstream.ok && (upstream.status === 401 || upstream.status === 403)) {
+      upstream = await fetch(parsed.href, {
+        redirect: 'follow',
+        signal: ac.signal,
+        headers: baseHeaders,
+      });
+    }
+    clearTimeout(to);
+    if (!upstream.ok) {
+      return res
+        .status(502)
+        .type('text/plain')
+        .send(`Upstream failed (${upstream.status})`);
+    }
+
+    const ct = (upstream.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const looksImage = /\.(jpg|jpeg|png|gif|webp|avif|bmp)(\?|#|$)/i.test(parsed.pathname + parsed.search);
+    const okCt =
+      !ct
+      || ct.startsWith('image/')
+      || (looksImage && (ct === 'application/octet-stream' || ct === 'binary/octet-stream'));
+
+    if (!okCt) {
+      return res.status(502).type('text/plain').send('Not an image');
+    }
+
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    if (buf.length > 5 * 1024 * 1024) {
+      return res.status(413).type('text/plain').send('Too large');
+    }
+
+    const outType = ct && ct.startsWith('image/') ? ct : 'image/jpeg';
+    res.setHeader('Content-Type', outType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(buf);
+  } catch (e) {
+    clearTimeout(to);
+    return res.status(502).type('text/plain').send('Fetch failed');
+  }
+};
+
+module.exports = {
+  getFeed,
+  getPost,
+  getProxyImage,
+  extractArticle,
+  toggleLike,
+  toggleBookmark,
+  getBookmarks,
+  getComments,
+  addComment,
+};

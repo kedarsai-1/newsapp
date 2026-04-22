@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import '../constants.dart';
@@ -8,13 +9,21 @@ class SocketService {
 
   static bool get isConnected => _connected;
 
+  /// Real-time updates are optional. Flutter Web often hits CORS / websocket limits with remote APIs.
   static void connect() {
+    if (kIsWeb) {
+      debugPrint('Socket: skipped on web (use pull-to-refresh / manual refresh for new posts).');
+      return;
+    }
     if (_connected) return;
 
     _socket = IO.io(
       AppConstants.socketUrl,
       IO.OptionBuilder()
-          .setTransports(['websocket'])
+          .setTransports(['websocket', 'polling'])
+          .setTimeout(60000)
+          .setReconnectionAttempts(3)
+          .setReconnectionDelay(2000)
           .disableAutoConnect()
           .build(),
     );
@@ -22,7 +31,6 @@ class SocketService {
     _socket!.onConnect((_) {
       _connected = true;
       debugPrint('Socket connected');
-      // Join the general feed room
       _socket!.emit('join_feed', 'all');
     });
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../constants.dart';
@@ -7,23 +8,98 @@ class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
   List<Category> _categories = [];
   String? _selectedCategoryId;
+  String _selectedLanguage = 'all';
   String? _searchQuery;
   int _page = 1;
   bool _hasMore = true;
   bool _loading = false;
   bool _refreshing = false;
   String? _error;
+  String? _categoriesError;
 
   List<NewsPost> get posts => _posts;
   List<Category> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
+  String get selectedLanguage => _selectedLanguage;
   bool get loading => _loading;
   bool get refreshing => _refreshing;
   bool get hasMore => _hasMore;
   String? get error => _error;
+  String? get categoriesError => _categoriesError;
+  bool get prefsLoaded => _prefsLoaded;
+  bool get languageOnboardingCompleted => _languageOnboardingCompleted;
+
+  static const String _languagePrefKey = 'preferred_feed_language';
+  static const String _languageOnboardingKey = 'language_onboarding_completed';
+
+  bool _prefsLoaded = false;
+  bool _languageOnboardingCompleted = false;
+
+  Future<void> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    _selectedLanguage = prefs.getString(_languagePrefKey) ?? 'all';
+
+    final done = prefs.getBool(_languageOnboardingKey);
+    if (done != null) {
+      _languageOnboardingCompleted = done;
+    } else {
+      // Existing installs already chose a language via the old feed chips.
+      _languageOnboardingCompleted = prefs.containsKey(_languagePrefKey);
+      if (_languageOnboardingCompleted) {
+        await prefs.setBool(_languageOnboardingKey, true);
+      }
+    }
+
+    _prefsLoaded = true;
+    notifyListeners();
+  }
+
+  /// Call after user picks a language on the onboarding screen.
+  Future<void> completeLanguageOnboarding(String languageCode) async {
+    _selectedLanguage = languageCode;
+    _languageOnboardingCompleted = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languagePrefKey, languageCode);
+    await prefs.setBool(_languageOnboardingKey, true);
+    notifyListeners();
+    await refresh();
+  }
 
   Future<void> loadCategories() async {
-    _categories = await ApiService.getCategories();
+    try {
+      final data = await ApiService.getCategoriesJson();
+      if (data['success'] == true && data['categories'] is List) {
+        final list = data['categories'] as List;
+        final all = list
+            .map((c) => Category.fromJson(Map<String, dynamic>.from(c as Map)))
+            .toList();
+        // Keep only categories we can reliably populate/display right now.
+        const allowed = {
+          'general',
+          'politics',
+          'sports',
+          'technology',
+          'entertainment',
+          'business',
+          'health',
+          'local',
+        };
+        _categories = all.where((c) => allowed.contains(c.slug.toLowerCase())).toList()
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        if (_categories.isEmpty) {
+          _categoriesError =
+              'No categories in database. On the server run: npm run seed (or redeploy API so defaults are created).';
+        } else {
+          _categoriesError = null;
+        }
+      } else {
+        _categories = [];
+        _categoriesError = data['message']?.toString() ?? 'Could not load categories.';
+      }
+    } catch (e) {
+      _categories = [];
+      _categoriesError = 'Categories failed: $e';
+    }
     notifyListeners();
   }
 
@@ -33,6 +109,7 @@ class NewsProvider extends ChangeNotifier {
     _page = 1;
     _hasMore = true;
     notifyListeners();
+    await loadCategories();
     await _fetchPosts(reset: true);
     _refreshing = false;
     notifyListeners();
@@ -59,12 +136,28 @@ class NewsProvider extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> selectLanguage(String languageCode) async {
+    _selectedLanguage = languageCode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languagePrefKey, languageCode);
+    await refresh();
+  }
+
   Future<void> _fetchPosts({required bool reset}) async {
     try {
       final res = await ApiService.getFeed(
         page: reset ? 1 : _page,
         categoryId: _selectedCategoryId,
+        language: _selectedLanguage,
         search: _searchQuery,
+        // Keep the feed fresh by default (Way2News behavior).
+        // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).
+        // RSS items in your DB are ~15 days old, so 7 days hides everything.
+        // Once NewsAPI ingestion is confirmed working, you can tighten back to 7.
+        days: 30,
+        // Show reporter/manual + NewsAPI. Temporarily also allow RSS since your DB currently contains RSS
+        // and NewsAPI is returning apiKeyInvalid (so api feed would be empty otherwise).
+        sourceTypes: const ['api', 'manual', 'rss'],
       );
       if (res['success'] == true) {
         final fetched = (res['posts'] as List)

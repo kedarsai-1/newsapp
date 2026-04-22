@@ -46,12 +46,15 @@ dependencies:
   pull_to_refresh: ^2.0.0
   flutter_svg: ^2.0.9
   badges: ^3.1.2
+  url_launcher: ^6.3.0
 
   # Socket.io
   socket_io_client: ^2.0.3+1
 
   flutter_dotenv: ^5.1.0
   cupertino_icons: ^1.0.6
+  google_fonts: ^8.0.2
+  share_plus: ^10.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
+import '../theme/app_palette.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;
@@ -19,6 +20,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -28,22 +30,22 @@ class EmptyState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: p.inputFill,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 52, color: AppColors.textHint),
+              child: Icon(icon, size: 52, color: p.textHint),
             ),
             const SizedBox(height: 20),
             Text(
               title,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: p.textPrimary),
               textAlign: TextAlign.center,
             ),
             if (subtitle != null) ...[
               const SizedBox(height: 8),
               Text(
                 subtitle!,
-                style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                style: TextStyle(fontSize: 14, color: p.textSecondary, height: 1.5),
                 textAlign: TextAlign.center,
               ),
             ],

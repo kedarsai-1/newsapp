@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import '../models/models.dart';
 import '../constants.dart';
+import '../theme/app_palette.dart';
 
 // Full-screen photo viewer
 class PhotoViewer extends StatelessWidget {
@@ -27,7 +28,7 @@ class PhotoViewer extends StatelessWidget {
       body: Center(
         child: InteractiveViewer(
           child: CachedNetworkImage(
-            imageUrl: imageUrl,
+            imageUrl: AppConstants.resolveMediaUrl(imageUrl),
             fit: BoxFit.contain,
             placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Colors.white)),
             errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 60),
@@ -55,7 +56,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
+    _controller = VideoPlayerController.networkUrl(Uri.parse(AppConstants.resolveMediaUrl(widget.videoUrl)))
       ..initialize().then((_) {
         if (mounted) setState(() => _initialized = true);
       });
@@ -72,6 +73,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     if (!_initialized) {
       return Container(
         height: 220,
@@ -105,7 +107,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
           ),
           Positioned(
             bottom: 0, left: 0, right: 0,
-            child: VideoProgressIndicator(_controller, allowScrubbing: true, colors: const VideoProgressColors(playedColor: AppColors.primary)),
+            child: VideoProgressIndicator(_controller, allowScrubbing: true, colors: VideoProgressColors(playedColor: p.primary)),
           ),
         ],
       ),
@@ -125,9 +127,9 @@ class MediaGallery extends StatelessWidget {
     // Single image — full width
     if (media.length == 1 && media.first.isImage) {
       return GestureDetector(
-        onTap: () => PhotoViewer.show(context, media.first.url),
+        onTap: () => PhotoViewer.show(context, AppConstants.resolveMediaUrl(media.first.url)),
         child: CachedNetworkImage(
-          imageUrl: media.first.url,
+          imageUrl: AppConstants.resolveMediaUrl(media.first.url),
           width: double.infinity,
           height: 220,
           fit: BoxFit.cover,
@@ -137,7 +139,7 @@ class MediaGallery extends StatelessWidget {
 
     // Single video
     if (media.length == 1 && media.first.isVideo) {
-      return InlineVideoPlayer(videoUrl: media.first.url);
+      return InlineVideoPlayer(videoUrl: AppConstants.resolveMediaUrl(media.first.url));
     }
 
     // Multiple — horizontal scroll
@@ -148,23 +150,24 @@ class MediaGallery extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: media.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
+        itemBuilder: (context, i) {
           final item = media[i];
+          final p = context.palette;
           return GestureDetector(
             onTap: () {
-              if (item.isImage) PhotoViewer.show(context, item.url);
+              if (item.isImage) PhotoViewer.show(context, AppConstants.resolveMediaUrl(item.url));
             },
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Stack(
                 children: [
                   CachedNetworkImage(
-                    imageUrl: item.isVideo ? (item.thumbnail ?? item.url) : item.url,
+                    imageUrl: AppConstants.resolveMediaUrl(item.isVideo ? (item.thumbnail ?? item.url) : item.url),
                     width: 200,
                     height: 200,
                     fit: BoxFit.cover,
                     placeholder: (_, __) => Container(width: 200, height: 200, color: const Color(0xFFF0F0F0)),
-                    errorWidget: (_, __, ___) => Container(width: 200, height: 200, color: const Color(0xFFF0F0F0), child: const Icon(Icons.broken_image, color: AppColors.textHint)),
+                    errorWidget: (_, __, ___) => Container(width: 200, height: 200, color: const Color(0xFFF0F0F0), child: Icon(Icons.broken_image, color: p.textHint)),
                   ),
                   if (item.isVideo)
                     Positioned.fill(

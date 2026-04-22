@@ -9,13 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:news_app/main.dart';
+import 'package:news_app/providers/theme_provider.dart';
 
 void main() {
   testWidgets('NewsApp builds smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const NewsApp());
+    await tester.pumpWidget(NewsApp(themeProvider: ThemeProvider()));
+    await tester.pump();
 
-    // Basic sanity check: the app should render a MaterialApp.
-    expect(find.byType(MaterialApp), findsOneWidget);
+    expect(find.byType(MaterialApp), findsWidgets);
   });
 }

@@ -11,6 +11,9 @@ const {
   updateUserRole,
   toggleUserActive,
   createCategory,
+  runIngestionNow,
+  getIngestionRunStatus,
+  backfillThumbnails,
 } = require('../controllers/adminController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -33,5 +36,12 @@ router.put('/users/:id/toggle-active', toggleUserActive);
 
 // Category management
 router.post('/categories', createCategory);
+
+// News ingestion
+router.post('/ingestion/run', runIngestionNow);
+router.get('/ingestion/status', getIngestionRunStatus);
+
+// Media maintenance
+router.post('/media/backfill-thumbnails', backfillThumbnails);
 
 module.exports = router;

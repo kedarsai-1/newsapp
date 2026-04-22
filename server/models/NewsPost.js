@@ -76,6 +76,14 @@ const newsPostSchema = new mongoose.Schema({
   isFeatured: { type: Boolean, default: false },
   isBreaking: { type: Boolean, default: false },
   tags: [{ type: String, trim: true, lowercase: true }],
+  language: { type: String, trim: true, lowercase: true, default: 'en' },
+  sourceName: { type: String, default: null, trim: true },
+  sourceUrl: { type: String, default: null, trim: true },
+  sourceUrlHash: { type: String, default: null, index: true, sparse: true },
+  sourcePublishedAt: { type: Date, default: null },
+  sourceType: { type: String, enum: ['rss', 'html', 'manual', 'api'], default: 'manual' },
+  scrapedAt: { type: Date, default: null },
+  scrapeConfidence: { type: Number, min: 0, max: 1, default: null },
 }, {
   timestamps: true,
 });
@@ -85,6 +93,8 @@ newsPostSchema.index({ status: 1, createdAt: -1 });
 newsPostSchema.index({ category: 1, status: 1, createdAt: -1 });
 newsPostSchema.index({ reporter: 1, createdAt: -1 });
 newsPostSchema.index({ 'location.city': 1, status: 1 });
+newsPostSchema.index({ language: 1, status: 1, createdAt: -1 });
+newsPostSchema.index({ sourceUrlHash: 1 }, { unique: true, sparse: true });
 
 // Virtual: has video
 newsPostSchema.virtual('hasVideo').get(function () {

@@ -43,8 +43,12 @@ class AuthProvider extends ChangeNotifier {
           await _saveUser(_user!);
           notifyListeners();
         } else {
-          // Token expired / invalid — force re-login
-          await logout();
+          // Only force logout on auth failures (401/403). Treat other errors as transient.
+          final sc = res['statusCode'];
+          final statusCode = sc is int ? sc : int.tryParse('$sc');
+          if (statusCode == 401 || statusCode == 403) {
+            await logout();
+          }
         }
       } catch (_) {
         // Network error — keep cached user, don't force logout
@@ -133,7 +137,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Returns the correct home route for the current user's role
   String get homeRoute {
-    if (_user == null) return '/login';
+    if (_user == null) return '/feed';
     if (_user!.isAdmin) return '/admin';
     if (_user!.isReporter) return '/reporter';
     return '/feed';

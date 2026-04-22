@@ -8,6 +8,7 @@ import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/app_utils.dart';
 import '../../constants.dart';
+import '../../theme/app_palette.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:typed_data';
 
@@ -66,18 +67,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
+    final p = context.palette;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(leading: const Icon(Icons.photo_library, color: AppColors.primary), title: const Text('Photo from Gallery'),
+          ListTile(leading: Icon(Icons.photo_library, color: p.primary), title: const Text('Photo from Gallery'),
             onTap: () async {
               Navigator.pop(context);
               final picked = await picker.pickMultiImage(imageQuality: 85);
               if (picked.isNotEmpty && mounted) setState(() => _mediaFiles.addAll(picked));
             }),
-          ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.primary), title: const Text('Take Photo'),
+          ListTile(leading: Icon(Icons.camera_alt, color: p.primary), title: const Text('Take Photo'),
             onTap: () async {
               Navigator.pop(context);
               try {
@@ -89,13 +91,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 }
               }
             }),
-          ListTile(leading: const Icon(Icons.videocam, color: AppColors.primary), title: const Text('Video from Gallery'),
+          ListTile(leading: Icon(Icons.videocam, color: p.primary), title: const Text('Video from Gallery'),
             onTap: () async {
               Navigator.pop(context);
               final picked = await picker.pickVideo(source: ImageSource.gallery);
               if (picked != null && mounted) setState(() => _mediaFiles.add(picked));
             }),
-          ListTile(leading: const Icon(Icons.video_call, color: AppColors.primary), title: const Text('Record Video'),
+          ListTile(leading: Icon(Icons.video_call, color: p.primary), title: const Text('Record Video'),
             onTap: () async {
               Navigator.pop(context);
               try {
@@ -148,6 +150,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final loading = context.watch<ReporterProvider>().loading;
     return Scaffold(
       appBar: AppBar(
@@ -161,24 +164,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: _gpsPosition != null ? const Color(0xFFE1F5EE) : const Color(0xFFFAEEDA),
+              color: _gpsPosition != null ? p.categoryChipBg : const Color(0xFFFAEEDA),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(children: [
               Icon(
                 _locationLoading ? Icons.gps_not_fixed : (_gpsPosition != null ? Icons.gps_fixed : Icons.location_off),
-                size: 18, color: _gpsPosition != null ? AppColors.primaryDark : AppColors.warning,
+                size: 18, color: _gpsPosition != null ? p.primaryDark : p.warning,
               ),
               const SizedBox(width: 8),
               Expanded(child: _locationLoading
-                  ? const Text('Capturing GPS...', style: TextStyle(fontSize: 13))
+                  ? Text('Capturing GPS...', style: TextStyle(fontSize: 13, color: p.textSecondary))
                   : _gpsPosition != null
                       ? Text('📍 ${_gpsPosition!.latitude.toStringAsFixed(4)}, ${_gpsPosition!.longitude.toStringAsFixed(4)}',
-                          style: const TextStyle(fontSize: 13, color: AppColors.primaryDark))
-                      : const Text('Location unavailable', style: TextStyle(fontSize: 13, color: AppColors.warning))),
+                          style: TextStyle(fontSize: 13, color: p.primaryDark))
+                      : Text('Location unavailable', style: TextStyle(fontSize: 13, color: p.warning))),
               if (!_locationLoading)
                 IconButton(icon: const Icon(Icons.refresh, size: 18), onPressed: _captureLocation,
-                    color: AppColors.textSecondary, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+                    color: p.textSecondary, padding: EdgeInsets.zero, constraints: const BoxConstraints()),
             ]),
           ),
           const SizedBox(height: 16),
@@ -232,10 +235,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               child: Container(
                 height: 100,
                 decoration: BoxDecoration(border: Border.all(color: const Color(0xFFDDDDDD)), borderRadius: BorderRadius.circular(10)),
-                child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.add_photo_alternate_outlined, size: 32, color: AppColors.textHint),
-                  SizedBox(height: 6),
-                  Text('Tap to add photos or videos', style: TextStyle(color: AppColors.textHint, fontSize: 13)),
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.add_photo_alternate_outlined, size: 32, color: p.textHint),
+                  const SizedBox(height: 6),
+                  Text('Tap to add photos or videos', style: TextStyle(color: p.textHint, fontSize: 13)),
                 ]),
               ),
             )
@@ -248,7 +251,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
                   if (i == _mediaFiles.length) {
-                    return GestureDetector(onTap: _pickMedia, child: Container(width: 100, height: 100, decoration: BoxDecoration(border: Border.all(color: const Color(0xFFDDDDDD)), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.add, color: AppColors.textHint)));
+                    return GestureDetector(onTap: _pickMedia, child: Container(width: 100, height: 100, decoration: BoxDecoration(border: Border.all(color: p.cardBorder), borderRadius: BorderRadius.circular(10)), child: Icon(Icons.add, color: p.textHint)));
                   }
                   return Stack(children: [
                     ClipRRect(
@@ -257,9 +260,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           ? Container(
                               width: 100,
                               height: 100,
-                              color: AppColors.surface,
+                              color: p.glassSurface,
                               alignment: Alignment.center,
-                              child: const Icon(Icons.videocam_outlined, size: 36, color: AppColors.textHint),
+                              child: Icon(Icons.videocam_outlined, size: 36, color: p.textHint),
                             )
                           : FutureBuilder<Uint8List>(
                               future: _getPreviewBytes(_mediaFiles[i]),

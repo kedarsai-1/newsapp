@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
+import '../utils/i18n.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;
@@ -12,6 +13,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -19,21 +21,33 @@ class EmptyState extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: GlassColors.surfaceWhite,
+              color: p.inputFill,
               shape: BoxShape.circle,
-              border: Border.all(color: GlassColors.borderWhite, width: 0.8),
+              border: Border.all(color: p.cardBorder, width: 0.8),
             ),
-            child: Icon(icon, size: 48, color: GlassColors.textHint),
+            child: Icon(icon, size: 48, color: p.textHint),
           ),
           const SizedBox(height: 20),
-          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: GlassColors.textPrimary), textAlign: TextAlign.center),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: p.textPrimary,
+            ),
+            textAlign: TextAlign.center,
+          ),
           if (subtitle != null) ...[
             const SizedBox(height: 8),
-            Text(subtitle!, style: const TextStyle(fontSize: 14, color: GlassColors.textTertiary, height: 1.5), textAlign: TextAlign.center),
+            Text(
+              subtitle!,
+              style: TextStyle(fontSize: 14, color: p.textSecondary, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
           ],
           if (buttonLabel != null && onButtonTap != null) ...[
             const SizedBox(height: 24),
-            GlassButton(label: buttonLabel!, onPressed: onButtonTap),
+            ElevatedButton(onPressed: onButtonTap, child: Text(buttonLabel!)),
           ],
         ]),
       ),
@@ -50,9 +64,9 @@ class ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     return EmptyState(
       icon: Icons.wifi_off,
-      title: 'Something went wrong',
+      title: I18n.t(context, 'err_generic_title'),
       subtitle: message,
-      buttonLabel: onRetry != null ? 'Try Again' : null,
+      buttonLabel: onRetry != null ? I18n.t(context, 'action_try_again') : null,
       onButtonTap: onRetry,
     );
   }

@@ -1,12 +1,37 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'theme/app_palette.dart';
+
+export 'theme/app_palette.dart';
+export 'theme/app_theme.dart';
 
 class AppConstants {
-  static String get baseUrl =>
-      dotenv.env['API_BASE_URL'] ?? 'http://10.0.2.2:5000/api';
-  static String get socketUrl =>
-      dotenv.env['SOCKET_URL'] ?? 'http://10.0.2.2:5000';
+  /// Base API URL including `/api` suffix, e.g. `https://host.com/api` or `http://127.0.0.1:5001/api`.
+  static String get baseUrl {
+    final v = dotenv.env['API_BASE_URL']?.trim();
+    if (v != null && v.isNotEmpty) return v;
+    if (kIsWeb) return 'http://127.0.0.1:5001/api';
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'http://10.0.2.2:5001/api';
+      default:
+        return 'http://127.0.0.1:5001/api';
+    }
+  }
+
+  static String get socketUrl {
+    final v = dotenv.env['SOCKET_URL']?.trim();
+    if (v != null && v.isNotEmpty) return v;
+    if (kIsWeb) return 'http://127.0.0.1:5001';
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'http://10.0.2.2:5001';
+      default:
+        return 'http://127.0.0.1:5001';
+    }
+  }
   static String get appName =>
       dotenv.env['APP_NAME'] ?? 'NewsNow';
   static int get pageSize =>
@@ -17,20 +42,83 @@ class AppConstants {
       (dotenv.env['APP_ENV'] ?? 'development') == 'development';
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
+  static const String guestLikesKey = 'guest_likes';
+  static const String guestBookmarksKey = 'guest_bookmarks';
+  static const String guestCommentsKey = 'guest_comments';
+
+  /// Ensures image URLs work across environments (HTTPS for Cloudinary, relative paths vs API host).
+  static String resolveMediaUrl(String? url) {
+    if (url == null) return '';
+    final u = url.trim();
+    if (u.isEmpty) return '';
+    if (u.startsWith('//')) return 'https:$u';
+    if (u.startsWith('https://')) return u;
+    if (u.startsWith('http://')) {
+      // News/CDN URLs: prefer https so Android cleartext and TLS work reliably.
+      final upgraded = u.replaceFirst('http://', 'https://');
+      final host = Uri.tryParse(upgraded)?.host ?? '';
+      if (host.isNotEmpty) return upgraded;
+      return u;
+    }
+    try {
+      final baseUri = Uri.parse(baseUrl);
+      final origin = baseUri.origin;
+      return u.startsWith('/') ? '$origin$u' : '$origin/$u';
+    } catch (_) {
+      return u;
+    }
+  }
+
+  /// Headers for loading remote article images (many publishers check Referer).
+  static Map<String, String> imageLoadHeaders(String? articleSourceUrl) {
+    final h = <String, String>{
+      'User-Agent':
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+    };
+    final ref = articleSourceUrl?.trim();
+    if (ref != null && ref.isNotEmpty) {
+      final uri = Uri.tryParse(ref);
+      if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
+        h['Referer'] = uri.toString();
+      }
+    }
+    return h;
+  }
+
+  /// Hotlinked news images often 403 from the app; load via API proxy instead (see GET /api/news/proxy-image).
+  /// Skips proxy for Cloudinary (your uploads).
+  static String imageUrlForDisplay(String? rawUrl, {String? articleReferer}) {
+    final resolved = resolveMediaUrl(rawUrl);
+    if (resolved.isEmpty) return '';
+    final host = Uri.tryParse(resolved)?.host.toLowerCase() ?? '';
+    if (host.contains('cloudinary.com')) return resolved;
+
+    final api = Uri.parse(baseUrl);
+    var path = api.path;
+    if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+    path = '$path/news/proxy-image';
+
+    final qp = <String, String>{'url': resolved};
+    final ref = articleReferer?.trim();
+    if (ref != null && ref.isNotEmpty) qp['referer'] = ref;
+
+    return api.replace(path: path, queryParameters: qp).toString();
+  }
 }
 
 // ─── Glass Design System ──────────────────────────────────────────────────────
 
 class GlassColors {
-  // Background gradients
-  static const Color gradientStart  = Color(0xFF0F0C29);
-  static const Color gradientMid    = Color(0xFF302B63);
-  static const Color gradientEnd    = Color(0xFF24243E);
+  // Background gradients (aligned with AppPalette editorial dark)
+  static const Color gradientStart  = Color(0xFF070A0F);
+  static const Color gradientMid    = Color(0xFF0D1522);
+  static const Color gradientEnd    = Color(0xFF121528);
 
   // Blob accent colors
-  static const Color blobGreen  = Color(0xFF1D9E75);
-  static const Color blobPurple = Color(0xFF7F77DD);
-  static const Color blobOrange = Color(0xFFD85A30);
+  static const Color blobGreen  = Color(0xFF34D399);
+  static const Color blobPurple = Color(0xFFC084FC);
+  static const Color blobOrange = Color(0xFFF97316);
 
   // Glass surface tints
   static const Color surfaceWhite   = Color(0x12FFFFFF); // rgba(255,255,255,0.07)
@@ -44,51 +132,29 @@ class GlassColors {
   static const Color textTertiary   = Color(0x66FFFFFF); // 40% white
   static const Color textHint       = Color(0x40FFFFFF); // 25% white
 
-  // Accent — teal (primary action)
-  static const Color accentGreen        = Color(0xFF1D9E75);
-  static const Color accentGreenLight   = Color(0xFF5DCAA5);
-  static const Color accentGreenSurface = Color(0x1E1D9E75); // 12%
-  static const Color accentGreenBorder  = Color(0x4D1D9E75); // 30%
+  // Accent — mint (primary action)
+  static const Color accentGreen        = Color(0xFF34D399);
+  static const Color accentGreenLight   = Color(0xFF6EE7B7);
+  static const Color accentGreenSurface = Color(0x1E34D399);
+  static const Color accentGreenBorder  = Color(0x4D34D399);
 
   // Accent — orange (breaking / admin)
-  static const Color accentOrange        = Color(0xFFD85A30);
-  static const Color accentOrangeLight   = Color(0xFFF0997B);
-  static const Color accentOrangeSurface = Color(0x26D85A30); // 15%
-  static const Color accentOrangeBorder  = Color(0x59D85A30); // 35%
+  static const Color accentOrange        = Color(0xFFF97316);
+  static const Color accentOrangeLight   = Color(0xFFFDBA74);
+  static const Color accentOrangeSurface = Color(0x26F97316);
+  static const Color accentOrangeBorder  = Color(0x59F97316);
 
   // Accent — purple (reporter badge, categories)
-  static const Color accentPurple        = Color(0xFF7F77DD);
-  static const Color accentPurpleLight   = Color(0xFFAFA9EC);
-  static const Color accentPurpleSurface = Color(0x337F77DD);
-  static const Color accentPurpleBorder  = Color(0x4D7F77DD);
+  static const Color accentPurple        = Color(0xFFC084FC);
+  static const Color accentPurpleLight   = Color(0xFFE9D5FF);
+  static const Color accentPurpleSurface = Color(0x33C084FC);
+  static const Color accentPurpleBorder  = Color(0x4DC084FC);
 
   // Semantic
-  static const Color success = Color(0xFF5DCAA5);
-  static const Color warning = Color(0xFFF0997B);
-  static const Color error   = Color(0xFFF09595);
-  static const Color info    = Color(0xFF85B7EB);
-}
-
-// ─── App Theme ────────────────────────────────────────────────────────────────
-
-class AppColors {
-  static const Color primary       = GlassColors.accentGreen;
-  static const Color primaryDark   = Color(0xFF0F6E56);
-  static const Color accent        = GlassColors.accentOrange;
-  static const Color breaking      = GlassColors.accentOrange;
-  static const Color background    = GlassColors.gradientStart;
-  static const Color surface       = GlassColors.surfaceWhite;
-  static const Color cardBg        = GlassColors.surfaceWhite;
-  static const Color textPrimary   = GlassColors.textPrimary;
-  static const Color textSecondary = GlassColors.textSecondary;
-  static const Color textHint      = GlassColors.textHint;
-  static const Color adminBadge    = GlassColors.accentOrangeLight;
-  static const Color reporterBadge = GlassColors.accentGreenLight;
-  static const Color userBadge     = GlassColors.info;
-  static const Color success       = GlassColors.success;
-  static const Color warning       = GlassColors.warning;
-  static const Color error         = GlassColors.error;
-  static const Color info          = GlassColors.info;
+  static const Color success = Color(0xFF34D399);
+  static const Color warning = Color(0xFFFBBF24);
+  static const Color error   = Color(0xFFF87171);
+  static const Color info    = Color(0xFF38BDF8);
 }
 
 // ─── Gradient Background Widget ───────────────────────────────────────────────
@@ -99,49 +165,26 @@ class GlassBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            GlassColors.gradientStart,
-            GlassColors.gradientMid,
-            GlassColors.gradientEnd,
+            p.gradientStart,
+            p.gradientMid,
+            p.gradientEnd,
           ],
-          stops: [0.0, 0.5, 1.0],
+          stops: const [0.0, 0.5, 1.0],
         ),
       ),
-      child: Stack(
-        children: [
-          // Ambient blobs
-          Positioned(top: -80, left: -60, child: _Blob(size: 300, color: GlassColors.blobGreen)),
-          Positioned(bottom: 80, right: -40, child: _Blob(size: 240, color: GlassColors.blobPurple)),
-          Positioned(top: 280, left: 120, child: _Blob(size: 160, color: GlassColors.blobOrange)),
-          child,
-        ],
-      ),
+      child: child,
     );
   }
 }
 
-class _Blob extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _Blob({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withOpacity(0.35),
-      ),
-    );
-  }
-}
+// _Blob intentionally removed — keep backgrounds clean for production.
 
 // ─── Glass Card ───────────────────────────────────────────────────────────────
 
@@ -646,91 +689,4 @@ class GlassLocationBar extends StatelessWidget {
       ]),
     );
   }
-}
-
-// ─── Full App Theme ───────────────────────────────────────────────────────────
-
-class AppTheme {
-  static ThemeData get light => ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: GlassColors.gradientStart,
-    colorScheme: ColorScheme.dark(
-      primary: GlassColors.accentGreen,
-      secondary: GlassColors.accentPurple,
-      surface: GlassColors.surfaceWhite,
-      onPrimary: Colors.white,
-      onSurface: GlassColors.textPrimary,
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: GlassColors.surfaceWhite,
-      foregroundColor: GlassColors.textPrimary,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      titleTextStyle: TextStyle(color: GlassColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: GlassColors.accentGreen,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-      ),
-    ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: Colors.transparent,
-      selectedItemColor: GlassColors.accentGreenLight,
-      unselectedItemColor: GlassColors.textHint,
-      type: BottomNavigationBarType.fixed,
-      elevation: 0,
-    ),
-    cardTheme: CardThemeData(
-      color: GlassColors.surfaceWhite,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: GlassColors.borderWhite, width: 0.8),
-      ),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: GlassColors.surfaceWhite,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GlassColors.borderWhite)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GlassColors.borderWhite, width: 0.8)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: GlassColors.accentGreen, width: 1.5)),
-      labelStyle: const TextStyle(color: GlassColors.textTertiary),
-      hintStyle: const TextStyle(color: GlassColors.textHint),
-    ),
-    textTheme: const TextTheme(
-      bodyLarge: TextStyle(color: GlassColors.textPrimary),
-      bodyMedium: TextStyle(color: GlassColors.textPrimary),
-      bodySmall: TextStyle(color: GlassColors.textSecondary),
-    ),
-    iconTheme: const IconThemeData(color: GlassColors.textSecondary),
-    dividerTheme: const DividerThemeData(color: GlassColors.borderWhite, thickness: 0.8),
-    dialogTheme: DialogThemeData(
-      backgroundColor: const Color(0xFF2A2750),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: GlassColors.borderWhite, width: 0.8)),
-    ),
-    popupMenuTheme: const PopupMenuThemeData(
-      color: Color(0xFF2A2750),
-      shape: RoundedRectangleBorder(),
-    ),
-    tabBarTheme: const TabBarThemeData(
-      labelColor: GlassColors.accentGreenLight,
-      unselectedLabelColor: GlassColors.textTertiary,
-      indicatorColor: GlassColors.accentGreen,
-    ),
-    checkboxTheme: CheckboxThemeData(
-      fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? GlassColors.accentGreen : Colors.transparent),
-      side: const BorderSide(color: GlassColors.borderBright, width: 1.5),
-    ),
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: const Color(0xFF2A2750),
-      contentTextStyle: const TextStyle(color: GlassColors.textPrimary),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
 }

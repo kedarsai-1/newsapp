@@ -7,6 +7,9 @@ class AdminProvider extends ChangeNotifier {
   List<NewsPost> _pendingPosts = [];
   List<NewsPost> _recentActivity = [];
   List<User> _users = [];
+  Map<String, dynamic>? _ingestionStatus;
+  Map<String, dynamic>? _lastIngestionStats;
+  bool _ingestionLoading = false;
   bool _loading = false;
   String? _error;
 
@@ -14,6 +17,9 @@ class AdminProvider extends ChangeNotifier {
   List<NewsPost> get pendingPosts => _pendingPosts;
   List<NewsPost> get recentActivity => _recentActivity;
   List<User> get users => _users;
+  Map<String, dynamic>? get ingestionStatus => _ingestionStatus;
+  Map<String, dynamic>? get lastIngestionStats => _lastIngestionStats;
+  bool get ingestionLoading => _ingestionLoading;
   bool get loading => _loading;
   String? get error => _error;
   int get pendingCount => _pendingPosts.length;
@@ -140,6 +146,39 @@ class AdminProvider extends ChangeNotifier {
       return false;
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<void> loadIngestionStatus() async {
+    try {
+      final res = await ApiService.getIngestionStatus();
+      if (res['success'] == true) {
+        _ingestionStatus = res['status'] as Map<String, dynamic>?;
+        _error = null;
+        notifyListeners();
+      }
+    } catch (_) {
+      // no-op, status polling should fail silently in UI
+    }
+  }
+
+  Future<Map<String, dynamic>> runIngestionNow() async {
+    _ingestionLoading = true;
+    notifyListeners();
+    try {
+      final res = await ApiService.runIngestionNow();
+      if (res['success'] == true) {
+        _lastIngestionStats = res['stats'] as Map<String, dynamic>?;
+        await Future.wait([loadPendingPosts(), loadIngestionStatus()]);
+      } else {
+        await loadIngestionStatus();
+      }
+      return res;
+    } catch (e) {
+      return {'success': false, 'message': 'Failed to start ingestion.'};
+    } finally {
+      _ingestionLoading = false;
+      notifyListeners();
     }
   }
 }

@@ -21,15 +21,15 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-    id: json['_id'] ?? '',
-    name: json['name'] ?? '',
-    email: json['email'] ?? '',
-    role: json['role'] ?? 'user',
-    avatar: json['avatar'],
-    phone: json['phone'],
-    bio: json['bio'],
-    isActive: json['isActive'] ?? true,
-  );
+        id: json['_id'] ?? '',
+        name: json['name'] ?? '',
+        email: json['email'] ?? '',
+        role: json['role'] ?? 'user',
+        avatar: json['avatar'],
+        phone: json['phone'],
+        bio: json['bio'],
+        isActive: json['isActive'] ?? true,
+      );
 
   bool get isAdmin => role == 'admin';
   bool get isReporter => role == 'reporter';
@@ -53,12 +53,12 @@ class Category {
   });
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
-    id: json['_id'] ?? '',
-    name: json['name'] ?? '',
-    slug: json['slug'] ?? '',
-    icon: json['icon'] ?? '📰',
-    color: json['color'] ?? '#1D9E75',
-  );
+        id: json['_id'] ?? '',
+        name: json['name'] ?? '',
+        slug: json['slug'] ?? '',
+        icon: json['icon'] ?? '📰',
+        color: json['color'] ?? '#1D9E75',
+      );
 }
 
 // models/media_item.dart
@@ -78,12 +78,12 @@ class MediaItem {
   });
 
   factory MediaItem.fromJson(Map<String, dynamic> json) => MediaItem(
-    id: json['_id'] ?? '',
-    type: json['type'] ?? 'image',
-    url: json['url'] ?? '',
-    thumbnail: json['thumbnail'],
-    size: json['size'] ?? 0,
-  );
+        id: json['_id'] ?? '',
+        type: json['type'] ?? 'image',
+        url: json['url'] ?? '',
+        thumbnail: json['thumbnail'],
+        size: json['size'] ?? 0,
+      );
 
   bool get isVideo => type == 'video';
   bool get isImage => type == 'image';
@@ -108,13 +108,13 @@ class LocationData {
   });
 
   factory LocationData.fromJson(Map<String, dynamic> json) => LocationData(
-    latitude: (json['latitude'] ?? 0).toDouble(),
-    longitude: (json['longitude'] ?? 0).toDouble(),
-    address: json['address'],
-    city: json['city'],
-    state: json['state'],
-    country: json['country'] ?? 'India',
-  );
+        latitude: (json['latitude'] ?? 0).toDouble(),
+        longitude: (json['longitude'] ?? 0).toDouble(),
+        address: json['address'],
+        city: json['city'],
+        state: json['state'],
+        country: json['country'] ?? 'India',
+      );
 
   String get displayLocation {
     if (city != null && state != null) return '$city, $state';
@@ -141,6 +141,9 @@ class NewsPost {
   final bool isBreaking;
   final bool isFeatured;
   final List<String> tags;
+  final String language;
+  final String? sourceUrl;
+  final String? sourceName;
   final DateTime createdAt;
 
   NewsPost({
@@ -159,31 +162,49 @@ class NewsPost {
     this.isBreaking = false,
     this.isFeatured = false,
     this.tags = const [],
+    this.language = 'en',
+    this.sourceUrl,
+    this.sourceName,
     required this.createdAt,
   });
 
   factory NewsPost.fromJson(Map<String, dynamic> json) => NewsPost(
-    id: json['_id'] ?? '',
-    title: json['title'] ?? '',
-    body: json['body'] ?? '',
-    summary: json['summary'],
-    reporter: json['reporter'] is Map ? User.fromJson(json['reporter']) : null,
-    category: json['category'] is Map ? Category.fromJson(json['category']) : null,
-    media: (json['media'] as List? ?? []).map((m) => MediaItem.fromJson(m)).toList(),
-    location: json['location'] != null ? LocationData.fromJson(json['location']) : null,
-    status: json['status'] ?? 'pending',
-    rejectionReason: json['rejectionReason'],
-    views: json['views'] ?? 0,
-    likes: json['likes'] ?? 0,
-    isBreaking: json['isBreaking'] ?? false,
-    isFeatured: json['isFeatured'] ?? false,
-    tags: List<String>.from(json['tags'] ?? []),
-    createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-  );
+        id: json['_id'] ?? '',
+        title: json['title'] ?? '',
+        body: json['body'] ?? '',
+        summary: json['summary'],
+        reporter:
+            json['reporter'] is Map ? User.fromJson(json['reporter']) : null,
+        category: json['category'] is Map
+            ? Category.fromJson(json['category'])
+            : null,
+        media: (json['media'] as List? ?? [])
+            .map((m) => MediaItem.fromJson(m))
+            .toList(),
+        location: json['location'] != null
+            ? LocationData.fromJson(json['location'])
+            : null,
+        status: json['status'] ?? 'pending',
+        rejectionReason: json['rejectionReason'],
+        views: json['views'] ?? 0,
+        likes: json['likes'] ?? 0,
+        isBreaking: json['isBreaking'] ?? false,
+        isFeatured: json['isFeatured'] ?? false,
+        tags: List<String>.from(json['tags'] ?? []),
+        language: (json['language'] ?? 'en').toString().toLowerCase(),
+        sourceUrl: json['sourceUrl'],
+        sourceName: json['sourceName']?.toString(),
+        createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      );
 
-  bool get hasImages => media.any((m) => m.isImage);
+  bool get hasImages => media.any((m) => m.isImage && m.url.trim().isNotEmpty);
   bool get hasVideos => media.any((m) => m.isVideo);
-  MediaItem? get firstImage => media.firstWhere((m) => m.isImage, orElse: () => media.first);
+  MediaItem? get firstImage {
+    for (final m in media) {
+      if (m.isImage && m.url.trim().isNotEmpty) return m;
+    }
+    return null;
+  }
 }
 
 // models/comment.dart
@@ -201,9 +222,9 @@ class Comment {
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) => Comment(
-    id: json['_id'] ?? '',
-    user: json['user'] is Map ? User.fromJson(json['user']) : null,
-    text: json['text'] ?? '',
-    createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-  );
+        id: json['_id'] ?? '',
+        user: json['user'] is Map ? User.fromJson(json['user']) : null,
+        text: json['text'] ?? '',
+        createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      );
 }

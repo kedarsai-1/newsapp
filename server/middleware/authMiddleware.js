@@ -31,6 +31,29 @@ const protect = async (req, res, next) => {
   }
 };
 
+// Attach user when token exists; allow anonymous requests.
+const optionalProtect = async (req, res, next) => {
+  try {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-password');
+    req.user = user && user.isActive ? user : null;
+    next();
+  } catch (_) {
+    req.user = null;
+    next();
+  }
+};
+
 // Role-based access guard — usage: authorize('admin') or authorize('admin', 'reporter')
 const authorize = (...roles) => {
   return (req, res, next) => {
@@ -51,4 +74,4 @@ const generateToken = (userId) => {
   });
 };
 
-module.exports = { protect, authorize, generateToken };
+module.exports = { protect, optionalProtect, authorize, generateToken };

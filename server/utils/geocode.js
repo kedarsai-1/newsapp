@@ -13,12 +13,24 @@ const reverseGeocode = async (latitude, longitude) => {
       const data = await response.json();
       const addr = data.address || {};
   
+      const city =
+        addr.city ||
+        addr.town ||
+        addr.village ||
+        addr.municipality ||
+        addr.district ||
+        addr.county ||
+        addr.state_district ||
+        addr.suburb ||
+        null;
+      const state = addr.state || addr.region || null;
+
       return {
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         address: data.display_name || null,
-        city: addr.city || addr.town || addr.village || addr.county || null,
-        state: addr.state || null,
+        city,
+        state,
         country: addr.country || 'India',
         capturedAt: new Date(),
       };

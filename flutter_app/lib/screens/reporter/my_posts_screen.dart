@@ -6,6 +6,8 @@ import '../../providers/reporter_provider.dart';
 import '../../widgets/empty_state.dart';
 import '../../utils/app_utils.dart';
 import '../../constants.dart';
+import '../../theme/app_palette.dart';
+import '../../widgets/location_label.dart';
 
 class MyPostsScreen extends StatefulWidget {
   const MyPostsScreen({super.key});
@@ -33,6 +35,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final provider = context.watch<ReporterProvider>();
     return Scaffold(
       appBar: AppBar(
@@ -40,9 +43,9 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textHint,
-          indicatorColor: AppColors.primary,
+          labelColor: p.primary,
+          unselectedLabelColor: p.textHint,
+          indicatorColor: p.primary,
           tabs: _labels.map((l) => Tab(text: l)).toList(),
         ),
       ),
@@ -67,9 +70,9 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
                       final statusColor = AppUtils.statusColor(post.status);
                       return Container(
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: p.glassSurface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE5E5E5), width: 0.5),
+                          border: Border.all(color: p.cardBorder, width: 0.5),
                         ),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           // Status header
@@ -84,23 +87,25 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
                               const SizedBox(width: 6),
                               Text(post.status.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor)),
                               const Spacer(),
-                              Text(timeago.format(post.createdAt), style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                              Text(timeago.format(post.createdAt), style: TextStyle(fontSize: 11, color: p.textHint)),
                             ]),
                           ),
                           Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(post.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                              Text(post.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 6),
                               Wrap(spacing: 10, children: [
                                 if (post.category != null)
-                                  Text('${post.category!.icon} ${post.category!.name}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                if (post.location?.city != null)
-                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                    const Icon(Icons.location_on_outlined, size: 12, color: AppColors.textHint),
-                                    const SizedBox(width: 3),
-                                    Text(post.location!.city!, style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
-                                  ]),
+                                  Text('${post.category!.icon} ${post.category!.name}', style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                                if (post.location != null)
+                                  LocationLabel(
+                                    location: post.location!,
+                                    style: TextStyle(fontSize: 12, color: p.textHint),
+                                    iconSize: 12,
+                                    expandText: false,
+                                    maxTextWidth: 180,
+                                  ),
                               ]),
                               if (post.status == 'rejected' && post.rejectionReason != null) ...[
                                 const SizedBox(height: 8),
@@ -108,28 +113,28 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(color: const Color(0xFFFCEBEB), borderRadius: BorderRadius.circular(8)),
                                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                    const Icon(Icons.info_outline, size: 14, color: AppColors.error),
+                                    Icon(Icons.info_outline, size: 14, color: p.error),
                                     const SizedBox(width: 6),
-                                    Expanded(child: Text(post.rejectionReason!, style: const TextStyle(fontSize: 12, color: AppColors.error))),
+                                    Expanded(child: Text(post.rejectionReason!, style: TextStyle(fontSize: 12, color: p.error))),
                                   ]),
                                 ),
                               ],
                               const SizedBox(height: 8),
                               Row(children: [
                                 if (post.status == 'approved') ...[
-                                  const Icon(Icons.visibility_outlined, size: 13, color: AppColors.textHint),
+                                  Icon(Icons.visibility_outlined, size: 13, color: p.textHint),
                                   const SizedBox(width: 4),
-                                  Text(AppUtils.formatCount(post.views), style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                                  Text(AppUtils.formatCount(post.views), style: TextStyle(fontSize: 12, color: p.textHint)),
                                   const SizedBox(width: 12),
-                                  const Icon(Icons.favorite_border, size: 13, color: AppColors.textHint),
+                                  Icon(Icons.favorite_border, size: 13, color: p.textHint),
                                   const SizedBox(width: 4),
-                                  Text(AppUtils.formatCount(post.likes), style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                                  Text(AppUtils.formatCount(post.likes), style: TextStyle(fontSize: 12, color: p.textHint)),
                                   const SizedBox(width: 12),
                                 ],
                                 if (post.media.isNotEmpty) ...[
-                                  const Icon(Icons.perm_media_outlined, size: 13, color: AppColors.textHint),
+                                  Icon(Icons.perm_media_outlined, size: 13, color: p.textHint),
                                   const SizedBox(width: 4),
-                                  Text('${post.media.length} media', style: const TextStyle(fontSize: 12, color: AppColors.textHint)),
+                                  Text('${post.media.length} media', style: TextStyle(fontSize: 12, color: p.textHint)),
                                 ],
                                 const Spacer(),
                                 if (['draft', 'rejected'].contains(post.status))
@@ -149,7 +154,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/reporter/new'),
-        backgroundColor: AppColors.primary,
+        backgroundColor: p.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );

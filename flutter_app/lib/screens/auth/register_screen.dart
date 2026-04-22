@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
-import '../../widgets/otp_input_widget.dart';
 import '../../constants.dart';
+import '../../utils/i18n.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -14,9 +14,6 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // Steps: 0 = fill form, 1 = verify OTP
-  int _step = 0;
-
   final _formKey      = GlobalKey<FormState>();
   final _nameCtrl     = TextEditingController();
   final _emailCtrl    = TextEditingController();
@@ -34,28 +31,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePass     = true;
   bool _obscureConfirm  = true;
   bool _submitted       = false;
-  bool _sending         = false;
-  bool _verifying       = false;
+  bool _loading         = false;
 
   final Set<String> _touched = {};
   int _passStrength = 0;
 
   String? _apiError;
-  String? _otpError;
-  String  _maskedTarget = '';
-  String  _channel      = '';
-  String  _enteredOtp   = '';
-
-  // Which channel the user chose for OTP
-  // 'email' if email is filled, 'phone' if only phone is filled
-  String get _otpChannel => _emailCtrl.text.trim().isNotEmpty ? 'email' : 'phone';
-  String get _otpTarget  => _otpChannel == 'email'
-      ? _emailCtrl.text.trim()
-      : _phoneCtrl.text.trim();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Allow deep-linking like /register?role=reporter
+      final role = GoRouterState.of(context).uri.queryParameters['role']?.trim().toLowerCase();
+      if (role == 'reporter' || role == 'user') {
+        setState(() => _role = role!);
+      }
+    });
     _nameFocus.addListener(()    { if (!_nameFocus.hasFocus)    _touch('name');    });
     _emailFocus.addListener(()   { if (!_emailFocus.hasFocus)   _touch('email');   });
     _phoneFocus.addListener(()   { if (!_phoneFocus.hasFocus)   _touch('phone');   });
@@ -91,12 +83,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _valName(String? v) {
     if (!_isTouched('name')) return null;
     final val = v?.trim() ?? '';
-    if (val.isEmpty) return 'Full name is required';
-    if (val.length < 2) return 'At least 2 characters required';
-    if (val.length > 60) return 'Must not exceed 60 characters';
-    if (!RegExp(r"^[a-zA-Z\s'\-\.]+$").hasMatch(val))
-      return 'Letters, spaces, hyphens, apostrophes only';
+    if (val.isEmpty) return I18n.t(context, 'err_name_required');
+    if (val.length < 2) return I18n.t(context, 'err_name_min');
+    if (val.length > 60) return I18n.t(context, 'err_name_max');
+    // Allow unicode letters for names (Hindi/Telugu), plus spaces and a few punctuation chars.
+    if (!RegExp(r"^[\p{L}\p{M}\s'\-\.]+$", unicode: true).hasMatch(val)) {
+      return I18n.t(context, 'err_name_invalid');
+    }
     return null;
+  }
+
+  bool _isValidEmail(String v) {
+    final val = v.trim();
+    if (val.isEmpty) return false;
+    if (val.length > 254) return false;
+    // No spaces; basic RFC-like structure.
+    if (val.contains(' ')) return false;
+    return RegExp(r'^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$', caseSensitive: false)
+        .hasMatch(val);
+  }
+
+  bool _isValidPhone(String v) {
+    final raw = v.trim();
+    if (raw.isEmpty) return false;
+    // Allow +, digits, spaces, hyphens, parentheses
+    if (!RegExp(r'^\+?[\d\s\-\(\)]+$').hasMatch(raw)) return false;
+    final digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 10 || digits.length > 15) return false;
+
+    // Harden India mobile numbers: if looks like Indian number, require 10 digits starting 6-9.
+    // Accept formats like 9876543210 or +91 9876543210.
+    if (digits.length == 10) {
+      return RegExp(r'^[6-9]\d{9}$').hasMatch(digits);
+    }
+    if (digits.length == 12 && digits.startsWith('91')) {
+      return RegExp(r'^91[6-9]\d{9}$').hasMatch(digits);
+    }
+    // Otherwise treat as international E.164-ish length check already done.
+    return true;
   }
 
   String? _valEmail(String? v) {
@@ -104,9 +128,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final val = v?.trim() ?? '';
     // Email is optional only if phone is provided
     if (val.isEmpty && _phoneCtrl.text.trim().isNotEmpty) return null;
-    if (val.isEmpty) return 'Email or phone is required';
-    if (!RegExp(r'^[\w.+\-]+@[a-zA-Z\d\-]+(\.[a-zA-Z\d\-]+)*\.[a-zA-Z]{2,}$').hasMatch(val))
-      return 'Enter a valid email address';
+    if (val.isEmpty) return I18n.t(context, 'err_target_required');
+    if (!_isValidEmail(val)) return I18n.t(context, 'err_email_invalid');
     return null;
   }
 
@@ -114,100 +137,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_isTouched('phone')) return null;
     final val = v?.trim() ?? '';
     if (val.isEmpty) return null; // optional if email given
-    final digits = val.replaceAll(RegExp(r'[\s\-\(\)\+]'), '');
-    if (!RegExp(r'^\d+$').hasMatch(digits)) return 'Digits only';
-    if (digits.length < 7) return 'Too short';
-    if (digits.length > 15) return 'Too long';
+    if (!_isValidPhone(val)) return I18n.t(context, 'err_phone_invalid');
     return null;
   }
 
   String? _valPass(String? v) {
     if (!_isTouched('pass')) return null;
     final val = v ?? '';
-    if (val.isEmpty) return 'Password is required';
-    if (val.length < 6) return 'Minimum 6 characters';
-    if (!RegExp(r'[A-Za-z]').hasMatch(val)) return 'Must contain at least one letter';
-    if (!RegExp(r'[0-9]').hasMatch(val)) return 'Must contain at least one number';
+    if (val.isEmpty) return I18n.t(context, 'err_password_required');
+    if (val.length < 6) return I18n.t(context, 'err_password_min');
+    if (!RegExp(r'[A-Za-z]').hasMatch(val)) return I18n.t(context, 'err_password_letter');
+    if (!RegExp(r'[0-9]').hasMatch(val)) return I18n.t(context, 'err_password_number');
     return null;
   }
 
   String? _valConfirm(String? v) {
     if (!_isTouched('confirm')) return null;
-    if ((v ?? '').isEmpty) return 'Please confirm your password';
-    if (v != _passCtrl.text) return 'Passwords do not match';
+    if ((v ?? '').isEmpty) return I18n.t(context, 'err_confirm_required');
+    if (v != _passCtrl.text) return I18n.t(context, 'err_confirm_mismatch');
     return null;
   }
 
-  // ── Step 1: Validate form and send OTP ─────────────────────────────────────
-
-  Future<void> _sendOtpAndProceed() async {
+  Future<void> _register() async {
     setState(() {
       _submitted = true;
       _touched.addAll(['name', 'email', 'phone', 'pass', 'confirm']);
     });
     if (!_formKey.currentState!.validate()) return;
 
-    // Must have at least email or phone
-    if (_emailCtrl.text.trim().isEmpty && _phoneCtrl.text.trim().isEmpty) {
-      setState(() => _apiError = 'Please enter an email or phone number.');
+    final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+
+    // Keep current backend contract: email is required for registration.
+    if (email.isEmpty) {
+      setState(() => _apiError = I18n.t(context, 'err_reg_email_required'));
       return;
     }
 
-    setState(() { _sending = true; _apiError = null; });
-    try {
-      final res = await ApiService.sendOtp(
-        target: _otpTarget,
-        purpose: 'register',
-      );
-      if (res['success'] == true) {
-        setState(() {
-          _channel      = res['channel'] ?? _otpChannel;
-          _maskedTarget = res['maskedTarget'] ?? _otpTarget;
-          _step         = 1;
-        });
-      } else {
-        setState(() => _apiError = res['message'] ?? 'Failed to send OTP.');
-      }
-    } catch (_) {
-      setState(() => _apiError = 'Connection error. Please try again.');
-    } finally {
-      if (mounted) setState(() => _sending = false);
+    if (!_isValidEmail(email)) {
+      setState(() => _apiError = I18n.t(context, 'err_email_invalid'));
+      return;
     }
-  }
+    if (phone.isNotEmpty && !_isValidPhone(phone)) {
+      setState(() => _apiError = I18n.t(context, 'err_phone_invalid'));
+      return;
+    }
 
-  // ── Step 2: Verify OTP and create account ──────────────────────────────────
-
-  Future<void> _verifyOtp(String code) async {
-    if (code.length < 6) return;
-    setState(() { _verifying = true; _otpError = null; });
+    setState(() { _loading = true; _apiError = null; });
     try {
-      final res = await ApiService.verifyRegisterOtp(
+      final res = await ApiService.register(
         name: _nameCtrl.text.trim(),
-        email: _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+        email: email,
         password: _passCtrl.text,
         role: _role,
-        code: code,
+        phone: phone.isEmpty ? null : phone,
       );
       if (res['success'] == true) {
         final auth = context.read<AuthProvider>();
         await auth.loginWithToken(res['token'], res['user']);
         if (mounted) context.go(auth.homeRoute);
       } else {
-        setState(() => _otpError = res['message'] ?? 'Invalid OTP.');
+        setState(() => _apiError = res['message'] ?? 'Registration failed.');
       }
     } catch (_) {
-      setState(() => _otpError = 'Connection error. Please try again.');
+      setState(() => _apiError = I18n.t(context, 'err_connection'));
     } finally {
-      if (mounted) setState(() => _verifying = false);
-    }
-  }
-
-  Future<void> _resendOtp() async {
-    setState(() => _otpError = null);
-    final res = await ApiService.sendOtp(target: _otpTarget, purpose: 'register');
-    if (res['success'] != true && mounted) {
-      setState(() => _otpError = res['message'] ?? 'Failed to resend OTP.');
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -238,27 +233,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return GlassBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: _step == 0
-            ? GlassAppBar(title: const SizedBox.shrink(), showBack: true)
-            : null,
+        appBar: GlassAppBar(title: const SizedBox.shrink(), showBack: true),
         body: SafeArea(
-          top: _step == 0,
+          top: true,
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (child, anim) => FadeTransition(
-                opacity: anim,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                      begin: const Offset(0.05, 0), end: Offset.zero).animate(anim),
-                  child: child,
-                ),
-              ),
-              child: _step == 0
-                  ? _buildForm(key: const ValueKey('form'))
-                  : _buildOtp(key: const ValueKey('otp')),
-            ),
+            child: _buildForm(key: const ValueKey('form')),
           ),
         ),
       ),
@@ -277,12 +257,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
         key: key,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Create account',
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800,
+          Text(I18n.t(context, 'reg_title'),
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800,
                   color: GlassColors.textPrimary, letterSpacing: -0.3)),
           const SizedBox(height: 4),
-          const Text('Join NewsNow — fill in your details',
-              style: TextStyle(fontSize: 14, color: GlassColors.textTertiary)),
+          Text(I18n.t(context, 'reg_subtitle'),
+              style: const TextStyle(fontSize: 14, color: GlassColors.textTertiary)),
           const SizedBox(height: 24),
 
           if (_apiError != null) ...[
@@ -291,11 +271,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
 
           // ── Full Name ────────────────────────────────────────────────────
-          _FieldLabel(label: 'Full Name', required: true),
+          _FieldLabel(label: I18n.t(context, 'field_full_name'), required: true),
           const SizedBox(height: 6),
           GlassTextField(
             controller: _nameCtrl, focusNode: _nameFocus,
-            hintText: 'e.g. Ravi Kumar',
+            hintText: I18n.t(context, 'hint_full_name'),
             prefixIcon: const Icon(Icons.person_outline),
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
@@ -305,39 +285,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 14),
 
           // ── Email ────────────────────────────────────────────────────────
-          _FieldLabel(label: 'Email Address', required: false),
+          _FieldLabel(label: I18n.t(context, 'field_email'), required: true),
           const SizedBox(height: 6),
           GlassTextField(
             controller: _emailCtrl, focusNode: _emailFocus,
-            hintText: 'you@example.com',
+            hintText: I18n.t(context, 'hint_email'),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             prefixIcon: const Icon(Icons.email_outlined),
             validator: _valEmail,
             onChanged: (_) { if (_submitted) setState(() {}); },
           ),
-          const SizedBox(height: 8),
-          GlassContainer(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            color: GlassColors.accentGreen.withOpacity(0.06),
-            borderColor: GlassColors.accentGreenBorder.withOpacity(0.4),
-            child: const Row(children: [
-              Icon(Icons.info_outline, size: 13, color: GlassColors.accentGreenLight),
-              SizedBox(width: 6),
-              Expanded(child: Text(
-                'Provide email or phone (or both). OTP will be sent to your contact.',
-                style: TextStyle(fontSize: 11, color: GlassColors.textTertiary, height: 1.4),
-              )),
-            ]),
-          ),
           const SizedBox(height: 14),
 
           // ── Phone ────────────────────────────────────────────────────────
-          _FieldLabel(label: 'Phone Number', required: false),
+          _FieldLabel(label: I18n.t(context, 'field_phone'), required: false),
           const SizedBox(height: 6),
           GlassTextField(
             controller: _phoneCtrl, focusNode: _phoneFocus,
-            hintText: '+91 98765 43210 (optional)',
+            hintText: I18n.t(context, 'hint_phone_optional'),
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.next,
             prefixIcon: const Icon(Icons.phone_outlined),
@@ -348,11 +314,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 14),
 
           // ── Password ─────────────────────────────────────────────────────
-          _FieldLabel(label: 'Password', required: true),
+          _FieldLabel(label: I18n.t(context, 'field_password'), required: true),
           const SizedBox(height: 6),
           GlassTextField(
             controller: _passCtrl, focusNode: _passFocus,
-            hintText: 'Min 6 chars, letters + numbers',
+            hintText: I18n.t(context, 'hint_password'),
             obscureText: _obscurePass,
             textInputAction: TextInputAction.next,
             prefixIcon: const Icon(Icons.lock_outline),
@@ -371,11 +337,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 14),
 
           // ── Confirm Password ─────────────────────────────────────────────
-          _FieldLabel(label: 'Confirm Password', required: true),
+          _FieldLabel(label: I18n.t(context, 'field_confirm_password'), required: true),
           const SizedBox(height: 6),
           GlassTextField(
             controller: _confirmCtrl, focusNode: _confirmFocus,
-            hintText: 'Re-enter your password',
+            hintText: I18n.t(context, 'hint_confirm_password'),
             obscureText: _obscureConfirm,
             textInputAction: TextInputAction.done,
             prefixIcon: const Icon(Icons.lock_outline),
@@ -386,7 +352,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             validator: _valConfirm,
             onChanged: (_) { if (_submitted) setState(() {}); },
-            onFieldSubmitted: (_) => _sendOtpAndProceed(),
+            onFieldSubmitted: (_) => _register(),
           ),
           const SizedBox(height: 20),
 
@@ -422,118 +388,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
           const SizedBox(height: 28),
 
           GlassButton(
-            label: 'Send Verification Code',
-            icon: Icons.send_rounded,
-            onPressed: _sendOtpAndProceed,
-            loading: _sending,
+            label: I18n.t(context, 'action_create_account'),
+            icon: Icons.person_add_rounded,
+            onPressed: _register,
+            loading: _loading,
           ),
           const SizedBox(height: 20),
 
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Text('Already have an account? ',
-                style: TextStyle(color: GlassColors.textTertiary, fontSize: 14)),
+            Text(I18n.t(context, 'reg_have_account'),
+                style: const TextStyle(color: GlassColors.textTertiary, fontSize: 14)),
             GestureDetector(
               onTap: () => context.go('/login'),
-              child: const Text('Sign In',
-                  style: TextStyle(color: GlassColors.accentGreenLight,
+              child: Text(I18n.t(context, 'action_signin'),
+                  style: const TextStyle(color: GlassColors.accentGreenLight,
                       fontWeight: FontWeight.w700, fontSize: 14)),
             ),
           ]),
         ],
       ),
-    );
-  }
-
-  // ── OTP Verify (Step 2) ──────────────────────────────────────────────────────
-
-  Widget _buildOtp({Key? key}) {
-    return Column(
-      key: key,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: 36),
-
-        GestureDetector(
-          onTap: () => setState(() { _step = 0; _otpError = null; _enteredOtp = ''; }),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.arrow_back_ios_new_rounded, size: 16, color: GlassColors.textTertiary),
-            SizedBox(width: 6),
-            Text('Edit details', style: TextStyle(color: GlassColors.textTertiary, fontSize: 13)),
-          ]),
-        ),
-        const SizedBox(height: 32),
-
-        Center(child: Container(
-          width: 64, height: 64,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [
-              _channel == 'phone' ? GlassColors.accentPurple : GlassColors.accentGreen,
-              _channel == 'phone' ? const Color(0xFF534AB7) : const Color(0xFF0F6E56),
-            ], begin: Alignment.topLeft, end: Alignment.bottomRight),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Icon(
-            _channel == 'phone' ? Icons.phone_android : Icons.mark_email_read_outlined,
-            color: Colors.white, size: 30,
-          ),
-        )),
-        const SizedBox(height: 20),
-
-        const Center(child: Text('Verify your account',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
-                color: GlassColors.textPrimary))),
-        const SizedBox(height: 10),
-
-        Center(child: RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            style: const TextStyle(fontSize: 14, color: GlassColors.textTertiary, height: 1.5),
-            children: [
-              TextSpan(text: 'We sent a 6-digit code to your $_channel\n'),
-              TextSpan(text: _maskedTarget,
-                  style: const TextStyle(color: GlassColors.accentGreenLight, fontWeight: FontWeight.w700)),
-            ],
-          ),
-        )),
-        const SizedBox(height: 36),
-
-        GlassOtpInput(
-          onCompleted: _verifyOtp,
-          onChanged: (v) => setState(() => _enteredOtp = v),
-        ),
-        const SizedBox(height: 16),
-
-        if (_otpError != null)
-          Center(child: Text(_otpError!,
-              style: TextStyle(color: GlassColors.error, fontSize: 13),
-              textAlign: TextAlign.center)),
-
-        if (_verifying)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: Center(child: SizedBox(height: 24, width: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, color: GlassColors.accentGreenLight))),
-          ),
-
-        const SizedBox(height: 24),
-
-        if (_enteredOtp.length == 6 && !_verifying)
-          GlassButton(
-            label: 'Create Account',
-            icon: Icons.person_add_rounded,
-            onPressed: () => _verifyOtp(_enteredOtp),
-            loading: _verifying,
-          ),
-
-        const SizedBox(height: 28),
-
-        Center(child: ResendOtpButton(onResend: _resendOtp)),
-        const SizedBox(height: 8),
-        const Center(child: Text('Code expires in 10 minutes',
-            style: TextStyle(fontSize: 12, color: GlassColors.textHint))),
-
-        const SizedBox(height: 24),
-      ],
     );
   }
 }

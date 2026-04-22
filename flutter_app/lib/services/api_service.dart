@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -7,7 +8,11 @@ import '../constants.dart';
 import '../models/models.dart';
 
 class ApiService {
+  /// Render / free tiers can cold-start; keep this generous.
+  static const Duration _httpTimeout = Duration(seconds: 90);
+
   static String? _token;
+  static bool get isAuthenticated => _token != null && _token!.isNotEmpty;
 
   static Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -33,26 +38,79 @@ class ApiService {
   };
 
   static Future<Map<String, dynamic>> _get(String path) async {
-    final res = await http.get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _headers);
-    return jsonDecode(res.body);
+    try {
+      final res = await http
+          .get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _headers)
+          .timeout(_httpTimeout);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message': 'Server error ${res.statusCode}. Check API is running.',
+        };
+      }
+      final body = res.body.trim();
+      if (body.isEmpty) {
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message': 'Empty response from server.',
+        };
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        // Preserve existing payload and add statusCode for callers that need it.
+        return {'statusCode': res.statusCode, ...decoded};
+      }
+      return {'success': false, 'message': 'Unexpected response format.'};
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message':
+            'Request timed out. The API may be waking up — pull to refresh in a moment.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+      };
+    }
   }
 
   static Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
-    final res = await http.post(
-      Uri.parse('${AppConstants.baseUrl}$path'),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    return jsonDecode(res.body);
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${AppConstants.baseUrl}$path'),
+            headers: _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_httpTimeout);
+      return jsonDecode(res.body);
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'Request timed out. Try again in a few seconds.',
+      };
+    }
   }
 
   static Future<Map<String, dynamic>> _put(String path, Map<String, dynamic> body) async {
-    final res = await http.put(
-      Uri.parse('${AppConstants.baseUrl}$path'),
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    return jsonDecode(res.body);
+    try {
+      final res = await http
+          .put(
+            Uri.parse('${AppConstants.baseUrl}$path'),
+            headers: _headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_httpTimeout);
+      return jsonDecode(res.body);
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'Request timed out. Try again in a few seconds.',
+      };
+    }
   }
 
   // ─── AUTH ────────────────────────────────────────────────────────────────
@@ -127,24 +185,56 @@ class ApiService {
   static Future<Map<String, dynamic>> getFeed({
     int page = 1,
     String? categoryId,
+    String? language,
     String? city,
     String? search,
     bool breaking = false,
+    int? days,
+    List<String>? sourceTypes,
   }) async {
     final params = {
       'page': page.toString(),
       'limit': AppConstants.pageSize.toString(),
       if (categoryId != null) 'category': categoryId,
+      if (language != null && language != 'all') 'language': language,
       if (city != null) 'city': city,
       if (search != null) 'search': search,
       if (breaking) 'breaking': 'true',
+      if (days != null) 'days': days.toString(),
+      if (sourceTypes != null && sourceTypes.isNotEmpty)
+        'sourceTypes': sourceTypes.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty).join(','),
     };
     final uri = Uri.parse('${AppConstants.baseUrl}/news/feed').replace(queryParameters: params);
-    final res = await http.get(uri, headers: _headers);
-    return jsonDecode(res.body);
+    try {
+      final res = await http.get(uri, headers: _headers).timeout(_httpTimeout);
+      return jsonDecode(res.body);
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message':
+            'Feed request timed out. The server may be cold-starting — tap refresh or try again shortly.',
+      };
+    }
   }
 
   static Future<Map<String, dynamic>> getPost(String id) async => _get('/news/$id');
+
+  /// Extract full article text from the publisher URL (best-effort).
+  static Future<Map<String, dynamic>> extractArticle(String url) async {
+    final uri = Uri.parse('${AppConstants.baseUrl}/news/extract')
+        .replace(queryParameters: {'url': url});
+    try {
+      final res = await http.get(uri, headers: _headers).timeout(_httpTimeout);
+      return jsonDecode(res.body);
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'Extraction timed out. Try opening the source link instead.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Extraction failed: $e'};
+    }
+  }
 
   static Future<Map<String, dynamic>> toggleLike(String postId) async =>
       _post('/news/$postId/like', {});
@@ -160,12 +250,167 @@ class ApiService {
   static Future<Map<String, dynamic>> addComment(String postId, String text) async =>
       _post('/news/$postId/comments', {'text': text});
 
+  // ─── GUEST INTERACTIONS (LOCAL STORAGE) ────────────────────────────────────
+
+  static Future<Set<String>> _guestStringSet(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(key) ?? const []).toSet();
+  }
+
+  static Future<void> _saveGuestStringSet(String key, Set<String> values) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(key, values.toList());
+  }
+
+  static Future<bool> toggleGuestLike(String postId) async {
+    final likes = await _guestStringSet(AppConstants.guestLikesKey);
+    final liked = !likes.contains(postId);
+    if (liked) {
+      likes.add(postId);
+    } else {
+      likes.remove(postId);
+    }
+    await _saveGuestStringSet(AppConstants.guestLikesKey, likes);
+    return liked;
+  }
+
+  static Future<bool> isGuestLiked(String postId) async {
+    final likes = await _guestStringSet(AppConstants.guestLikesKey);
+    return likes.contains(postId);
+  }
+
+  static Future<bool> toggleGuestBookmark(NewsPost post) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(AppConstants.guestBookmarksKey);
+    final map = raw == null
+        ? <String, dynamic>{}
+        : (jsonDecode(raw) as Map<String, dynamic>);
+    final bookmarked = !map.containsKey(post.id);
+    if (bookmarked) {
+      map[post.id] = {
+        '_id': post.id,
+        'title': post.title,
+        'body': post.body,
+        'summary': post.summary,
+        'reporter': post.reporter == null
+            ? null
+            : {
+                '_id': post.reporter!.id,
+                'name': post.reporter!.name,
+                'email': post.reporter!.email,
+                'role': post.reporter!.role,
+                'avatar': post.reporter!.avatar,
+              },
+        'category': post.category == null
+            ? null
+            : {
+                '_id': post.category!.id,
+                'name': post.category!.name,
+                'slug': post.category!.slug,
+                'icon': post.category!.icon,
+                'color': post.category!.color,
+              },
+        'media': post.media
+            .map((m) => {
+                  '_id': m.id,
+                  'type': m.type,
+                  'url': m.url,
+                  'thumbnail': m.thumbnail,
+                  'size': m.size,
+                })
+            .toList(),
+        'location': post.location == null
+            ? null
+            : {
+                'latitude': post.location!.latitude,
+                'longitude': post.location!.longitude,
+                'address': post.location!.address,
+                'city': post.location!.city,
+                'state': post.location!.state,
+                'country': post.location!.country,
+              },
+        'status': post.status,
+        'rejectionReason': post.rejectionReason,
+        'views': post.views,
+        'likes': post.likes,
+        'isBreaking': post.isBreaking,
+        'isFeatured': post.isFeatured,
+        'tags': post.tags,
+        'createdAt': post.createdAt.toIso8601String(),
+      };
+    } else {
+      map.remove(post.id);
+    }
+    await prefs.setString(AppConstants.guestBookmarksKey, jsonEncode(map));
+    return bookmarked;
+  }
+
+  static Future<bool> isGuestBookmarked(String postId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(AppConstants.guestBookmarksKey);
+    if (raw == null) return false;
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    return map.containsKey(postId);
+  }
+
+  static Future<List<NewsPost>> getGuestBookmarks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(AppConstants.guestBookmarksKey);
+    if (raw == null) return [];
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    return map.values
+        .whereType<Map<String, dynamic>>()
+        .map(NewsPost.fromJson)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  static Future<Map<String, dynamic>> addGuestComment(String postId, String text) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(AppConstants.guestCommentsKey);
+    final byPost = raw == null
+        ? <String, dynamic>{}
+        : (jsonDecode(raw) as Map<String, dynamic>);
+    final list = (byPost[postId] as List<dynamic>? ?? <dynamic>[]);
+
+    final comment = {
+      '_id': 'guest_${DateTime.now().millisecondsSinceEpoch}',
+      'user': {
+        '_id': 'guest',
+        'name': 'Guest User',
+        'email': 'guest@local',
+        'role': 'user',
+      },
+      'text': text,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+    list.insert(0, comment);
+    byPost[postId] = list;
+    await prefs.setString(AppConstants.guestCommentsKey, jsonEncode(byPost));
+    return comment;
+  }
+
+  static Future<List<Comment>> getGuestComments(String postId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(AppConstants.guestCommentsKey);
+    if (raw == null) return [];
+    final byPost = jsonDecode(raw) as Map<String, dynamic>;
+    final list = (byPost[postId] as List<dynamic>? ?? <dynamic>[]);
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(Comment.fromJson)
+        .toList();
+  }
+
   // ─── CATEGORIES ──────────────────────────────────────────────────────────
+
+  /// Full JSON from GET /categories (for error messages).
+  static Future<Map<String, dynamic>> getCategoriesJson() async => _get('/categories');
 
   static Future<List<Category>> getCategories() async {
     final data = await _get('/categories');
-    if (data['success'] == true) {
-      return (data['categories'] as List).map((c) => Category.fromJson(c)).toList();
+    if (data['success'] == true && data['categories'] is List) {
+      return (data['categories'] as List).map((c) => Category.fromJson(c as Map<String, dynamic>)).toList();
     }
     return [];
   }
@@ -262,4 +507,10 @@ class ApiService {
 
   static Future<Map<String, dynamic>> toggleUserActive(String userId) async =>
       _put('/admin/users/$userId/toggle-active', {});
+
+  static Future<Map<String, dynamic>> runIngestionNow() async =>
+      _post('/admin/ingestion/run', {});
+
+  static Future<Map<String, dynamic>> getIngestionStatus() async =>
+      _get('/admin/ingestion/status');
 }

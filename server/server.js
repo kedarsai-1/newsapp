@@ -150,8 +150,10 @@ mongoose.connect(process.env.MONGO_URI)
       console.log('[retention] disabled by RETENTION_ENABLED=false');
     }
 
-    server.listen(process.env.PORT || 5000, () => {
-      console.log(`Server running on port ${process.env.PORT || 5000}`);
+    // Bind on all interfaces so PaaS proxies (Railway, Render) can reach the app — localhost-only causes 502.
+    const port = Number(process.env.PORT) || 5000;
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`Server running on 0.0.0.0:${port}`);
     });
   })
   .catch((err) => {

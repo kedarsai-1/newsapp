@@ -1,6 +1,14 @@
-const { JSDOM } = require('jsdom');
+const { JSDOM, VirtualConsole } = require('jsdom');
 const { Readability } = require('@mozilla/readability');
 const { resolveGoogleNewsPublisherUrl } = require('./rssService');
+
+/** JSDOM's CSSOM cannot parse much modern CSS; strip styles so logs stay clean and Readability still has the DOM. */
+function stripStyleTags(html) {
+  if (typeof html !== 'string') return html;
+  return html
+    .replace(/<link\b[^>]*\brel=['"]?stylesheet['"]?[^>]*>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+}
 
 function isBlockedFetchHost(hostname) {
   const host = String(hostname || '').toLowerCase();
@@ -154,7 +162,14 @@ async function extractReadableArticle(urlString, options = {}) {
       return { success: false, message: 'Not an HTML page.' };
     }
 
-    const dom = new JSDOM(html, { url: url.toString() });
+    const forDom = stripStyleTags(html);
+    const virtualConsole = new VirtualConsole();
+    virtualConsole.on('error', () => {});
+
+    const dom = new JSDOM(forDom, {
+      url: url.toString(),
+      virtualConsole,
+    });
     const reader = new Readability(dom.window.document);
     const parsed = reader.parse();
     if (!parsed || !parsed.textContent) {

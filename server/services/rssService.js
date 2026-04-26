@@ -42,10 +42,46 @@ function decodeHtmlEntities(input = '') {
     .trim();
 }
 
-function summarize(text) {
+function summarizeLocal(text) {
   if (!text) return null;
   const t = String(text);
   return t.length > 280 ? `${t.slice(0, 277)}...` : t;
+}
+
+function summarizeInputFromItem(item) {
+  const raw = stripHtml(item?.contentSnippet || item?.content || item?.['content:encoded'] || item?.summary || '');
+  if (!raw) return '';
+  // Keep payload bounded for model latency/cost and to satisfy pipeline requirement.
+  const maxLen = 1000;
+  const minLen = 800;
+  if (raw.length <= maxLen) return raw;
+  const cut = raw.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(' ');
+  if (lastSpace >= minLen) return cut.slice(0, lastSpace).trim();
+  return cut.trim();
+}
+
+async function summarize(text) {
+  const input = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!input) return '';
+  try {
+    const response = await fetch(
+      'https://router.huggingface.co/hf-inference/models/sshleifer/distilbart-cnn-12-6',
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HF_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+        body: JSON.stringify({ inputs: input }),
+      },
+    );
+    if (!response.ok) throw new Error(`HF ${response.status}`);
+    const result = await response.json();
+    return String(result?.[0]?.summary_text || '').trim();
+  } catch {
+    return '';
+  }
 }
 
 function normalizeMediaUrl(url) {
@@ -222,7 +258,7 @@ function normalizeRssItem(item, feedCfg, { sourceUrlOverride } = {}) {
   return {
     title,
     body,
-    summary: summarize(stripHtml(item.contentSnippet || item.summary || rawBody)),
+    summary: summarizeLocal(stripHtml(item.contentSnippet || item.summary || rawBody)),
     mediaUrl: img,
     tags: [],
     sourceUrl: link,
@@ -234,5 +270,11 @@ function normalizeRssItem(item, feedCfg, { sourceUrlOverride } = {}) {
   };
 }
 
-module.exports = { fetchRssItems, normalizeRssItem, resolveGoogleNewsPublisherUrl };
+module.exports = {
+  fetchRssItems,
+  normalizeRssItem,
+  resolveGoogleNewsPublisherUrl,
+  summarize,
+  summarizeInputFromItem,
+};
 

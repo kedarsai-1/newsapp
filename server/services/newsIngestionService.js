@@ -11,7 +11,13 @@ const {
 const { newsApiIngestPlan } = require('../config/newsApiIngestPlan');
 const { cloudinary } = require('../config/cloudinary');
 const { getRssFeeds } = require('../config/rssFeeds');
-const { fetchRssItems, normalizeRssItem, resolveGoogleNewsPublisherUrl } = require('./rssService');
+const {
+  fetchRssItems,
+  normalizeRssItem,
+  resolveGoogleNewsPublisherUrl,
+  summarize: summarizeRssArticle,
+  summarizeInputFromItem,
+} = require('./rssService');
 const { extractReadableArticle } = require('./articleExtractionService');
 
 let ingestState = {
@@ -362,7 +368,22 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               continue;
             }
 
-            let postFields = item;
+            const summaryInput = summarizeInputFromItem(raw);
+            const fallbackSummary = summaryInput.slice(0, 150).trim();
+            let hfSummary = '';
+            if (summaryInput) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                hfSummary = await summarizeRssArticle(summaryInput);
+              } catch {
+                hfSummary = '';
+              }
+            }
+
+            let postFields = {
+              ...item,
+              summary: hfSummary || fallbackSummary || item.summary,
+            };
 
             // Google News RSS items often point to news.google.com redirect pages.
             // Resolve to the real publisher URL so:

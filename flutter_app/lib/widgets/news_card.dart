@@ -178,6 +178,7 @@ class _NewsCardText extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.s8),
         _NewsCardMeta(
+          constituency: (post.constituency ?? '').trim(),
           source: source,
           timeLabel: timeLabel,
           style: metaStyle,
@@ -188,11 +189,13 @@ class _NewsCardText extends StatelessWidget {
 }
 
 class _NewsCardMeta extends StatelessWidget {
+  final String constituency;
   final String source;
   final String timeLabel;
   final TextStyle style;
 
   const _NewsCardMeta({
+    required this.constituency,
     required this.source,
     required this.timeLabel,
     required this.style,
@@ -200,17 +203,34 @@ class _NewsCardMeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final c = constituency.trim();
+    return Wrap(
+      spacing: AppSpacing.s8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(
-          child: Text(
-            source,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
+        if (c.isNotEmpty && c.toLowerCase() != 'unknown')
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              color: context.palette.primary.withValues(alpha: 0.12),
+            ),
+            child: Text(
+              c,
+              style: style.copyWith(
+                color: context.palette.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
+            ),
           ),
+        Text(
+          source,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
         ),
-        const SizedBox(width: AppSpacing.s8),
         Text(timeLabel, style: style),
       ],
     );

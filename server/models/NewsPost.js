@@ -84,6 +84,11 @@ const newsPostSchema = new mongoose.Schema({
   sourceUrlHash: { type: String, default: null, index: true, sparse: true },
   sourcePublishedAt: { type: Date, default: null },
   sourceType: { type: String, enum: ['rss', 'html', 'manual', 'api'], default: 'manual' },
+  constituency: { type: String, trim: true, default: 'Unknown', index: true },
+  entities: [{
+    text: { type: String, trim: true },
+    label: { type: String, trim: true, uppercase: true },
+  }],
   scrapedAt: { type: Date, default: null },
   scrapeConfidence: { type: Number, min: 0, max: 1, default: null },
 }, {

@@ -75,6 +75,7 @@ const getFeed = async (req, res) => {
       city,
       search,
       language,
+      constituency,
       breaking,
       featured,
       days,
@@ -84,6 +85,9 @@ const getFeed = async (req, res) => {
     const query = { status: 'approved' };
     if (category) query.category = category;
     if (city) query['location.city'] = new RegExp(city, 'i');
+    if (constituency && String(constituency).trim().toLowerCase() !== 'all') {
+      query.constituency = new RegExp(`^${String(constituency).trim()}$`, 'i');
+    }
 
     const langParam =
       language && String(language).toLowerCase() !== 'all'

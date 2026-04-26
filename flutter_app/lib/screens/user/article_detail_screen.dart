@@ -521,6 +521,21 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600)),
                       ),
+                    if ((post.constituency ?? '').trim().isNotEmpty
+                        && (post.constituency ?? '').trim().toLowerCase() != 'unknown')
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.s8, vertical: 4),
+                        decoration: BoxDecoration(
+                            color: p.primary.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(10)),
+                        child: Text(
+                            '📍 ${(post.constituency ?? '').trim()}',
+                            style: TextStyle(
+                                color: p.primary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700)),
+                      ),
                   ]),
                   const SizedBox(height: AppSpacing.s16),
 

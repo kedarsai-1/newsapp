@@ -9,6 +9,7 @@ class NewsProvider extends ChangeNotifier {
   List<Category> _categories = [];
   String? _selectedCategoryId;
   String _selectedLanguage = 'all';
+  String _selectedConstituency = 'all';
   String? _searchQuery;
   int _page = 1;
   bool _hasMore = true;
@@ -21,6 +22,7 @@ class NewsProvider extends ChangeNotifier {
   List<Category> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
   String get selectedLanguage => _selectedLanguage;
+  String get selectedConstituency => _selectedConstituency;
   bool get loading => _loading;
   bool get refreshing => _refreshing;
   bool get hasMore => _hasMore;
@@ -152,12 +154,18 @@ class NewsProvider extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> selectConstituency(String constituency) async {
+    _selectedConstituency = constituency.trim().isEmpty ? 'all' : constituency.trim();
+    await refresh();
+  }
+
   Future<void> _fetchPosts({required bool reset}) async {
     try {
       final res = await ApiService.getFeed(
         page: reset ? 1 : _page,
         categoryId: _selectedCategoryId,
         language: _selectedLanguage,
+        constituency: _selectedConstituency,
         search: _searchQuery,
         // Keep the feed fresh by default (Way2News behavior).
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).

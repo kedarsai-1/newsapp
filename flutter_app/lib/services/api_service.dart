@@ -186,6 +186,7 @@ class ApiService {
     int page = 1,
     String? categoryId,
     String? language,
+    String? constituency,
     String? city,
     String? search,
     bool breaking = false,
@@ -197,6 +198,8 @@ class ApiService {
       'limit': AppConstants.pageSize.toString(),
       if (categoryId != null) 'category': categoryId,
       if (language != null && language != 'all') 'language': language,
+      if (constituency != null && constituency != 'all' && constituency.trim().isNotEmpty)
+        'constituency': constituency.trim(),
       if (city != null) 'city': city,
       if (search != null) 'search': search,
       if (breaking) 'breaking': 'true',

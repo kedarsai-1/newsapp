@@ -22,6 +22,7 @@ const {
   translateEnglishToFeedLanguage,
 } = require('./rssService');
 const { extractReadableArticle } = require('./articleExtractionService');
+const { classifyArticleConstituency } = require('./constituencyClassifierService');
 
 let ingestState = {
   isRunning: false,
@@ -180,6 +181,8 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     sourceUrlHash: item.sourceUrl ? hashUrl(item.sourceUrl) : null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
+    constituency: item.constituency || 'Unknown',
+    entities: Array.isArray(item.entities) ? item.entities : [],
     scrapedAt: new Date(),
     scrapeConfidence: item.scrapeConfidence,
   };
@@ -419,6 +422,12 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               title: displayTitle,
               summary: summaryPrimary || fallbackSummary || item.summary,
               originalLanguage: originalLang,
+            };
+            const constituencyResult = await classifyArticleConstituency(raw);
+            postFields = {
+              ...postFields,
+              constituency: constituencyResult.constituency || 'Unknown',
+              entities: Array.isArray(constituencyResult.entities) ? constituencyResult.entities : [],
             };
 
             // Google News RSS items often point to news.google.com redirect pages.

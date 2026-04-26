@@ -142,6 +142,7 @@ class NewsPost {
   final bool isFeatured;
   final List<String> tags;
   final String language;
+  final String? constituency;
   final String? sourceUrl;
   final String? sourceName;
   final DateTime createdAt;
@@ -163,6 +164,7 @@ class NewsPost {
     this.isFeatured = false,
     this.tags = const [],
     this.language = 'en',
+    this.constituency,
     this.sourceUrl,
     this.sourceName,
     required this.createdAt,
@@ -192,6 +194,7 @@ class NewsPost {
         isFeatured: json['isFeatured'] ?? false,
         tags: List<String>.from(json['tags'] ?? []),
         language: (json['language'] ?? 'en').toString().toLowerCase(),
+        constituency: json['constituency']?.toString(),
         sourceUrl: json['sourceUrl'],
         sourceName: json['sourceName']?.toString(),
         createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),

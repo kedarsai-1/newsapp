@@ -28,6 +28,7 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   final _refreshController = RefreshController(initialRefresh: false);
   final _scrollController = ScrollController();
+  final _constituencyController = TextEditingController();
   bool _showBanner = false;
   String? _bannerTitle;
 
@@ -75,6 +76,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   void dispose() {
+    _constituencyController.dispose();
     _refreshController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -168,6 +170,41 @@ class _FeedScreenState extends State<FeedScreen> {
                         selectedCode: provider.selectedLanguage,
                         onChanged: (code) {
                           provider.selectLanguage(code);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 0, AppSpacing.s16, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Constituency',
+                        style: context.metaText.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                          color: p.textHint,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.s8),
+                      _ConstituencyFilterField(
+                        controller: _constituencyController,
+                        selectedValue: provider.selectedConstituency,
+                        suggestions: provider.posts
+                            .map((p) => (p.constituency ?? '').trim())
+                            .where((c) => c.isNotEmpty && c.toLowerCase() != 'unknown')
+                            .toSet()
+                            .toList()
+                          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())),
+                        onApply: (value) {
+                          provider.selectConstituency(value);
+                        },
+                        onClear: () {
+                          provider.selectConstituency('all');
+                          _constituencyController.clear();
                         },
                       ),
                     ],
@@ -911,6 +948,93 @@ class _FeedLanguageDropdown extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ConstituencyFilterField extends StatelessWidget {
+  final TextEditingController controller;
+  final String selectedValue;
+  final List<String> suggestions;
+  final ValueChanged<String> onApply;
+  final VoidCallback onClear;
+
+  const _ConstituencyFilterField({
+    required this.controller,
+    required this.selectedValue,
+    required this.suggestions,
+    required this.onApply,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final hasSelection =
+        selectedValue.trim().isNotEmpty && selectedValue.toLowerCase() != 'all';
+    if (hasSelection && controller.text.trim() != selectedValue.trim()) {
+      controller.text = selectedValue;
+      controller.selection = TextSelection.collapsed(offset: controller.text.length);
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: controller,
+            style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              hintText: 'Type constituency (e.g. Mangalagiri)',
+              hintStyle: TextStyle(color: p.textHint),
+              isDense: true,
+              filled: true,
+              fillColor: p.surface,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: p.glassBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: p.primary, width: 1.2),
+              ),
+              suffixIcon: suggestions.isNotEmpty
+                  ? PopupMenuButton<String>(
+                      icon: Icon(Icons.arrow_drop_down_rounded, color: p.textHint),
+                      onSelected: (value) {
+                        controller.text = value;
+                        onApply(value);
+                      },
+                      itemBuilder: (_) => suggestions
+                          .take(30)
+                          .map(
+                            (s) => PopupMenuItem<String>(
+                              value: s,
+                              child: Text(s, overflow: TextOverflow.ellipsis),
+                            ),
+                          )
+                          .toList(),
+                    )
+                  : null,
+            ),
+            onSubmitted: (value) => onApply(value),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filled(
+          onPressed: () => onApply(controller.text),
+          icon: const Icon(Icons.check_rounded),
+          style: IconButton.styleFrom(
+            backgroundColor: p.primary,
+            foregroundColor: Colors.white,
+          ),
+          tooltip: 'Apply constituency filter',
+        ),
+        if (hasSelection)
+          IconButton(
+            onPressed: onClear,
+            icon: Icon(Icons.clear_rounded, color: p.textHint),
+            tooltip: 'Clear constituency filter',
+          ),
+      ],
     );
   }
 }

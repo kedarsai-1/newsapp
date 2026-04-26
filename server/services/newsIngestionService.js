@@ -375,8 +375,12 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               try {
                 // eslint-disable-next-line no-await-in-loop
                 hfSummary = await summarizeRssArticle(summaryInput);
-              } catch {
+              } catch (e) {
                 hfSummary = '';
+                stats.fallbacks += 1;
+                console.warn(
+                  `[rss] summary fallback (${feed.name || 'RSS'}): ${e?.message || e}`,
+                );
               }
             }
 

@@ -79,8 +79,14 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         }
         _loading = false;
       });
-      await _loadFullIfPossible(showError: false);
     }
+  }
+
+  String _displayText(NewsPost post) {
+    final short = post.summary?.trim();
+    if (_fullText != null && _fullText!.trim().isNotEmpty) return _fullText!.trim();
+    if (short != null && short.isNotEmpty) return short;
+    return post.body;
   }
 
   bool _shouldTryExtract(NewsPost post) {
@@ -619,7 +625,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                       ),
                     ),
                   Text(
-                    (_fullText ?? post.body),
+                    _displayText(post),
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: p.textPrimary,
                           fontSize: 15,
@@ -633,7 +639,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   ),
                   const SizedBox(height: AppSpacing.s12),
                   ..._paragraphs(
-                    (_fullText ?? post.body),
+                    _displayText(post),
                     Theme.of(context).textTheme.bodyLarge?.copyWith(
                           color: p.textPrimary,
                           fontSize: 15,

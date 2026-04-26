@@ -35,6 +35,12 @@ class NewsProvider extends ChangeNotifier {
   bool _prefsLoaded = false;
   bool _languageOnboardingCompleted = false;
 
+  String _formatError(Object e, {String fallback = 'Request failed.'}) {
+    final msg = e.toString().replaceFirst('Exception: ', '').trim();
+    if (msg.isEmpty) return fallback;
+    return msg;
+  }
+
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _selectedLanguage = prefs.getString(_languagePrefKey) ?? 'all';
@@ -98,7 +104,10 @@ class NewsProvider extends ChangeNotifier {
       }
     } catch (e) {
       _categories = [];
-      _categoriesError = 'Categories failed: $e';
+      _categoriesError = _formatError(
+        e,
+        fallback: 'Could not load categories. Please try again.',
+      );
     }
     notifyListeners();
   }
@@ -173,10 +182,15 @@ class NewsProvider extends ChangeNotifier {
         _hasMore = fetched.length == AppConstants.pageSize;
         _error = null;
       } else {
-        _error = res['message'];
+        _error = (res['message']?.toString().trim().isNotEmpty == true)
+            ? res['message'].toString().trim()
+            : 'Failed to load news from API.';
       }
     } catch (e) {
-      _error = 'Failed to load news. Check your connection.';
+      _error = _formatError(
+        e,
+        fallback: 'Failed to load news. Check your connection.',
+      );
     }
   }
 

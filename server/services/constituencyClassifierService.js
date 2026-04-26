@@ -191,6 +191,19 @@ function mapToConstituency(entities) {
   return 'Unknown';
 }
 
+function mapTextToConstituency(text) {
+  const hay = String(text || '').toLowerCase();
+  if (!hay) return 'Unknown';
+  for (const [constituency, keywords] of Object.entries(constituencyMap)) {
+    for (const keyword of keywords) {
+      const k = String(keyword || '').trim().toLowerCase();
+      if (!k) continue;
+      if (hay.includes(k)) return constituency;
+    }
+  }
+  return 'Unknown';
+}
+
 async function extractEntities(text) {
   const nerUrl = String(process.env.NER_URL || '').trim();
   if (!nerUrl) return [];
@@ -224,7 +237,12 @@ async function classifyArticleConstituency(article) {
   const text = article?.contentSnippet || article?.content || article?.title || '';
   try {
     const entities = await extractEntities(text);
-    const constituency = mapToConstituency(entities);
+    let constituency = mapToConstituency(entities);
+    if (constituency === 'Unknown') {
+      constituency = mapTextToConstituency(
+        `${article?.title || ''} ${article?.contentSnippet || ''} ${article?.content || ''}`,
+      );
+    }
     return {
       title: article?.title || '',
       link: article?.link || article?.sourceUrl || '',
@@ -244,6 +262,7 @@ async function classifyArticleConstituency(article) {
 module.exports = {
   constituencyMap,
   mapToConstituency,
+  mapTextToConstituency,
   extractEntities,
   classifyArticleConstituency,
 };

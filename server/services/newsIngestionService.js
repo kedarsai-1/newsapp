@@ -215,6 +215,9 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     sourceUrlHash: item.sourceUrl ? hashUrl(item.sourceUrl) : null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
+    politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(item.politicsScope || '').toLowerCase())
+      ? String(item.politicsScope).toLowerCase()
+      : null,
     constituency: item.constituency || 'Unknown',
     entities: Array.isArray(item.entities) ? item.entities : [],
     scrapedAt: new Date(),
@@ -461,6 +464,13 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               title: displayTitle,
               summary: summaryPrimary || fallbackSummary || item.summary,
               originalLanguage: originalLang,
+              politicsScope: feed.categorySlug === 'politics'
+                ? (
+                  ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(feed.politicsScope || '').toLowerCase())
+                    ? String(feed.politicsScope).toLowerCase()
+                    : 'all'
+                )
+                : null,
             };
             const constituencyResult = await classifyArticleConstituency(raw);
             postFields = {

@@ -28,7 +28,6 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   final _refreshController = RefreshController(initialRefresh: false);
   final _scrollController = ScrollController();
-  final _constituencyController = TextEditingController();
   bool _showBanner = false;
   String? _bannerTitle;
 
@@ -76,7 +75,6 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   void dispose() {
-    _constituencyController.dispose();
     _refreshController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -176,40 +174,53 @@ class _FeedScreenState extends State<FeedScreen> {
                   ),
                 ),
 
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 0, AppSpacing.s16, 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Constituency',
-                        style: context.metaText.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                          color: p.textHint,
+                if (provider.shouldShowPoliticalScopeDropdown)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 0, AppSpacing.s16, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Political Region',
+                          style: context.metaText.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: p.textHint,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppSpacing.s8),
-                      _ConstituencyFilterField(
-                        controller: _constituencyController,
-                        selectedValue: provider.selectedConstituency,
-                        suggestions: provider.posts
-                            .map((p) => (p.constituency ?? '').trim())
-                            .where((c) => c.isNotEmpty && c.toLowerCase() != 'unknown')
-                            .toSet()
-                            .toList()
-                          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase())),
-                        onApply: (value) {
-                          provider.selectConstituency(value);
-                        },
-                        onClear: () {
-                          provider.selectConstituency('all');
-                          _constituencyController.clear();
-                        },
-                      ),
-                    ],
+                        const SizedBox(height: AppSpacing.s8),
+                        _PoliticalRegionDropdown(
+                          selectedCode: provider.selectedPoliticsScope,
+                          languageCode: provider.selectedLanguage,
+                          onChanged: (v) => provider.selectPoliticsScope(v),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+
+                if (provider.shouldShowAndhraConstituencyFilter)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 0, AppSpacing.s16, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Andhra Constituency',
+                          style: context.metaText.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: p.textHint,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.s8),
+                        _PoliticalConstituencyDropdown(
+                          selectedConstituency: provider.selectedConstituency,
+                          options: provider.availablePoliticalConstituencies,
+                          onChanged: (v) => provider.selectConstituency(v),
+                        ),
+                      ],
+                    ),
+                  ),
 
                 if (provider.categoriesError != null)
                   Padding(
@@ -952,85 +963,212 @@ class _FeedLanguageDropdown extends StatelessWidget {
   }
 }
 
-class _ConstituencyFilterField extends StatelessWidget {
-  final TextEditingController controller;
-  final String selectedValue;
-  final List<String> suggestions;
-  final ValueChanged<String> onApply;
-  final VoidCallback onClear;
+class _PoliticalRegionDropdown extends StatelessWidget {
+  final String selectedCode;
+  final String languageCode;
+  final void Function(String code) onChanged;
 
-  const _ConstituencyFilterField({
-    required this.controller,
-    required this.selectedValue,
-    required this.suggestions,
-    required this.onApply,
-    required this.onClear,
+  const _PoliticalRegionDropdown({
+    required this.selectedCode,
+    required this.languageCode,
+    required this.onChanged,
+  });
+
+  List<String> get _codes {
+    if (languageCode == 'te') return const ['all', 'andhra', 'telangana'];
+    if (languageCode == 'hi' || languageCode == 'en') return const ['all', 'india', 'international'];
+    return const ['all'];
+  }
+
+  String _label(String code) {
+    if (languageCode == 'te') {
+      switch (code) {
+        case 'andhra':
+          return 'Andhra Pradesh';
+        case 'telangana':
+          return 'Telangana';
+        case 'all':
+        default:
+          return 'All (AP/Telangana/India)';
+      }
+    }
+    switch (code) {
+      case 'india':
+        return 'India';
+      case 'international':
+        return 'International';
+      case 'all':
+      default:
+        return 'All (India + International)';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final codes = _codes;
+    final value = codes.contains(selectedCode) ? selectedCode : 'all';
+    return SizedBox(
+      height: 48,
+      child: PopupMenuButton<String>(
+        initialValue: value,
+        tooltip: 'Select political region',
+        color: p.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onSelected: onChanged,
+        itemBuilder: (context) => codes.map((code) {
+          final selected = code == value;
+          return PopupMenuItem<String>(
+            value: code,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _label(code),
+                    style: TextStyle(
+                      color: p.textPrimary,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (selected) Icon(Icons.check_rounded, size: 18, color: p.primary),
+              ],
+            ),
+          );
+        }).toList(),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: p.primary,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: p.primary.withValues(alpha: 0.22),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _label(value),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white.withValues(alpha: 0.95),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PoliticalConstituencyDropdown extends StatelessWidget {
+  final String selectedConstituency;
+  final List<String> options;
+  final void Function(String value) onChanged;
+
+  const _PoliticalConstituencyDropdown({
+    required this.selectedConstituency,
+    required this.options,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final hasSelection =
-        selectedValue.trim().isNotEmpty && selectedValue.toLowerCase() != 'all';
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: controller,
-            style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600),
-            decoration: InputDecoration(
-              hintText: 'Type constituency (e.g. Mangalagiri)',
-              hintStyle: TextStyle(color: p.textHint),
-              isDense: true,
-              filled: true,
-              fillColor: p.surface,
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: p.glassBorder),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: p.primary, width: 1.2),
-              ),
-              suffixIcon: suggestions.isNotEmpty
-                  ? PopupMenuButton<String>(
-                      icon: Icon(Icons.arrow_drop_down_rounded, color: p.textHint),
-                      onSelected: (value) {
-                        controller.text = value;
-                        onApply(value);
-                      },
-                      itemBuilder: (_) => suggestions
-                          .take(30)
-                          .map(
-                            (s) => PopupMenuItem<String>(
-                              value: s,
-                              child: Text(s, overflow: TextOverflow.ellipsis),
-                            ),
-                          )
-                          .toList(),
-                    )
-                  : null,
+    final values = ['all', ...options];
+    final selected = values.contains(selectedConstituency) ? selectedConstituency : 'all';
+    String labelFor(String v) => v == 'all' ? 'All Andhra Constituencies' : v;
+
+    return SizedBox(
+      height: 48,
+      child: PopupMenuButton<String>(
+        initialValue: selected,
+        tooltip: 'Select Andhra constituency',
+        color: p.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onSelected: onChanged,
+        itemBuilder: (context) => values.map((v) {
+          final isSelected = v == selected;
+          return PopupMenuItem<String>(
+            value: v,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    labelFor(v),
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: p.textPrimary,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (isSelected) Icon(Icons.check_rounded, size: 18, color: p.primary),
+              ],
             ),
-            onSubmitted: (value) => onApply(value.trim().isEmpty ? 'all' : value.trim()),
+          );
+        }).toList(),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: p.primary,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: p.primary.withValues(alpha: 0.22),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    labelFor(selected),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Colors.white.withValues(alpha: 0.95),
+                  size: 22,
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(width: 8),
-        IconButton.filled(
-          onPressed: () => onApply(controller.text.trim().isEmpty ? 'all' : controller.text.trim()),
-          icon: const Icon(Icons.check_rounded),
-          style: IconButton.styleFrom(
-            backgroundColor: p.primary,
-            foregroundColor: Colors.white,
-          ),
-          tooltip: 'Apply constituency filter',
-        ),
-        if (hasSelection)
-          IconButton(
-            onPressed: onClear,
-            icon: Icon(Icons.clear_rounded, color: p.textHint),
-            tooltip: 'Clear constituency filter',
-          ),
-      ],
+      ),
     );
   }
 }

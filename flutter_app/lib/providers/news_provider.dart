@@ -10,6 +10,7 @@ class NewsProvider extends ChangeNotifier {
   String? _selectedCategoryId;
   String _selectedLanguage = 'all';
   String _selectedConstituency = 'all';
+  String _selectedPoliticsScope = 'all';
   String? _searchQuery;
   int _page = 1;
   bool _hasMore = true;
@@ -23,6 +24,7 @@ class NewsProvider extends ChangeNotifier {
   String? get selectedCategoryId => _selectedCategoryId;
   String get selectedLanguage => _selectedLanguage;
   String get selectedConstituency => _selectedConstituency;
+  String get selectedPoliticsScope => _selectedPoliticsScope;
   bool get loading => _loading;
   bool get refreshing => _refreshing;
   bool get hasMore => _hasMore;
@@ -138,6 +140,8 @@ class NewsProvider extends ChangeNotifier {
   Future<void> selectCategory(String? categoryId) async {
     _selectedCategoryId = categoryId;
     _searchQuery = null;
+    if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
+    if (!isPoliticsMode) _selectedConstituency = 'all';
     await refresh();
   }
 
@@ -151,6 +155,8 @@ class NewsProvider extends ChangeNotifier {
     _selectedLanguage = languageCode;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_languagePrefKey, languageCode);
+    if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
+    if (!isPoliticsMode) _selectedConstituency = 'all';
     await refresh();
   }
 
@@ -159,13 +165,62 @@ class NewsProvider extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> selectPoliticsScope(String scope) async {
+    final s = scope.trim().toLowerCase();
+    _selectedPoliticsScope = ['andhra', 'telangana', 'india', 'international'].contains(s) ? s : 'all';
+    if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
+    await refresh();
+  }
+
+  bool get isTeluguPoliticsMode {
+    if (_selectedLanguage != 'te') return false;
+    if (_selectedCategoryId == null) return false;
+    Category? cat;
+    for (final c in _categories) {
+      if (c.id == _selectedCategoryId) {
+        cat = c;
+        break;
+      }
+    }
+    return (cat?.slug.toLowerCase() ?? '') == 'politics';
+  }
+
+  bool get isPoliticsMode {
+    if (_selectedCategoryId == null) return false;
+    for (final c in _categories) {
+      if (c.id == _selectedCategoryId) return c.slug.toLowerCase() == 'politics';
+    }
+    return false;
+  }
+
+  bool get shouldShowPoliticalScopeDropdown {
+    if (!isPoliticsMode) return false;
+    return _selectedLanguage == 'te' || _selectedLanguage == 'hi' || _selectedLanguage == 'en';
+  }
+
+  List<String> get availablePoliticalConstituencies {
+    final set = <String>{};
+    for (final p in _posts) {
+      final c = (p.constituency ?? '').trim();
+      if (c.isEmpty || c.toLowerCase() == 'unknown') continue;
+      set.add(c);
+    }
+    final out = set.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return out;
+  }
+
+  bool get shouldShowAndhraConstituencyFilter {
+    return isTeluguPoliticsMode && _selectedPoliticsScope == 'andhra';
+  }
+
   Future<void> _fetchPosts({required bool reset}) async {
     try {
       final res = await ApiService.getFeed(
         page: reset ? 1 : _page,
         categoryId: _selectedCategoryId,
         language: _selectedLanguage,
-        constituency: _selectedConstituency,
+        constituency: shouldShowAndhraConstituencyFilter ? _selectedConstituency : 'all',
+        politicsScope: _selectedPoliticsScope,
         search: _searchQuery,
         // Keep the feed fresh by default (Way2News behavior).
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).

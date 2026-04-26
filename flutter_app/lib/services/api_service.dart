@@ -187,6 +187,7 @@ class ApiService {
     String? categoryId,
     String? language,
     String? constituency,
+    String? politicsScope,
     String? city,
     String? search,
     bool breaking = false,
@@ -200,6 +201,8 @@ class ApiService {
       if (language != null && language != 'all') 'language': language,
       if (constituency != null && constituency != 'all' && constituency.trim().isNotEmpty)
         'constituency': constituency.trim(),
+      if (politicsScope != null && politicsScope != 'all' && politicsScope.trim().isNotEmpty)
+        'politicsScope': politicsScope.trim().toLowerCase(),
       if (city != null) 'city': city,
       if (search != null) 'search': search,
       if (breaking) 'breaking': 'true',

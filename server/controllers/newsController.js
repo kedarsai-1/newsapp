@@ -76,6 +76,7 @@ const getFeed = async (req, res) => {
       search,
       language,
       constituency,
+      politicsScope,
       breaking,
       featured,
       days,
@@ -87,6 +88,10 @@ const getFeed = async (req, res) => {
     if (city) query['location.city'] = new RegExp(city, 'i');
     if (constituency && String(constituency).trim().toLowerCase() !== 'all') {
       query.constituency = new RegExp(`^${String(constituency).trim()}$`, 'i');
+    }
+    const ps = String(politicsScope || '').toLowerCase().trim();
+    if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international'].includes(ps)) {
+      query.politicsScope = ps;
     }
 
     const langParam =

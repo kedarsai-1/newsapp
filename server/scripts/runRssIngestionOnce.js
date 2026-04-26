@@ -156,6 +156,9 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     sourceUrlHash: item.sourceUrl ? hashUrl(item.sourceUrl) : null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
+    politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(item.politicsScope || '').toLowerCase())
+      ? String(item.politicsScope).toLowerCase()
+      : null,
     scrapedAt: new Date(),
     scrapeConfidence: item.scrapeConfidence,
   };
@@ -192,6 +195,14 @@ async function main() {
         }
 
         let postFields = item;
+        if (feed.categorySlug === 'politics') {
+          postFields = {
+            ...postFields,
+            politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(feed.politicsScope || '').toLowerCase())
+              ? String(feed.politicsScope).toLowerCase()
+              : 'all',
+          };
+        }
 
         if (
           feed.resolvePublisherUrl

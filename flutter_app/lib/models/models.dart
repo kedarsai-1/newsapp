@@ -142,6 +142,7 @@ class NewsPost {
   final bool isFeatured;
   final List<String> tags;
   final String language;
+  final String? politicsScope;
   final String? constituency;
   final String? sourceUrl;
   final String? sourceName;
@@ -164,6 +165,7 @@ class NewsPost {
     this.isFeatured = false,
     this.tags = const [],
     this.language = 'en',
+    this.politicsScope,
     this.constituency,
     this.sourceUrl,
     this.sourceName,
@@ -194,6 +196,7 @@ class NewsPost {
         isFeatured: json['isFeatured'] ?? false,
         tags: List<String>.from(json['tags'] ?? []),
         language: (json['language'] ?? 'en').toString().toLowerCase(),
+        politicsScope: json['politicsScope']?.toString(),
         constituency: json['constituency']?.toString(),
         sourceUrl: json['sourceUrl'],
         sourceName: json['sourceName']?.toString(),

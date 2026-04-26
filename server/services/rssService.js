@@ -99,6 +99,21 @@ function shouldUseHfSummarization(text, { language } = {}) {
   return latinRatio >= 0.65;
 }
 
+function parseHfSummarizationJson(result) {
+  if (result == null) return '';
+  if (typeof result === 'string') return result.trim();
+  if (Array.isArray(result)) {
+    const first = result[0];
+    if (first && typeof first === 'object' && first.summary_text != null) {
+      return String(first.summary_text).trim();
+    }
+  }
+  if (typeof result === 'object' && result.summary_text != null) {
+    return String(result.summary_text).trim();
+  }
+  return '';
+}
+
 async function summarize(text) {
   const input = sanitizeForSummarization(text);
   if (!input) return '';
@@ -124,7 +139,7 @@ async function summarize(text) {
       throw new Error(`HF ${response.status}${detail}`);
     }
     const result = await response.json();
-    const out = String(result?.[0]?.summary_text || '').trim();
+    const out = parseHfSummarizationJson(result);
     if (!out || looksMojibake(out)) return '';
     return out;
   } catch (e) {

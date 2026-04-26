@@ -445,10 +445,34 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                 });
                 const full = String(ext?.text || '').replace(/\s+/g, ' ').trim();
                 if (ext?.success && full.length > 320) {
+                  // Do not overwrite HF summary: enrichment used to replace it with a 280-char truncate.
+                  let summaryAfterEnrich = (hfSummary && String(hfSummary).trim())
+                    ? String(hfSummary).trim()
+                    : null;
+                  if (!summaryAfterEnrich) {
+                    const chunk = full.slice(0, 1000).trim();
+                    const lang = feed.language || item.language;
+                    if (
+                      chunk.length >= 40
+                      && shouldUseHfSummarization(chunk, { language: lang })
+                    ) {
+                      try {
+                        // eslint-disable-next-line no-await-in-loop
+                        const s2 = await summarizeRssArticle(chunk);
+                        if (s2 && String(s2).trim()) summaryAfterEnrich = String(s2).trim();
+                      } catch (e) {
+                        stats.fallbacks += 1;
+                        console.warn(
+                          `[rss] summary after enrich (${feed.name || 'RSS'}): ${e?.message || e}`,
+                        );
+                      }
+                    }
+                  }
+                  if (!summaryAfterEnrich) summaryAfterEnrich = summarizeForPost(full);
                   postFields = {
                     ...postFields,
                     body: full.slice(0, 10000),
-                    summary: summarizeForPost(full),
+                    summary: summaryAfterEnrich,
                   };
                 }
               } catch { /* ignore */ }

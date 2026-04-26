@@ -22,9 +22,9 @@ class NewsProvider extends ChangeNotifier {
   List<NewsPost> get posts => _posts;
   List<Category> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
-  String get selectedLanguage => _selectedLanguage;
-  String get selectedConstituency => _selectedConstituency;
-  String get selectedPoliticsScope => _selectedPoliticsScope;
+  String get selectedLanguage => (_selectedLanguage as dynamic) == null ? 'all' : _selectedLanguage;
+  String get selectedConstituency => (_selectedConstituency as dynamic) == null ? 'all' : _selectedConstituency;
+  String get selectedPoliticsScope => (_selectedPoliticsScope as dynamic) == null ? 'all' : _selectedPoliticsScope;
   bool get loading => _loading;
   bool get refreshing => _refreshing;
   bool get hasMore => _hasMore;
@@ -173,7 +173,7 @@ class NewsProvider extends ChangeNotifier {
   }
 
   bool get isTeluguPoliticsMode {
-    if (_selectedLanguage != 'te') return false;
+    if (selectedLanguage != 'te') return false;
     if (_selectedCategoryId == null) return false;
     Category? cat;
     for (final c in _categories) {
@@ -195,7 +195,7 @@ class NewsProvider extends ChangeNotifier {
 
   bool get shouldShowPoliticalScopeDropdown {
     if (!isPoliticsMode) return false;
-    return _selectedLanguage == 'te' || _selectedLanguage == 'hi' || _selectedLanguage == 'en';
+    return selectedLanguage == 'te' || selectedLanguage == 'hi' || selectedLanguage == 'en';
   }
 
   List<String> get availablePoliticalConstituencies {
@@ -210,7 +210,7 @@ class NewsProvider extends ChangeNotifier {
   }
 
   bool get shouldShowAndhraConstituencyFilter {
-    return isTeluguPoliticsMode && _selectedPoliticsScope == 'andhra';
+    return isTeluguPoliticsMode && selectedPoliticsScope == 'andhra';
   }
 
   Future<void> _fetchPosts({required bool reset}) async {
@@ -218,9 +218,9 @@ class NewsProvider extends ChangeNotifier {
       final res = await ApiService.getFeed(
         page: reset ? 1 : _page,
         categoryId: _selectedCategoryId,
-        language: _selectedLanguage,
-        constituency: shouldShowAndhraConstituencyFilter ? _selectedConstituency : 'all',
-        politicsScope: _selectedPoliticsScope,
+        language: selectedLanguage,
+        constituency: shouldShowAndhraConstituencyFilter ? selectedConstituency : 'all',
+        politicsScope: selectedPoliticsScope,
         search: _searchQuery,
         // Keep the feed fresh by default (Way2News behavior).
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).

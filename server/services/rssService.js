@@ -130,28 +130,155 @@ async function translateToEnglish(text) {
   }
 }
 
-async function prepareEnglishForSummarization(strippedText) {
+function extractiveSummaryNative(text, maxLen = 300) {
+  const t = sanitizeForSummarization(text);
+  if (!t) return '';
+  if (t.length <= maxLen) return t;
+  const cut = t.slice(0, maxLen);
+  const sentenceEnd = /[.!?।॥\u0964\u0965\n]/;
+  let best = -1;
+  for (let i = Math.min(cut.length - 1, maxLen - 1); i > 80; i -= 1) {
+    if (sentenceEnd.test(t[i])) {
+      best = i + 1;
+      break;
+    }
+  }
+  if (best > 80) return t.slice(0, best).trim();
+  const sp = cut.lastIndexOf(' ');
+  if (sp > 60) return `${cut.slice(0, sp).trim()}…`;
+  return `${cut.trim()}…`;
+}
+
+function clipSummarySchema(s, max = 300) {
+  const x = String(s || '').replace(/\s+/g, ' ').trim();
+  if (x.length <= max) return x;
+  return `${x.slice(0, max - 1).trim()}…`;
+}
+
+/** Devanagari, Telugu, Tamil, etc. — if dominant, do not run English-only distilbart. */
+function isPrimarilyIndicScript(text) {
+  const t = String(text || '');
+  const indic = (t.match(/[\u0900-\u0D7F]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  if (indic + latin === 0) return false;
+  return indic / (indic + latin) >= 0.35;
+}
+
+async function hfMarianTranslate(text, model, token) {
+  const input = String(text || '').trim().slice(0, 600);
+  if (!input) return '';
+  const response = await fetch(
+    `https://router.huggingface.co/hf-inference/models/${model}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      body: JSON.stringify({ inputs: input }),
+    },
+  );
+  if (!response.ok) throw new Error(String(response.status));
+  const result = await response.json();
+  return parseHfTranslationJson(result) || '';
+}
+
+async function hfNllbToTelugu(text, token) {
+  const input = String(text || '').trim().slice(0, 512);
+  if (!input) return '';
+  const response = await fetch(
+    'https://router.huggingface.co/hf-inference/models/facebook/nllb-200-distilled-600M',
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+      body: JSON.stringify({
+        inputs: input,
+        parameters: { src_lang: 'eng_Latn', tgt_lang: 'tel_Telu' },
+      }),
+    },
+  );
+  if (!response.ok) throw new Error(String(response.status));
+  const result = await response.json();
+  return parseHfTranslationJson(result) || '';
+}
+
+/**
+ * When the RSS feed is tagged hi/te but the article text is English, localize summary/title for display.
+ */
+async function translateEnglishToFeedLanguage(text, feedLang) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  const token = String(process.env.HF_TOKEN || '').trim();
+  if (!token) return raw;
+  const code = String(feedLang || '').toLowerCase();
+  try {
+    if (code === 'hi') {
+      const out = await hfMarianTranslate(raw, 'Helsinki-NLP/opus-mt-en-hi', token);
+      return out || raw;
+    }
+    if (code === 'te') {
+      const out = await hfNllbToTelugu(raw, token);
+      return out || raw;
+    }
+  } catch {
+    return raw;
+  }
+  return raw;
+}
+
+/** Detect language on first 800 chars; keep text in original language (no EN translate) for summarization. */
+function prepareForSummarization(strippedText) {
   const raw = String(strippedText || '').replace(/\s+/g, ' ').trim();
   if (!raw) return { textForSummary: '', originalLang: 'und' };
   const limited = raw.length > 800 ? raw.slice(0, 800) : raw;
   const lang = detectLanguage(limited);
-  let text = limited;
-  if (lang !== 'eng') {
-    try {
-      text = await translateToEnglish(limited);
-    } catch {
-      text = limited;
-    }
-  }
-  const textForSummary = sanitizeForSummarization(text);
-  return { textForSummary, originalLang: lang };
+  return { textForSummary: sanitizeForSummarization(limited), originalLang: lang };
 }
 
-async function prepareForHfSummaryFromRssItem(item) {
+function prepareForHfSummaryFromRssItem(item) {
   const plain = stripHtml(
     item?.contentSnippet || item?.content || item?.['content:encoded'] || item?.summary || '',
   );
-  return prepareEnglishForSummarization(plain);
+  return prepareForSummarization(plain);
+}
+
+/**
+ * English → HF abstractive summary; Indic/other → extractive summary in the original script.
+ * If feed is hi/te but franc says English, translate summary to that language.
+ */
+async function summarizeForRssIngest(text, originalLang, feedLang) {
+  const src = String(text || '').trim();
+  if (!src || src.length < 40) return '';
+  const fl = String(feedLang || '').toLowerCase();
+  const forceNativeForIndicFeed =
+    (fl === 'te' || fl === 'hi') && isPrimarilyIndicScript(src);
+
+  let summary = '';
+  if (originalLang === 'eng' && !forceNativeForIndicFeed) {
+    if (shouldUseHfSummarization(src, { language: 'en' })) {
+      try {
+        summary = await summarize(src);
+      } catch {
+        summary = '';
+      }
+    }
+    if (!summary) summary = extractiveSummaryNative(src, 300);
+  } else {
+    summary = extractiveSummaryNative(src, 300);
+  }
+  if (!summary) summary = summarizeLocal(src) || '';
+  summary = clipSummarySchema(summary, 300);
+
+  if ((fl === 'hi' || fl === 'te') && originalLang === 'eng' && summary && !forceNativeForIndicFeed) {
+    try {
+      const tr = await translateEnglishToFeedLanguage(summary, fl);
+      if (tr && tr.trim()) summary = clipSummarySchema(tr, 300);
+    } catch { /* keep English */ }
+  }
+  return summary;
 }
 
 function shouldUseHfSummarization(text, { language } = {}) {
@@ -413,7 +540,10 @@ module.exports = {
   shouldUseHfSummarization,
   detectLanguage,
   translateToEnglish,
-  prepareEnglishForSummarization,
+  prepareForSummarization,
   prepareForHfSummaryFromRssItem,
+  summarizeForRssIngest,
+  translateEnglishToFeedLanguage,
+  extractiveSummaryNative,
 };
 

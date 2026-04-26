@@ -401,6 +401,11 @@ const getProxyImage = async (req, res) => {
     } catch { /* keep default */ }
   }
 
+  // The Hindu CDN often rejects article URLs as Referer; site root works for thgimgs.com.
+  if (host === 'thgimgs.com' || host.endsWith('.thgimgs.com')) {
+    referer = 'https://www.thehindu.com/';
+  }
+
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 15000);
   try {

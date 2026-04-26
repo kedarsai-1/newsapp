@@ -15,11 +15,11 @@ const {
   fetchRssItems,
   normalizeRssItem,
   resolveGoogleNewsPublisherUrl,
-  summarize: summarizeRssArticle,
   summarizeInputFromItem,
-  shouldUseHfSummarization,
   prepareForHfSummaryFromRssItem,
-  prepareEnglishForSummarization,
+  prepareForSummarization,
+  summarizeForRssIngest,
+  translateEnglishToFeedLanguage,
 } = require('./rssService');
 const { extractReadableArticle } = require('./articleExtractionService');
 
@@ -372,33 +372,47 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               continue;
             }
 
-            // eslint-disable-next-line no-await-in-loop
-            const prep = await prepareForHfSummaryFromRssItem(raw);
+            const prep = prepareForHfSummaryFromRssItem(raw);
             const summaryInput = prep.textForSummary;
             const originalLang = prep.originalLang;
             const fallbackSummary = String(item.summary || summarizeInputFromItem(raw)).slice(0, 150).trim();
-            let hfSummary = '';
+            let displayTitle = item.title;
             if (
-              summaryInput
-              && shouldUseHfSummarization(summaryInput, { language: 'en' })
+              ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
+              && originalLang === 'eng'
             ) {
               try {
                 // eslint-disable-next-line no-await-in-loop
-                hfSummary = await summarizeRssArticle(summaryInput);
+                const tr = await translateEnglishToFeedLanguage(
+                  String(item.title || '').slice(0, 400),
+                  feed.language,
+                );
+                if (tr && tr.trim()) displayTitle = tr.slice(0, 200);
+              } catch { /* keep RSS title */ }
+            }
+
+            let summaryPrimary = '';
+            if (summaryInput) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                summaryPrimary = await summarizeForRssIngest(
+                  summaryInput,
+                  originalLang,
+                  feed.language || '',
+                );
               } catch (e) {
-                hfSummary = '';
+                summaryPrimary = '';
                 stats.fallbacks += 1;
                 console.warn(
                   `[rss] summary fallback (${feed.name || 'RSS'}): ${e?.message || e}`,
                 );
               }
-            } else if (summaryInput) {
-              stats.fallbacks += 1;
             }
 
             let postFields = {
               ...item,
-              summary: hfSummary || fallbackSummary || item.summary,
+              title: displayTitle,
+              summary: summaryPrimary || fallbackSummary || item.summary,
               originalLanguage: originalLang,
             };
 
@@ -452,22 +466,21 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                 });
                 const full = String(ext?.text || '').replace(/\s+/g, ' ').trim();
                 if (ext?.success && full.length > 320) {
-                  // Do not overwrite HF summary: enrichment used to replace it with a 280-char truncate.
-                  let summaryAfterEnrich = (hfSummary && String(hfSummary).trim())
-                    ? String(hfSummary).trim()
+                  let summaryAfterEnrich = (summaryPrimary && String(summaryPrimary).trim())
+                    ? String(summaryPrimary).trim()
                     : null;
                   if (!summaryAfterEnrich) {
                     const chunk = full.slice(0, 1000).trim();
                     if (chunk.length >= 40) {
                       try {
-                        // eslint-disable-next-line no-await-in-loop
-                        const prepChunk = await prepareEnglishForSummarization(chunk);
-                        if (
-                          prepChunk.textForSummary.length >= 40
-                          && shouldUseHfSummarization(prepChunk.textForSummary, { language: 'en' })
-                        ) {
+                        const prepChunk = prepareForSummarization(chunk);
+                        if (prepChunk.textForSummary.length >= 40) {
                           // eslint-disable-next-line no-await-in-loop
-                          const s2 = await summarizeRssArticle(prepChunk.textForSummary);
+                          const s2 = await summarizeForRssIngest(
+                            prepChunk.textForSummary,
+                            prepChunk.originalLang,
+                            feed.language || '',
+                          );
                           if (s2 && String(s2).trim()) summaryAfterEnrich = String(s2).trim();
                         }
                         if (

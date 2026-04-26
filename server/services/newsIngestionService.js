@@ -16,6 +16,7 @@ const {
   normalizeRssItem,
   resolveGoogleNewsPublisherUrl,
   summarizeInputFromItem,
+  detectLanguage,
   prepareForHfSummaryFromRssItem,
   prepareForSummarization,
   summarizeForRssIngest,
@@ -38,6 +39,39 @@ const DEFAULT_CATEGORY_SLUG = process.env.SCRAPER_DEFAULT_CATEGORY || 'general';
 const SCRAPER_AUTO_APPROVE = process.env.SCRAPER_AUTO_APPROVE !== 'false';
 const NEWSAPI_MULTI_CATEGORY = process.env.NEWSAPI_MULTI_CATEGORY !== 'false';
 const INGEST_REHOST_IMAGES = process.env.INGEST_REHOST_IMAGES !== 'false';
+
+function stripMarkup(input = '') {
+  return String(input || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function scriptRatio(text, re) {
+  const t = String(text || '');
+  const letters = (t.match(/[A-Za-z\u0900-\u097F\u0C00-\u0C7F]/g) || []).length;
+  if (!letters) return 0;
+  const scriptChars = (t.match(re) || []).length;
+  return scriptChars / letters;
+}
+
+function matchesExpectedFeedLanguage(rawItem, feedLang) {
+  const fl = String(feedLang || '').toLowerCase();
+  if (fl !== 'hi' && fl !== 'te') return true;
+  const sample = stripMarkup(
+    `${rawItem?.title || ''} ${rawItem?.contentSnippet || rawItem?.content || rawItem?.summary || ''}`,
+  ).slice(0, 1000);
+  if (!sample) return true;
+  const detected = detectLanguage(sample);
+  if (fl === 'hi') {
+    if (detected === 'hin') return true;
+    return scriptRatio(sample, /[\u0900-\u097F]/g) >= 0.22;
+  }
+  if (detected === 'tel') return true;
+  return scriptRatio(sample, /[\u0C00-\u0C7F]/g) >= 0.18;
+}
 
 function hashUrl(url) {
   return crypto.createHash('sha256').update(url).digest('hex');
@@ -235,6 +269,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     duplicates: 0,
     failed: 0,
     fallbacks: 0,
+    languageFiltered: 0,
     sourceRuns: [],
   };
 
@@ -373,6 +408,10 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             const item = normalizeRssItem(raw, feed);
             if (!item.title) {
               stats.failed += 1;
+              continue;
+            }
+            if (!matchesExpectedFeedLanguage(raw, feed.language || '')) {
+              stats.languageFiltered += 1;
               continue;
             }
             if (await isDuplicate(item)) {

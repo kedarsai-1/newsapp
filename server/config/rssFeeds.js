@@ -32,19 +32,19 @@ const defaultRssFeeds = [
   // ═══════════════════════════════════════════════════════════════════════════
   // HINDI - Mix of RSS images and og:image fallback
   // ═══════════════════════════════════════════════════════════════════════════
-  { name: 'NDTV Hindi', url: 'https://feeds.feedburner.com/ndtv/latest', categorySlug: 'general', language: 'hi' },
-  { name: 'NDTV Hindi - India', url: 'https://feeds.feedburner.com/ndtvnews-india-news', categorySlug: 'politics', language: 'hi' },
-  { name: 'NDTV Hindi - Business', url: 'https://feeds.feedburner.com/ndtvprofit-latest', categorySlug: 'business', language: 'hi' },
-  // Feedburner sometimes returns invalid XML; use the official sports RSS page if needed.
-  { name: 'NDTV - Sports', url: 'https://sports.ndtv.com/rss', categorySlug: 'sports', language: 'hi', ogImageFallback: true },
+  // NDTV "Hindi" feeds are currently returning many English items; prefer stricter Hindi sources.
   { name: 'News18 Hindi', url: 'https://hindi.news18.com/rss/khabar/nation/nation.xml', categorySlug: 'general', language: 'hi' },
+  { name: 'News18 Hindi - Politics', url: 'https://hindi.news18.com/rss/khabar/politics/politics.xml', categorySlug: 'politics', language: 'hi', ogImageFallback: true },
   { name: 'Dainik Jagran', url: 'https://feeds.feedburner.com/JagranNews', categorySlug: 'general', language: 'hi', ogImageFallback: true },
   { name: 'Amar Ujala', url: 'https://www.amarujala.com/rss/breaking-news.xml', categorySlug: 'general', language: 'hi', ogImageFallback: true },
+  { name: 'Google News Hindi - Politics', url: 'https://news.google.com/rss/search?q=%E0%A4%B0%E0%A4%BE%E0%A4%9C%E0%A4%A8%E0%A5%80%E0%A4%A4%E0%A4%BF&hl=hi&gl=IN&ceid=IN:hi', categorySlug: 'politics', language: 'hi', resolvePublisherUrl: true },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TELUGU - Working feeds with images
   // ═══════════════════════════════════════════════════════════════════════════
   { name: 'TV9 Telugu', url: 'https://www.tv9telugu.com/feed', categorySlug: 'general', language: 'te' },
+  { name: 'TV9 Telugu - Andhra Pradesh', url: 'https://www.tv9telugu.com/category/andhra-pradesh/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true },
+  { name: 'TV9 Telugu - Telangana', url: 'https://www.tv9telugu.com/category/telangana/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true },
   // TV9 category feeds (WordPress style)
   { name: 'TV9 Telugu - Sports', url: 'https://www.tv9telugu.com/category/sports/feed', categorySlug: 'sports', language: 'te', ogImageFallback: true },
   { name: 'TV9 Telugu - Business', url: 'https://www.tv9telugu.com/category/business/feed', categorySlug: 'business', language: 'te', ogImageFallback: true },
@@ -56,6 +56,7 @@ const defaultRssFeeds = [
   // Category URLs can change; keep only confirmed-working endpoints.
   { name: '123Telugu', url: 'https://www.123telugu.com/feed', categorySlug: 'general', language: 'te', ogImageFallback: true },
   { name: '123Telugu - Movies', url: 'https://www.123telugu.com/category/mnews/feed', categorySlug: 'entertainment', language: 'te', ogImageFallback: true },
+  { name: 'Google News Telugu - Politics', url: 'https://news.google.com/rss/search?q=%E0%B0%B0%E0%B0%BE%E0%B0%9C%E0%B0%95%E0%B1%80%E0%B0%AF%E0%B0%BE%E0%B0%B2%E0%B1%81&hl=te&gl=IN&ceid=IN:te', categorySlug: 'politics', language: 'te', resolvePublisherUrl: true },
 ];
 
 function getRssFeedsFromEnv() {

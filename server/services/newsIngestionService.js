@@ -18,6 +18,8 @@ const {
   summarize: summarizeRssArticle,
   summarizeInputFromItem,
   shouldUseHfSummarization,
+  prepareForHfSummaryFromRssItem,
+  prepareEnglishForSummarization,
 } = require('./rssService');
 const { extractReadableArticle } = require('./articleExtractionService');
 
@@ -172,6 +174,7 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
     tags: item.tags || [],
     language: item.language || 'en',
+    originalLanguage: item.originalLanguage || null,
     sourceName,
     sourceUrl: item.sourceUrl || null,
     sourceUrlHash: item.sourceUrl ? hashUrl(item.sourceUrl) : null,
@@ -369,12 +372,15 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               continue;
             }
 
-            const summaryInput = summarizeInputFromItem(raw);
-            const fallbackSummary = String(item.summary || summaryInput).slice(0, 150).trim();
+            // eslint-disable-next-line no-await-in-loop
+            const prep = await prepareForHfSummaryFromRssItem(raw);
+            const summaryInput = prep.textForSummary;
+            const originalLang = prep.originalLang;
+            const fallbackSummary = String(item.summary || summarizeInputFromItem(raw)).slice(0, 150).trim();
             let hfSummary = '';
             if (
               summaryInput
-              && shouldUseHfSummarization(summaryInput, { language: feed.language || item.language })
+              && shouldUseHfSummarization(summaryInput, { language: 'en' })
             ) {
               try {
                 // eslint-disable-next-line no-await-in-loop
@@ -393,6 +399,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             let postFields = {
               ...item,
               summary: hfSummary || fallbackSummary || item.summary,
+              originalLanguage: originalLang,
             };
 
             // Google News RSS items often point to news.google.com redirect pages.
@@ -451,15 +458,25 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                     : null;
                   if (!summaryAfterEnrich) {
                     const chunk = full.slice(0, 1000).trim();
-                    const lang = feed.language || item.language;
-                    if (
-                      chunk.length >= 40
-                      && shouldUseHfSummarization(chunk, { language: lang })
-                    ) {
+                    if (chunk.length >= 40) {
                       try {
                         // eslint-disable-next-line no-await-in-loop
-                        const s2 = await summarizeRssArticle(chunk);
-                        if (s2 && String(s2).trim()) summaryAfterEnrich = String(s2).trim();
+                        const prepChunk = await prepareEnglishForSummarization(chunk);
+                        if (
+                          prepChunk.textForSummary.length >= 40
+                          && shouldUseHfSummarization(prepChunk.textForSummary, { language: 'en' })
+                        ) {
+                          // eslint-disable-next-line no-await-in-loop
+                          const s2 = await summarizeRssArticle(prepChunk.textForSummary);
+                          if (s2 && String(s2).trim()) summaryAfterEnrich = String(s2).trim();
+                        }
+                        if (
+                          (!postFields.originalLanguage || postFields.originalLanguage === 'und')
+                          && prepChunk.originalLang
+                          && prepChunk.originalLang !== 'und'
+                        ) {
+                          postFields = { ...postFields, originalLanguage: prepChunk.originalLang };
+                        }
                       } catch (e) {
                         stats.fallbacks += 1;
                         console.warn(

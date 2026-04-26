@@ -1,4 +1,5 @@
 const Parser = require('rss-parser');
+const { franc } = require('franc');
 
 const parser = new Parser({
   timeout: 15000,
@@ -81,6 +82,76 @@ function sanitizeForSummarization(text) {
     .replace(/\uFFFD/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function detectLanguage(text) {
+  const lang = franc(text || '');
+  return lang;
+}
+
+function parseHfTranslationJson(result) {
+  if (result == null) return '';
+  if (typeof result === 'string') return result.trim();
+  if (Array.isArray(result)) {
+    const first = result[0];
+    if (first && typeof first === 'object' && first.translation_text != null) {
+      return String(first.translation_text).trim();
+    }
+  }
+  if (typeof result === 'object' && result.translation_text != null) {
+    return String(result.translation_text).trim();
+  }
+  return '';
+}
+
+async function translateToEnglish(text) {
+  const token = String(process.env.HF_TOKEN || '').trim();
+  if (!token) return String(text || '');
+  const input = String(text || '').slice(0, 800);
+  if (!input.trim()) return '';
+  try {
+    const response = await fetch(
+      'https://router.huggingface.co/hf-inference/models/Helsinki-NLP/opus-mt-mul-en',
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        method: 'POST',
+        body: JSON.stringify({ inputs: input }),
+      },
+    );
+    if (!response.ok) throw new Error(`HF translate ${response.status}`);
+    const result = await response.json();
+    const out = parseHfTranslationJson(result);
+    return out || text;
+  } catch {
+    return String(text || '');
+  }
+}
+
+async function prepareEnglishForSummarization(strippedText) {
+  const raw = String(strippedText || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return { textForSummary: '', originalLang: 'und' };
+  const limited = raw.length > 800 ? raw.slice(0, 800) : raw;
+  const lang = detectLanguage(limited);
+  let text = limited;
+  if (lang !== 'eng') {
+    try {
+      text = await translateToEnglish(limited);
+    } catch {
+      text = limited;
+    }
+  }
+  const textForSummary = sanitizeForSummarization(text);
+  return { textForSummary, originalLang: lang };
+}
+
+async function prepareForHfSummaryFromRssItem(item) {
+  const plain = stripHtml(
+    item?.contentSnippet || item?.content || item?.['content:encoded'] || item?.summary || '',
+  );
+  return prepareEnglishForSummarization(plain);
 }
 
 function shouldUseHfSummarization(text, { language } = {}) {
@@ -340,5 +411,9 @@ module.exports = {
   summarize,
   summarizeInputFromItem,
   shouldUseHfSummarization,
+  detectLanguage,
+  translateToEnglish,
+  prepareEnglishForSummarization,
+  prepareForHfSummaryFromRssItem,
 };
 

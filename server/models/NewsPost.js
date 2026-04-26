@@ -77,6 +77,8 @@ const newsPostSchema = new mongoose.Schema({
   isBreaking: { type: Boolean, default: false },
   tags: [{ type: String, trim: true, lowercase: true }],
   language: { type: String, trim: true, lowercase: true, default: 'en' },
+  /** ISO 639-3 from franc (e.g. eng, tel) at ingest time. */
+  originalLanguage: { type: String, trim: true, default: null, maxlength: 12 },
   sourceName: { type: String, default: null, trim: true },
   sourceUrl: { type: String, default: null, trim: true },
   sourceUrlHash: { type: String, default: null, index: true, sparse: true },

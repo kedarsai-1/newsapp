@@ -249,9 +249,14 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     const fetchItems = useGNews ? fetchGNewsItems : fetchNewsApiItems;
     const providerLabel = useGNews ? 'GNews' : 'NewsAPI';
 
-    const ingestLanguages = useGNews
-      ? getGNewsIngestLanguages()
-      : [(process.env.NEWSAPI_LANGUAGE || 'en').toLowerCase()];
+    // Same language list for both providers so Telugu/Hindi feeds fill when using NewsAPI too (where supported).
+    const ingestLanguages = getGNewsIngestLanguages();
+    if (!useGNews) {
+      console.log(
+        '[ingest] NewsAPI: fetching en, te, hi per plan (unsupported langs return 0 articles). '
+          + 'Prefer GNEWS_API_KEY for reliable regional headlines.',
+      );
+    }
 
     const reporter = await ensureSystemReporter();
     const plans = getIngestPlans();
@@ -286,7 +291,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
           const items = await fetchItems({
             newsApiCategory: plan.newsApiCategory,
             pageSize: perRequest,
-            ...(useGNews ? { language: ingestLang } : {}),
+            language: ingestLang,
           });
           stats.fetched += items.length;
 

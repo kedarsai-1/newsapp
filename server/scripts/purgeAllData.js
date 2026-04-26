@@ -7,6 +7,9 @@
  *
  * Run:
  *   node scripts/purgeAllData.js
+ *
+ * DB only (skip Cloudinary — useful when asset purge is slow or not needed):
+ *   PURGE_DB_ONLY=true node scripts/purgeAllData.js
  */
 
 require('dotenv').config();
@@ -80,13 +83,18 @@ async function main() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log('[purge] connected');
 
-  console.log('[purge] deleting Cloudinary assets under prefix "newsapp/"...');
-  if (isCloudinaryConfigured()) {
+  const dbOnly = String(process.env.PURGE_DB_ONLY || '').toLowerCase() === 'true';
+  console.log(
+    dbOnly
+      ? '[purge] PURGE_DB_ONLY=true — skipping Cloudinary'
+      : '[purge] deleting Cloudinary assets under prefix "newsapp/"...',
+  );
+  if (!dbOnly && isCloudinaryConfigured()) {
     const img = await deleteCloudinaryByPrefix({ prefix: 'newsapp/', resourceType: 'image' });
     const vid = await deleteCloudinaryByPrefix({ prefix: 'newsapp/', resourceType: 'video' });
     console.log(`[purge] cloudinary images: listed=${img.listed} deleted=${img.deleted}`);
     console.log(`[purge] cloudinary videos: listed=${vid.listed} deleted=${vid.deleted}`);
-  } else {
+  } else if (!dbOnly) {
     console.log('[purge] cloudinary not configured; skipping asset deletion');
   }
 

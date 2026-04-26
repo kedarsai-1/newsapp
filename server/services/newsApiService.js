@@ -306,11 +306,16 @@ async function mapWithConcurrency(items, limit, mapper) {
  * @returns {Promise<Array<object>>} Normalized items for newsIngestionService.toPostDoc
  */
 async function fetchNewsApiItems(options = {}) {
-  const { newsApiCategory, pageSize: pageSizeOpt } = options;
+  const { newsApiCategory, pageSize: pageSizeOpt, language: languageOpt } = options;
   const key = process.env.NEWSAPI_KEY?.trim();
   if (!key) return [];
 
   const country = (process.env.NEWSAPI_COUNTRY || 'in').trim();
+  const lang = String(
+    languageOpt || process.env.NEWSAPI_LANGUAGE || 'en',
+  )
+    .trim()
+    .toLowerCase();
   const defaultSize = Number(process.env.NEWSAPI_PAGE_SIZE || 12);
   const pageSize = Math.min(
     Math.max(Number(pageSizeOpt ?? defaultSize), 1),
@@ -319,8 +324,13 @@ async function fetchNewsApiItems(options = {}) {
 
   const url = new URL('https://newsapi.org/v2/top-headlines');
   url.searchParams.set('apiKey', key);
-  url.searchParams.set('country', country);
   url.searchParams.set('pageSize', String(pageSize));
+  // NewsAPI: `language` cannot be mixed with `country`. English = India bundle; other langs = language-only.
+  if (lang === 'en') {
+    url.searchParams.set('country', country);
+  } else {
+    url.searchParams.set('language', lang);
+  }
   if (newsApiCategory && String(newsApiCategory).trim()) {
     url.searchParams.set('category', String(newsApiCategory).trim());
   }
@@ -331,6 +341,8 @@ async function fetchNewsApiItems(options = {}) {
   const data = await res.json();
 
   if (data.status !== 'ok') {
+    // Many keys / langs are unsupported; skip this language instead of failing the whole ingest run.
+    if (lang !== 'en') return [];
     throw new Error(data.message || `NewsAPI error (code ${data.code ?? res.status})`);
   }
 
@@ -362,7 +374,7 @@ async function fetchNewsApiItems(options = {}) {
       sourceUrl: article.url || '',
       sourcePublishedAt: article.publishedAt || null,
       sourceType: 'api',
-      language: (process.env.NEWSAPI_LANGUAGE || 'en').toLowerCase(),
+      language: lang,
       scrapeConfidence: img ? 0.9 : 0.85,
       apiSourceName: article.source?.name || 'headlines',
     };

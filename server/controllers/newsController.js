@@ -89,9 +89,6 @@ const getFeed = async (req, res) => {
       language && String(language).toLowerCase() !== 'all'
         ? String(language).toLowerCase()
         : null;
-    if (langParam && langParam !== 'en') {
-      query.language = langParam;
-    }
 
     if (breaking === 'true') query.isBreaking = true;
     if (featured === 'true') query.isFeatured = true;
@@ -132,22 +129,41 @@ const getFeed = async (req, res) => {
         ]
       : null;
 
-    const langEnOr =
-      langParam === 'en'
-        ? [
+    /** ISO 639-1 feed filter + franc ISO 639-3 (`tel`/`hin`) so RSS/API rows still match. */
+    const languageClause = (() => {
+      if (!langParam) return null;
+      if (langParam === 'en') {
+        return {
+          $or: [
             { language: 'en' },
             { language: { $exists: false } },
             { language: null },
-          ]
-        : null;
+          ],
+        };
+      }
+      if (langParam === 'te') {
+        return {
+          $or: [
+            { language: 'te' },
+            { originalLanguage: 'tel' },
+          ],
+        };
+      }
+      if (langParam === 'hi') {
+        return {
+          $or: [
+            { language: 'hi' },
+            { originalLanguage: 'hin' },
+          ],
+        };
+      }
+      return { language: langParam };
+    })();
 
-    if (searchOr && langEnOr) {
-      query.$and = [{ $or: searchOr }, { $or: langEnOr }];
-    } else if (searchOr) {
-      query.$or = searchOr;
-    } else if (langEnOr) {
-      query.$or = langEnOr;
-    }
+    const filterAnd = [...(query.$and || [])];
+    if (searchOr) filterAnd.push({ $or: searchOr });
+    if (languageClause) filterAnd.push(languageClause);
+    if (filterAnd.length) query.$and = filterAnd;
 
     // Optional freshness window.
     // IMPORTANT: For "manual" posts we typically want to keep them visible even if older.

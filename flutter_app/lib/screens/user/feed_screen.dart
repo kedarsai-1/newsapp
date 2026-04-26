@@ -972,10 +972,6 @@ class _ConstituencyFilterField extends StatelessWidget {
     final p = context.palette;
     final hasSelection =
         selectedValue.trim().isNotEmpty && selectedValue.toLowerCase() != 'all';
-    if (hasSelection && controller.text.trim() != selectedValue.trim()) {
-      controller.text = selectedValue;
-      controller.selection = TextSelection.collapsed(offset: controller.text.length);
-    }
     return Row(
       children: [
         Expanded(
@@ -1015,12 +1011,12 @@ class _ConstituencyFilterField extends StatelessWidget {
                     )
                   : null,
             ),
-            onSubmitted: (value) => onApply(value),
+            onSubmitted: (value) => onApply(value.trim().isEmpty ? 'all' : value.trim()),
           ),
         ),
         const SizedBox(width: 8),
         IconButton.filled(
-          onPressed: () => onApply(controller.text),
+          onPressed: () => onApply(controller.text.trim().isEmpty ? 'all' : controller.text.trim()),
           icon: const Icon(Icons.check_rounded),
           style: IconButton.styleFrom(
             backgroundColor: p.primary,

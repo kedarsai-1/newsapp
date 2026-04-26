@@ -72,10 +72,23 @@ function looksMojibake(text) {
   );
 }
 
-function shouldUseHfSummarization(text) {
+function sanitizeForSummarization(text) {
+  return String(text || '')
+    .replace(/â€™/g, "'")
+    .replace(/â€œ|â€\x9D/g, '"')
+    .replace(/â€"/g, '-')
+    .replace(/Ã©/g, 'e')
+    .replace(/\uFFFD/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function shouldUseHfSummarization(text, { language } = {}) {
   const t = String(text || '').trim();
-  if (!t || t.length < 120) return false;
-  if (looksMojibake(t)) return false;
+  if (!t || t.length < 40) return false;
+
+  // Force-enable for explicitly English feeds, then let sanitize step clean mojibake.
+  if (String(language || '').toLowerCase() === 'en') return true;
 
   const letters = (t.match(/[A-Za-z\u0900-\u0D7F]/g) || []).length;
   if (letters === 0) return false;
@@ -87,7 +100,7 @@ function shouldUseHfSummarization(text) {
 }
 
 async function summarize(text) {
-  const input = String(text || '').replace(/\s+/g, ' ').trim();
+  const input = sanitizeForSummarization(text);
   if (!input) return '';
   const token = String(process.env.HF_TOKEN || '').trim();
   if (!token) {

@@ -372,7 +372,10 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             const summaryInput = summarizeInputFromItem(raw);
             const fallbackSummary = String(item.summary || summaryInput).slice(0, 150).trim();
             let hfSummary = '';
-            if (summaryInput && shouldUseHfSummarization(summaryInput)) {
+            if (
+              summaryInput
+              && shouldUseHfSummarization(summaryInput, { language: feed.language || item.language })
+            ) {
               try {
                 // eslint-disable-next-line no-await-in-loop
                 hfSummary = await summarizeRssArticle(summaryInput);

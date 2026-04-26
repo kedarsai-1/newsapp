@@ -1,5 +1,7 @@
+const mongoose = require('mongoose');
 const NewsPost = require('../models/NewsPost');
 const User = require('../models/User');
+const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const { extractReadableArticle } = require('../services/articleExtractionService');
@@ -15,6 +17,18 @@ function cleanTextForClient(input) {
     .replace(/\u00a0/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Same filter as find(), but with ObjectId fields cast for aggregation $match. */
+function feedMatchForAggregate(query) {
+  const m = { ...query };
+  if (m.category != null) {
+    const id = String(m.category);
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      m.category = new mongoose.Types.ObjectId(id);
+    }
+  }
+  return m;
 }
 
 function sanitizeStoryTextFields(post) {
@@ -159,23 +173,63 @@ const getFeed = async (req, res) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const total = await NewsPost.countDocuments(query);
+    const lim = parseInt(limit);
+    const match = feedMatchForAggregate(query);
+    const total = await NewsPost.countDocuments(match);
 
-    const posts = await NewsPost.find(query)
-      .populate('reporter', 'name avatar')
-      .populate('category', 'name slug icon color')
-      .select('-likedBy -rejectionReason')
-      // Prefer actual article publish time; fall back to insert time.
-      .sort({ sourcePublishedAt: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    const userColl = User.collection.collectionName;
+    const catColl = Category.collection.collectionName;
+
+    const postsRaw = await NewsPost.aggregate([
+      { $match: match },
+      {
+        $addFields: {
+          _feedSort: {
+            $ifNull: [
+              '$sourcePublishedAt',
+              { $ifNull: ['$scrapedAt', '$createdAt'] },
+            ],
+          },
+        },
+      },
+      { $sort: { _feedSort: -1, _id: -1 } },
+      { $skip: skip },
+      { $limit: lim },
+      {
+        $lookup: {
+          from: userColl,
+          localField: 'reporter',
+          foreignField: '_id',
+          pipeline: [{ $project: { name: 1, avatar: 1 } }],
+          as: '_reporterArr',
+        },
+      },
+      {
+        $lookup: {
+          from: catColl,
+          localField: 'category',
+          foreignField: '_id',
+          pipeline: [{ $project: { name: 1, slug: 1, icon: 1, color: 1 } }],
+          as: '_categoryArr',
+        },
+      },
+      {
+        $set: {
+          reporter: { $arrayElemAt: ['$_reporterArr', 0] },
+          category: { $arrayElemAt: ['$_categoryArr', 0] },
+        },
+      },
+      {
+        $unset: ['_reporterArr', '_categoryArr', '_feedSort', 'likedBy', 'rejectionReason'],
+      },
+    ]);
 
     res.json({
       success: true,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      posts: posts.map(sanitizeStoryTextFields),
+      posts: postsRaw.map(sanitizeStoryTextFields),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -86,7 +86,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     final short = post.summary?.trim();
     if (_fullText != null && _fullText!.trim().isNotEmpty) return _fullText!.trim();
     if (short != null && short.isNotEmpty) return short;
-    return post.body;
+    final body = post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (body.length <= 420) return body;
+    return '${body.substring(0, 420).trim()}...';
   }
 
   bool _shouldTryExtract(NewsPost post) {
@@ -624,20 +626,6 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                         ),
                       ),
                     ),
-                  Text(
-                    _displayText(post),
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: p.textPrimary,
-                          fontSize: 15,
-                          height: 1.85,
-                        ) ??
-                        TextStyle(
-                          fontSize: 15,
-                          height: 1.85,
-                          color: p.textPrimary,
-                        ),
-                  ),
-                  const SizedBox(height: AppSpacing.s12),
                   ..._paragraphs(
                     _displayText(post),
                     Theme.of(context).textTheme.bodyLarge?.copyWith(

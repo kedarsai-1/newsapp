@@ -49,7 +49,7 @@ function summarizeLocal(text) {
 }
 
 function summarizeInputFromItem(item) {
-  const raw = stripHtml(item?.contentSnippet || item?.content || item?.['content:encoded'] || item?.summary || '');
+  const raw = stripHtml(item?.content || item?.['content:encoded'] || item?.contentSnippet || item?.summary || '');
   if (!raw) return '';
   // Keep payload bounded for model latency/cost and to satisfy pipeline requirement.
   const maxLen = 1000;
@@ -59,6 +59,31 @@ function summarizeInputFromItem(item) {
   const lastSpace = cut.lastIndexOf(' ');
   if (lastSpace >= minLen) return cut.slice(0, lastSpace).trim();
   return cut.trim();
+}
+
+function looksMojibake(text) {
+  const t = String(text || '');
+  return (
+    t.includes('\uFFFD')
+    || t.includes('â€™')
+    || t.includes('â€œ')
+    || t.includes('â€')
+    || t.includes('Ã')
+  );
+}
+
+function shouldUseHfSummarization(text) {
+  const t = String(text || '').trim();
+  if (!t || t.length < 120) return false;
+  if (looksMojibake(t)) return false;
+
+  const letters = (t.match(/[A-Za-z\u0900-\u0D7F]/g) || []).length;
+  if (letters === 0) return false;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  const latinRatio = latin / letters;
+
+  // sshleifer/distilbart-cnn-12-6 is English-focused; avoid low-quality output on Indic-heavy text.
+  return latinRatio >= 0.65;
 }
 
 async function summarize(text) {
@@ -86,7 +111,9 @@ async function summarize(text) {
       throw new Error(`HF ${response.status}${detail}`);
     }
     const result = await response.json();
-    return String(result?.[0]?.summary_text || '').trim();
+    const out = String(result?.[0]?.summary_text || '').trim();
+    if (!out || looksMojibake(out)) return '';
+    return out;
   } catch (e) {
     throw new Error(`HuggingFace summarization failed: ${e.message || e}`);
   }
@@ -284,5 +311,6 @@ module.exports = {
   resolveGoogleNewsPublisherUrl,
   summarize,
   summarizeInputFromItem,
+  shouldUseHfSummarization,
 };
 

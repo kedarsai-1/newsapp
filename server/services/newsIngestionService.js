@@ -17,6 +17,7 @@ const {
   resolveGoogleNewsPublisherUrl,
   summarize: summarizeRssArticle,
   summarizeInputFromItem,
+  shouldUseHfSummarization,
 } = require('./rssService');
 const { extractReadableArticle } = require('./articleExtractionService');
 
@@ -369,9 +370,9 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             }
 
             const summaryInput = summarizeInputFromItem(raw);
-            const fallbackSummary = summaryInput.slice(0, 150).trim();
+            const fallbackSummary = String(item.summary || summaryInput).slice(0, 150).trim();
             let hfSummary = '';
-            if (summaryInput) {
+            if (summaryInput && shouldUseHfSummarization(summaryInput)) {
               try {
                 // eslint-disable-next-line no-await-in-loop
                 hfSummary = await summarizeRssArticle(summaryInput);
@@ -382,6 +383,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                   `[rss] summary fallback (${feed.name || 'RSS'}): ${e?.message || e}`,
                 );
               }
+            } else if (summaryInput) {
+              stats.fallbacks += 1;
             }
 
             let postFields = {

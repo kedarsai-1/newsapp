@@ -7,6 +7,15 @@ import '../models/models.dart';
 import '../theme/app_typography.dart';
 import '../theme/app_spacing.dart';
 
+String _summaryOrBodySnippet(NewsPost post, {int maxLen = 220}) {
+  final fromSummary = post.summary?.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final base = (fromSummary != null && fromSummary.isNotEmpty)
+      ? fromSummary
+      : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (base.length <= maxLen) return base;
+  return '${base.substring(0, maxLen).trim()}...';
+}
+
 /// Production card: horizontal, borderless, responsive.
 class NewsCard extends StatelessWidget {
   final NewsPost post;
@@ -147,7 +156,7 @@ class _NewsCardText extends StatelessWidget {
         ? post.sourceName!.trim()
         : (post.category?.name ?? '').trim();
     final timeLabel = timeago.format(post.createdAt);
-    final subtitle = post.summary?.trim().isNotEmpty == true ? post.summary!.trim() : null;
+    final subtitle = _summaryOrBodySnippet(post).trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -158,7 +167,7 @@ class _NewsCardText extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: titleStyle,
         ),
-        if (subtitle != null) ...[
+        if (subtitle.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s8),
           Text(
             subtitle,

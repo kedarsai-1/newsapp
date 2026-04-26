@@ -11,7 +11,6 @@ import '../../services/auth_provider.dart';
 import '../../services/socket_service.dart';
 import '../../models/models.dart';
 import '../../widgets/news_card.dart';
-import '../../widgets/shimmer_widgets.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/category_chip.dart';
 import '../../widgets/news_shimmer_loader.dart';
@@ -441,6 +440,15 @@ class _StoryReaderPageState extends State<_StoryReaderPage>
 
   NewsPost get post => widget.post;
 
+  String _previewText() {
+    final fromSummary = post.summary?.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final base = (fromSummary != null && fromSummary.isNotEmpty)
+        ? fromSummary
+        : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (base.length <= 320) return base;
+    return '${base.substring(0, 320).trim()}...';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -710,7 +718,7 @@ class _StoryReaderPageState extends State<_StoryReaderPage>
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
-                                  post.body,
+                                  _previewText(),
                                   maxLines: 8,
                                   overflow: TextOverflow.ellipsis,
                                   style: t.bodyLarge?.copyWith(

@@ -11,8 +11,6 @@ import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
 import '../../constants.dart';
-import '../../theme/app_typography.dart';
-import '../../theme/app_spacing.dart';
 import '../../users/media_widgets.dart';
 import '../../widgets/location_label.dart';
 import '../../widgets/shimmer_widgets.dart';
@@ -86,8 +84,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
   String _displayText(NewsPost post) {
     final short = post.summary?.trim();
-    if (_fullText != null && _fullText!.trim().isNotEmpty)
+    if (_fullText != null && _fullText!.trim().isNotEmpty) {
       return _fullText!.trim();
+    }
     if (short != null && short.isNotEmpty) return short;
     final body = post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (body.length <= 420) return body;

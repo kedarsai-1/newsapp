@@ -33,9 +33,9 @@ class ApiService {
   }
 
   static Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    if (_token != null) 'Authorization': 'Bearer $_token',
-  };
+        'Content-Type': 'application/json',
+        if (_token != null) 'Authorization': 'Bearer $_token',
+      };
 
   static Future<Map<String, dynamic>> _get(String path) async {
     try {
@@ -77,7 +77,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> _post(
+      String path, Map<String, dynamic> body) async {
     try {
       final res = await http
           .post(
@@ -95,7 +96,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> _put(String path, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> _put(
+      String path, Map<String, dynamic> body) async {
     try {
       final res = await http
           .put(
@@ -131,7 +133,8 @@ class ApiService {
     });
   }
 
-  static Future<Map<String, dynamic>> login(String email, String password) async {
+  static Future<Map<String, dynamic>> login(
+      String email, String password) async {
     return _post('/auth/login', {'email': email, 'password': password});
   }
 
@@ -199,18 +202,26 @@ class ApiService {
       'limit': AppConstants.pageSize.toString(),
       if (categoryId != null) 'category': categoryId,
       if (language != null && language != 'all') 'language': language,
-      if (constituency != null && constituency != 'all' && constituency.trim().isNotEmpty)
+      if (constituency != null &&
+          constituency != 'all' &&
+          constituency.trim().isNotEmpty)
         'constituency': constituency.trim(),
-      if (politicsScope != null && politicsScope != 'all' && politicsScope.trim().isNotEmpty)
+      if (politicsScope != null &&
+          politicsScope != 'all' &&
+          politicsScope.trim().isNotEmpty)
         'politicsScope': politicsScope.trim().toLowerCase(),
       if (city != null) 'city': city,
       if (search != null) 'search': search,
       if (breaking) 'breaking': 'true',
       if (days != null) 'days': days.toString(),
       if (sourceTypes != null && sourceTypes.isNotEmpty)
-        'sourceTypes': sourceTypes.map((s) => s.trim().toLowerCase()).where((s) => s.isNotEmpty).join(','),
+        'sourceTypes': sourceTypes
+            .map((s) => s.trim().toLowerCase())
+            .where((s) => s.isNotEmpty)
+            .join(','),
     };
-    final uri = Uri.parse('${AppConstants.baseUrl}/news/feed').replace(queryParameters: params);
+    final uri = Uri.parse('${AppConstants.baseUrl}/news/feed')
+        .replace(queryParameters: params);
     try {
       final res = await http.get(uri, headers: _headers).timeout(_httpTimeout);
       return jsonDecode(res.body);
@@ -223,7 +234,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getPost(String id) async => _get('/news/$id');
+  static Future<Map<String, dynamic>> getPost(String id) async =>
+      _get('/news/$id');
 
   /// Extract full article text from the publisher URL (best-effort).
   static Future<Map<String, dynamic>> extractArticle(String url) async {
@@ -248,13 +260,25 @@ class ApiService {
   static Future<Map<String, dynamic>> toggleBookmark(String postId) async =>
       _post('/news/$postId/bookmark', {});
 
-  static Future<Map<String, dynamic>> getBookmarks() async => _get('/news/bookmarks');
+  static Future<Map<String, dynamic>> getBookmarks() async =>
+      _get('/news/bookmarks');
 
   static Future<Map<String, dynamic>> getComments(String postId) async =>
       _get('/news/$postId/comments');
 
-  static Future<Map<String, dynamic>> addComment(String postId, String text) async =>
+  static Future<Map<String, dynamic>> addComment(
+          String postId, String text) async =>
       _post('/news/$postId/comments', {'text': text});
+
+  static Future<Map<String, dynamic>> translateText({
+    required String text,
+    required String targetLanguage,
+  }) async {
+    return _post('/news/translate', {
+      'text': text,
+      'targetLanguage': targetLanguage,
+    });
+  }
 
   // ─── GUEST INTERACTIONS (LOCAL STORAGE) ────────────────────────────────────
 
@@ -263,7 +287,8 @@ class ApiService {
     return (prefs.getStringList(key) ?? const []).toSet();
   }
 
-  static Future<void> _saveGuestStringSet(String key, Set<String> values) async {
+  static Future<void> _saveGuestStringSet(
+      String key, Set<String> values) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(key, values.toList());
   }
@@ -371,7 +396,8 @@ class ApiService {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
-  static Future<Map<String, dynamic>> addGuestComment(String postId, String text) async {
+  static Future<Map<String, dynamic>> addGuestComment(
+      String postId, String text) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(AppConstants.guestCommentsKey);
     final byPost = raw == null
@@ -411,12 +437,15 @@ class ApiService {
   // ─── CATEGORIES ──────────────────────────────────────────────────────────
 
   /// Full JSON from GET /categories (for error messages).
-  static Future<Map<String, dynamic>> getCategoriesJson() async => _get('/categories');
+  static Future<Map<String, dynamic>> getCategoriesJson() async =>
+      _get('/categories');
 
   static Future<List<Category>> getCategories() async {
     final data = await _get('/categories');
     if (data['success'] == true && data['categories'] is List) {
-      return (data['categories'] as List).map((c) => Category.fromJson(c as Map<String, dynamic>)).toList();
+      return (data['categories'] as List)
+          .map((c) => Category.fromJson(c as Map<String, dynamic>))
+          .toList();
     }
     return [];
   }
@@ -467,7 +496,8 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
-  static Future<Map<String, dynamic>> getMyPosts({String? status, int page = 1}) async {
+  static Future<Map<String, dynamic>> getMyPosts(
+      {String? status, int page = 1}) async {
     final params = {
       'page': page.toString(),
       if (status != null) 'status': status,
@@ -478,16 +508,19 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
-  static Future<Map<String, dynamic>> getReporterStats() async => _get('/reporter/stats');
+  static Future<Map<String, dynamic>> getReporterStats() async =>
+      _get('/reporter/stats');
 
   // ─── ADMIN ───────────────────────────────────────────────────────────────
 
-  static Future<Map<String, dynamic>> getDashboard() async => _get('/admin/dashboard');
+  static Future<Map<String, dynamic>> getDashboard() async =>
+      _get('/admin/dashboard');
 
   static Future<Map<String, dynamic>> getPendingPosts({int page = 1}) async =>
       _get('/admin/posts/pending?page=$page');
 
-  static Future<Map<String, dynamic>> approvePost(String id, {
+  static Future<Map<String, dynamic>> approvePost(
+    String id, {
     bool isBreaking = false,
     bool isFeatured = false,
   }) async {
@@ -497,10 +530,12 @@ class ApiService {
     });
   }
 
-  static Future<Map<String, dynamic>> rejectPost(String id, String reason) async =>
+  static Future<Map<String, dynamic>> rejectPost(
+          String id, String reason) async =>
       _put('/admin/posts/$id/reject', {'reason': reason});
 
-  static Future<Map<String, dynamic>> getUsers({String? role, int page = 1}) async {
+  static Future<Map<String, dynamic>> getUsers(
+      {String? role, int page = 1}) async {
     final params = {'page': page.toString(), if (role != null) 'role': role};
     final uri = Uri.parse('${AppConstants.baseUrl}/admin/users')
         .replace(queryParameters: params);
@@ -508,7 +543,8 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
-  static Future<Map<String, dynamic>> updateUserRole(String userId, String role) async =>
+  static Future<Map<String, dynamic>> updateUserRole(
+          String userId, String role) async =>
       _put('/admin/users/$userId/role', {'role': role});
 
   static Future<Map<String, dynamic>> toggleUserActive(String userId) async =>

@@ -10,10 +10,13 @@ import 'providers/admin_provider.dart';
 import 'constants.dart';
 import 'providers/theme_provider.dart';
 
+import 'screens/splash_screen.dart';
 import 'screens/onboarding/select_language_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/user/feed_screen.dart' show FeedScreen;
+import 'screens/user/quick_news_screen.dart';
+import 'screens/user/categories_screen.dart';
 import 'screens/user/article_detail_screen.dart';
 import 'screens/user/bookmarks_screen.dart';
 import 'screens/user/profile_screen.dart';
@@ -49,8 +52,7 @@ CustomTransitionPage<void> _smoothAppPage({
       final slide = Tween<Offset>(
         begin: const Offset(0, 0.024),
         end: Offset.zero,
-      ).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
       final scale = Tween<double>(begin: 0.985, end: 1.0).animate(
         CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
       );
@@ -93,6 +95,8 @@ GoRouter createAppRouter(BuildContext context) {
       final goingToAdmin = loc.startsWith('/admin');
       final goingToReporter = loc.startsWith('/reporter');
       final goingToUserRoute = loc == '/feed' ||
+          loc == '/quick-news' ||
+          loc == '/categories' ||
           loc == '/bookmarks' ||
           loc == '/settings' ||
           loc == '/profile' ||
@@ -115,143 +119,153 @@ GoRouter createAppRouter(BuildContext context) {
       return null;
     },
     routes: [
-        // Default web entrypoint (/) → user feed.
-        // This prevents "Could not navigate to initial route" when the app is opened at /
-        // or when the browser reloads on an unknown path.
-        GoRoute(
-          path: '/',
-          redirect: (_, __) => '/feed',
-        ),
+      // Default web entrypoint (/) → user feed.
+      // This prevents "Could not navigate to initial route" when the app is opened at /
+      // or when the browser reloads on an unknown path.
+      GoRoute(
+        path: '/',
+        redirect: (_, __) => '/feed',
+      ),
 
-        GoRoute(
-          path: '/select-language',
-          pageBuilder: (context, state) => _smoothAppPage(
-            state: state,
-            child: const SelectLanguageScreen(),
+      GoRoute(
+        path: '/select-language',
+        pageBuilder: (context, state) => _smoothAppPage(
+          state: state,
+          child: const SelectLanguageScreen(),
+        ),
+      ),
+
+      // ── Auth ──────────────────────────────────────────────
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) =>
+            _smoothAppPage(state: state, child: const LoginScreen()),
+      ),
+      GoRoute(
+        path: '/register',
+        pageBuilder: (context, state) =>
+            _smoothAppPage(state: state, child: const RegisterScreen()),
+      ),
+
+      // ── End User ──────────────────────────────────────────
+      ShellRoute(
+        builder: (context, state, child) => UserShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/feed',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const FeedScreen()),
           ),
-        ),
+          GoRoute(
+            path: '/quick-news',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const QuickNewsScreen()),
+          ),
+          GoRoute(
+            path: '/categories',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const CategoriesScreen()),
+          ),
+          GoRoute(
+            path: '/article/:id',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: ArticleDetailScreen(postId: state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/bookmarks',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const BookmarksScreen()),
+          ),
+          GoRoute(
+            path: '/settings',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const ProfileScreen()),
+          ),
+          // Backward-compatible route
+          GoRoute(
+            path: '/profile',
+            redirect: (_, __) => '/settings',
+          ),
+          GoRoute(
+            path: '/privacy-policy',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const PrivacyPolicyScreen(),
+            ),
+          ),
+        ],
+      ),
 
-        // ── Auth ──────────────────────────────────────────────
-        GoRoute(
-          path: '/login',
-          pageBuilder: (context, state) =>
-              _smoothAppPage(state: state, child: const LoginScreen()),
-        ),
-        GoRoute(
-          path: '/register',
-          pageBuilder: (context, state) =>
-              _smoothAppPage(state: state, child: const RegisterScreen()),
-        ),
+      // ── Reporter ──────────────────────────────────────────
+      ShellRoute(
+        builder: (context, state, child) => ReporterShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/reporter',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const ReporterDashboardScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/reporter/new',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const CreatePostScreen()),
+          ),
+          GoRoute(
+            path: '/reporter/posts',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const MyPostsScreen()),
+          ),
+          // Reporter profile reuses the user profile screen
+          GoRoute(
+            path: '/reporter/settings',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const ProfileScreen()),
+          ),
+          // Backward-compatible route
+          GoRoute(
+            path: '/reporter/profile',
+            redirect: (_, __) => '/reporter/settings',
+          ),
+        ],
+      ),
 
-        // ── End User ──────────────────────────────────────────
-        ShellRoute(
-          builder: (context, state, child) => UserShell(child: child),
-          routes: [
-            GoRoute(
-              path: '/feed',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const FeedScreen()),
-            ),
-            GoRoute(
-              path: '/article/:id',
-              pageBuilder: (context, state) => _smoothAppPage(
-                state: state,
-                child: ArticleDetailScreen(postId: state.pathParameters['id']!),
-              ),
-            ),
-            GoRoute(
-              path: '/bookmarks',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const BookmarksScreen()),
-            ),
-            GoRoute(
-              path: '/settings',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const ProfileScreen()),
-            ),
-            // Backward-compatible route
-            GoRoute(
-              path: '/profile',
-              redirect: (_, __) => '/settings',
-            ),
-            GoRoute(
-              path: '/privacy-policy',
-              pageBuilder: (context, state) => _smoothAppPage(
-                state: state,
-                child: const PrivacyPolicyScreen(),
-              ),
-            ),
-          ],
-        ),
-
-        // ── Reporter ──────────────────────────────────────────
-        ShellRoute(
-          builder: (context, state, child) => ReporterShell(child: child),
-          routes: [
-            GoRoute(
-              path: '/reporter',
-              pageBuilder: (context, state) => _smoothAppPage(
-                state: state,
-                child: const ReporterDashboardScreen(),
-              ),
-            ),
-            GoRoute(
-              path: '/reporter/new',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const CreatePostScreen()),
-            ),
-            GoRoute(
-              path: '/reporter/posts',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const MyPostsScreen()),
-            ),
-            // Reporter profile reuses the user profile screen
-            GoRoute(
-              path: '/reporter/settings',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const ProfileScreen()),
-            ),
-            // Backward-compatible route
-            GoRoute(
-              path: '/reporter/profile',
-              redirect: (_, __) => '/reporter/settings',
-            ),
-          ],
-        ),
-
-        // ── Admin ─────────────────────────────────────────────
-        ShellRoute(
-          builder: (context, state, child) => AdminShell(child: child),
-          routes: [
-            GoRoute(
-              path: '/admin',
-              pageBuilder: (context, state) => _smoothAppPage(
-                  state: state, child: const AdminDashboardScreen()),
-            ),
-            GoRoute(
-              path: '/admin/pending',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const PendingPostsScreen()),
-            ),
-            GoRoute(
-              path: '/admin/users',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const ManageUsersScreen()),
-            ),
-            // Admin profile reuses the user profile screen
-            GoRoute(
-              path: '/admin/settings',
-              pageBuilder: (context, state) =>
-                  _smoothAppPage(state: state, child: const ProfileScreen()),
-            ),
-            // Backward-compatible route
-            GoRoute(
-              path: '/admin/profile',
-              redirect: (_, __) => '/admin/settings',
-            ),
-          ],
-        ),
-      ],
+      // ── Admin ─────────────────────────────────────────────
+      ShellRoute(
+        builder: (context, state, child) => AdminShell(child: child),
+        routes: [
+          GoRoute(
+            path: '/admin',
+            pageBuilder: (context, state) => _smoothAppPage(
+                state: state, child: const AdminDashboardScreen()),
+          ),
+          GoRoute(
+            path: '/admin/pending',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const PendingPostsScreen()),
+          ),
+          GoRoute(
+            path: '/admin/users',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const ManageUsersScreen()),
+          ),
+          // Admin profile reuses the user profile screen
+          GoRoute(
+            path: '/admin/settings',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const ProfileScreen()),
+          ),
+          // Backward-compatible route
+          GoRoute(
+            path: '/admin/profile',
+            redirect: (_, __) => '/admin/settings',
+          ),
+        ],
+      ),
+    ],
   );
 }
 
@@ -278,15 +292,7 @@ class NewsApp extends StatelessWidget {
                 theme: AppTheme.light(),
                 darkTheme: AppTheme.dark(),
                 themeMode: theme.themeMode,
-                home: const Scaffold(
-                  body: Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                ),
+                home: const SplashScreen(),
               ),
             );
           }
@@ -300,8 +306,7 @@ class NewsApp extends StatelessWidget {
 class _AuthenticatedAppShell extends StatefulWidget {
   const _AuthenticatedAppShell();
   @override
-  State<_AuthenticatedAppShell> createState() =>
-      _AuthenticatedAppShellState();
+  State<_AuthenticatedAppShell> createState() => _AuthenticatedAppShellState();
 }
 
 class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
@@ -390,15 +395,19 @@ class UserShell extends StatelessWidget {
     final p = context.palette;
     final isLight = Theme.of(context).brightness == Brightness.light;
     int idx = 0;
-    if (loc == '/bookmarks') idx = 1;
-    if (loc == '/settings') idx = 2;
-    final isTabRoute = loc == '/feed' || loc == '/bookmarks' || loc == '/settings';
+    if (loc == '/categories') idx = 1;
+    if (loc == '/bookmarks') idx = 2;
+    if (loc == '/settings') idx = 3;
+    final isTabRoute = loc == '/feed' ||
+        loc == '/categories' ||
+        loc == '/bookmarks' ||
+        loc == '/settings';
 
     return Scaffold(
       extendBody: true,
       body: GlassBackground(
         child: _HorizontalShellSwipe(
-          tabRoutes: const ['/feed', '/bookmarks', '/settings'],
+          tabRoutes: const ['/feed', '/categories', '/bookmarks', '/settings'],
           // Only animate between bottom tabs. For pushed pages (e.g. /article/:id),
           // animating the shell causes visible "flash" when popping back.
           child: isTabRoute
@@ -425,7 +434,8 @@ class UserShell extends StatelessWidget {
           decoration: BoxDecoration(
             color: isLight ? Colors.white : p.surface.withValues(alpha: 0.70),
             border: Border(
-              top: BorderSide(color: p.cardBorder.withValues(alpha: isLight ? 1.0 : 0.55)),
+              top: BorderSide(
+                  color: p.cardBorder.withValues(alpha: isLight ? 1.0 : 0.55)),
             ),
           ),
           child: isLight
@@ -447,7 +457,7 @@ class UserShell extends StatelessWidget {
       child: NavigationBarTheme(
         data: NavigationBarThemeData(
           height: 66,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
           indicatorColor: p.primary.withValues(alpha: isLight ? 0.16 : 0.20),
           indicatorShape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
@@ -479,27 +489,35 @@ class UserShell extends StatelessWidget {
                 _goIfNeeded(context, loc, '/feed');
                 return;
               case 1:
-                _goIfNeeded(context, loc, '/bookmarks');
+                _goIfNeeded(context, loc, '/categories');
                 return;
               case 2:
+                _goIfNeeded(context, loc, '/bookmarks');
+                return;
+              case 3:
                 _goIfNeeded(context, loc, '/settings');
                 return;
             }
           },
           destinations: [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
+              icon: const Icon(Icons.home_outlined),
+              selectedIcon: const Icon(Icons.home_rounded),
               label: I18n.t(context, 'tab_feed'),
             ),
-            NavigationDestination(
+            const NavigationDestination(
+              icon: Icon(Icons.grid_view_outlined),
+              selectedIcon: Icon(Icons.grid_view_rounded),
+              label: 'Categories',
+            ),
+            const NavigationDestination(
               icon: Icon(Icons.bookmark_outline),
               selectedIcon: Icon(Icons.bookmark_rounded),
-              label: I18n.t(context, 'tab_saved'),
+              label: 'Saved',
             ),
             NavigationDestination(
-              icon: Icon(Icons.person_outline),
-              selectedIcon: Icon(Icons.person_rounded),
+              icon: const Icon(Icons.person_outline),
+              selectedIcon: const Icon(Icons.person_rounded),
               label: I18n.t(context, 'tab_settings'),
             ),
           ],
@@ -538,7 +556,9 @@ class _DockNavItem extends StatelessWidget {
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? p.primary.withValues(alpha: 0.16) : Colors.transparent,
+            color: selected
+                ? p.primary.withValues(alpha: 0.16)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -603,7 +623,11 @@ class ReporterShell extends StatelessWidget {
       extendBody: true,
       body: GlassBackground(
         child: _HorizontalShellSwipe(
-          tabRoutes: const ['/reporter', '/reporter/posts', '/reporter/settings'],
+          tabRoutes: const [
+            '/reporter',
+            '/reporter/posts',
+            '/reporter/settings'
+          ],
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 180),
             switchInCurve: Curves.easeOutCubic,
@@ -716,7 +740,8 @@ class AdminShell extends StatelessWidget {
               child: NavigationBarTheme(
                 data: NavigationBarThemeData(
                   height: 66,
-                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  labelBehavior:
+                      NavigationDestinationLabelBehavior.onlyShowSelected,
                   indicatorColor: p.primary.withValues(alpha: 0.20),
                   indicatorShape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),

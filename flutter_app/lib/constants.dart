@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'theme/app_palette.dart';
+import 'theme/app_gradients.dart';
 
 export 'theme/app_palette.dart';
 export 'theme/app_theme.dart';
+export 'theme/app_spacing.dart';
+export 'theme/app_typography.dart';
+export 'theme/app_gradients.dart';
+export 'theme/app_components.dart';
 
 class AppConstants {
   /// Base API URL including `/api` suffix, e.g. `https://host.com/api` or `http://127.0.0.1:5001/api`.
@@ -32,8 +37,8 @@ class AppConstants {
         return 'http://127.0.0.1:5001';
     }
   }
-  static String get appName =>
-      dotenv.env['APP_NAME'] ?? 'NewsNow';
+
+  static String get appName => dotenv.env['APP_NAME'] ?? 'NewsNow';
   static int get pageSize =>
       int.tryParse(dotenv.env['PAGE_SIZE'] ?? '20') ?? 20;
   static int get maxMediaFiles =>
@@ -111,50 +116,51 @@ class AppConstants {
 
 class GlassColors {
   // Background gradients (aligned with AppPalette editorial dark)
-  static const Color gradientStart  = Color(0xFF070A0F);
-  static const Color gradientMid    = Color(0xFF0D1522);
-  static const Color gradientEnd    = Color(0xFF121528);
+  static const Color gradientStart = Color(0xFF070A0F);
+  static const Color gradientMid = Color(0xFF0D1522);
+  static const Color gradientEnd = Color(0xFF121528);
 
   // Blob accent colors
-  static const Color blobGreen  = Color(0xFF34D399);
+  static const Color blobGreen = Color(0xFF34D399);
   static const Color blobPurple = Color(0xFFC084FC);
   static const Color blobOrange = Color(0xFFF97316);
 
   // Glass surface tints
-  static const Color surfaceWhite   = Color(0x12FFFFFF); // rgba(255,255,255,0.07)
-  static const Color surfaceBright  = Color(0x18FFFFFF); // rgba(255,255,255,0.10)
-  static const Color borderWhite    = Color(0x21FFFFFF); // rgba(255,255,255,0.13)
-  static const Color borderBright   = Color(0x2FFFFFFF); // rgba(255,255,255,0.18)
+  static const Color surfaceWhite = Color(0x12FFFFFF); // rgba(255,255,255,0.07)
+  static const Color surfaceBright =
+      Color(0x18FFFFFF); // rgba(255,255,255,0.10)
+  static const Color borderWhite = Color(0x21FFFFFF); // rgba(255,255,255,0.13)
+  static const Color borderBright = Color(0x2FFFFFFF); // rgba(255,255,255,0.18)
 
   // Text
-  static const Color textPrimary    = Color(0xFFFFFFFF);
-  static const Color textSecondary  = Color(0x99FFFFFF); // 60% white
-  static const Color textTertiary   = Color(0x66FFFFFF); // 40% white
-  static const Color textHint       = Color(0x40FFFFFF); // 25% white
+  static const Color textPrimary = Color(0xFFFFFFFF);
+  static const Color textSecondary = Color(0x99FFFFFF); // 60% white
+  static const Color textTertiary = Color(0x66FFFFFF); // 40% white
+  static const Color textHint = Color(0x40FFFFFF); // 25% white
 
   // Accent — mint (primary action)
-  static const Color accentGreen        = Color(0xFF34D399);
-  static const Color accentGreenLight   = Color(0xFF6EE7B7);
+  static const Color accentGreen = Color(0xFF34D399);
+  static const Color accentGreenLight = Color(0xFF6EE7B7);
   static const Color accentGreenSurface = Color(0x1E34D399);
-  static const Color accentGreenBorder  = Color(0x4D34D399);
+  static const Color accentGreenBorder = Color(0x4D34D399);
 
   // Accent — orange (breaking / admin)
-  static const Color accentOrange        = Color(0xFFF97316);
-  static const Color accentOrangeLight   = Color(0xFFFDBA74);
+  static const Color accentOrange = Color(0xFFF97316);
+  static const Color accentOrangeLight = Color(0xFFFDBA74);
   static const Color accentOrangeSurface = Color(0x26F97316);
-  static const Color accentOrangeBorder  = Color(0x59F97316);
+  static const Color accentOrangeBorder = Color(0x59F97316);
 
   // Accent — purple (reporter badge, categories)
-  static const Color accentPurple        = Color(0xFFC084FC);
-  static const Color accentPurpleLight   = Color(0xFFE9D5FF);
+  static const Color accentPurple = Color(0xFFC084FC);
+  static const Color accentPurpleLight = Color(0xFFE9D5FF);
   static const Color accentPurpleSurface = Color(0x33C084FC);
-  static const Color accentPurpleBorder  = Color(0x4DC084FC);
+  static const Color accentPurpleBorder = Color(0x4DC084FC);
 
   // Semantic
   static const Color success = Color(0xFF34D399);
   static const Color warning = Color(0xFFFBBF24);
-  static const Color error   = Color(0xFFF87171);
-  static const Color info    = Color(0xFF38BDF8);
+  static const Color error = Color(0xFFF87171);
+  static const Color info = Color(0xFF38BDF8);
 }
 
 // ─── Gradient Background Widget ───────────────────────────────────────────────
@@ -168,16 +174,7 @@ class GlassBackground extends StatelessWidget {
     final p = context.palette;
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            p.gradientStart,
-            p.gradientMid,
-            p.gradientEnd,
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        ),
+        gradient: AppGradients.background(p),
       ),
       child: child,
     );
@@ -224,11 +221,7 @@ class GlassCard extends StatelessWidget {
       ),
     );
   }
-
-
 }
-
-
 
 // ─── Glass Container (simpler, no clip) ──────────────────────────────────────
 
@@ -258,7 +251,8 @@ class GlassContainer extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? GlassColors.surfaceWhite,
         borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(color: borderColor ?? GlassColors.borderWhite, width: 0.8),
+        border: Border.all(
+            color: borderColor ?? GlassColors.borderWhite, width: 0.8),
       ),
       child: child,
     );
@@ -301,10 +295,23 @@ class GlassButton extends StatelessWidget {
           border: Border.all(color: color.withOpacity(0.5), width: 0.8),
         ),
         child: loading
-            ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+            ? const Center(
+                child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2)))
             : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                if (icon != null) ...[Icon(icon, color: Colors.white, size: 18), const SizedBox(width: 8)],
-                Text(label, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+                if (icon != null) ...[
+                  Icon(icon, color: Colors.white, size: 18),
+                  const SizedBox(width: 8)
+                ],
+                Text(label,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3)),
               ]),
       ),
     );
@@ -373,25 +380,32 @@ class GlassTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
-        labelStyle: const TextStyle(color: GlassColors.textTertiary, fontSize: 13),
+        labelStyle:
+            const TextStyle(color: GlassColors.textTertiary, fontSize: 13),
         hintStyle: const TextStyle(color: GlassColors.textHint, fontSize: 13),
         prefixIcon: prefixIcon != null
-            ? IconTheme(data: const IconThemeData(color: GlassColors.textTertiary, size: 18), child: prefixIcon!)
+            ? IconTheme(
+                data: const IconThemeData(
+                    color: GlassColors.textTertiary, size: 18),
+                child: prefixIcon!)
             : null,
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: GlassColors.surfaceWhite,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: GlassColors.borderWhite, width: 0.8),
+          borderSide:
+              const BorderSide(color: GlassColors.borderWhite, width: 0.8),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: GlassColors.borderWhite, width: 0.8),
+          borderSide:
+              const BorderSide(color: GlassColors.borderWhite, width: 0.8),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: GlassColors.accentGreen, width: 1.5),
+          borderSide:
+              const BorderSide(color: GlassColors.accentGreen, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -401,8 +415,10 @@ class GlassTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: GlassColors.error, width: 1.5),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        counterStyle: const TextStyle(color: GlassColors.textHint, fontSize: 11),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        counterStyle:
+            const TextStyle(color: GlassColors.textHint, fontSize: 11),
       ),
     );
   }
@@ -415,7 +431,8 @@ class GlassBadge extends StatelessWidget {
   final Color accentColor;
   final IconData? icon;
 
-  const GlassBadge({super.key, required this.label, required this.accentColor, this.icon});
+  const GlassBadge(
+      {super.key, required this.label, required this.accentColor, this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -427,8 +444,13 @@ class GlassBadge extends StatelessWidget {
         border: Border.all(color: accentColor.withOpacity(0.4), width: 0.8),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (icon != null) ...[Icon(icon, size: 12, color: accentColor), const SizedBox(width: 4)],
-        Text(label, style: TextStyle(fontSize: 11, color: accentColor, fontWeight: FontWeight.w600)),
+        if (icon != null) ...[
+          Icon(icon, size: 12, color: accentColor),
+          const SizedBox(width: 4)
+        ],
+        Text(label,
+            style: TextStyle(
+                fontSize: 11, color: accentColor, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -442,7 +464,12 @@ class GlassCategoryChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const GlassCategoryChip({super.key, required this.label, required this.icon, required this.selected, required this.onTap});
+  const GlassCategoryChip(
+      {super.key,
+      required this.label,
+      required this.icon,
+      required this.selected,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -452,10 +479,14 @@ class GlassCategoryChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? GlassColors.accentGreenSurface : GlassColors.surfaceWhite,
+          color: selected
+              ? GlassColors.accentGreenSurface
+              : GlassColors.surfaceWhite,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? GlassColors.accentGreenBorder : GlassColors.borderWhite,
+            color: selected
+                ? GlassColors.accentGreenBorder
+                : GlassColors.borderWhite,
             width: 0.8,
           ),
         ),
@@ -464,7 +495,9 @@ class GlassCategoryChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? GlassColors.accentGreenLight : GlassColors.textSecondary,
+            color: selected
+                ? GlassColors.accentGreenLight
+                : GlassColors.textSecondary,
           ),
         ),
       ),
@@ -479,14 +512,19 @@ class GlassBottomNav extends StatelessWidget {
   final List<BottomNavigationBarItem> items;
   final void Function(int) onTap;
 
-  const GlassBottomNav({super.key, required this.currentIndex, required this.items, required this.onTap});
+  const GlassBottomNav(
+      {super.key,
+      required this.currentIndex,
+      required this.items,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: GlassColors.surfaceWhite,
-        border: Border(top: BorderSide(color: GlassColors.borderWhite, width: 0.8)),
+        border:
+            Border(top: BorderSide(color: GlassColors.borderWhite, width: 0.8)),
       ),
       child: SafeArea(
         top: false,
@@ -505,16 +543,23 @@ class GlassBottomNav extends StatelessWidget {
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: selected ? GlassColors.accentGreenSurface : Colors.transparent,
+                          color: selected
+                              ? GlassColors.accentGreenSurface
+                              : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           selected
-                              ? (item.activeIcon is Icon ? (item.activeIcon as Icon).icon : (item.icon as Icon).icon)
+                              ? (item.activeIcon is Icon
+                                  ? (item.activeIcon as Icon).icon
+                                  : (item.icon as Icon).icon)
                               : (item.icon as Icon).icon,
-                          color: selected ? GlassColors.accentGreenLight : GlassColors.textHint,
+                          color: selected
+                              ? GlassColors.accentGreenLight
+                              : GlassColors.textHint,
                           size: 20,
                         ),
                       ),
@@ -523,8 +568,11 @@ class GlassBottomNav extends StatelessWidget {
                         item.label ?? '',
                         style: TextStyle(
                           fontSize: 10,
-                          color: selected ? GlassColors.accentGreenLight : GlassColors.textHint,
-                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                          color: selected
+                              ? GlassColors.accentGreenLight
+                              : GlassColors.textHint,
+                          fontWeight:
+                              selected ? FontWeight.w600 : FontWeight.w400,
                         ),
                       ),
                     ]),
@@ -556,7 +604,9 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => Size.fromHeight(bottom != null ? kToolbarHeight + bottom!.preferredSize.height : kToolbarHeight);
+  Size get preferredSize => Size.fromHeight(bottom != null
+      ? kToolbarHeight + bottom!.preferredSize.height
+      : kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -568,7 +618,8 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       automaticallyImplyLeading: showBack,
       leading: showBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: GlassColors.textSecondary),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 18, color: GlassColors.textSecondary),
               onPressed: () => Navigator.of(context).maybePop(),
             )
           : null,
@@ -578,7 +629,8 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       flexibleSpace: Container(
         decoration: BoxDecoration(
           color: GlassColors.surfaceWhite,
-          border: Border(bottom: BorderSide(color: GlassColors.borderWhite, width: 0.8)),
+          border: Border(
+              bottom: BorderSide(color: GlassColors.borderWhite, width: 0.8)),
         ),
       ),
     );
@@ -593,7 +645,12 @@ class GlassStatCard extends StatelessWidget {
   final IconData icon;
   final Color accentColor;
 
-  const GlassStatCard({super.key, required this.label, required this.value, required this.icon, required this.accentColor});
+  const GlassStatCard(
+      {super.key,
+      required this.label,
+      required this.value,
+      required this.icon,
+      required this.accentColor});
 
   @override
   Widget build(BuildContext context) {
@@ -603,9 +660,13 @@ class GlassStatCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, size: 20, color: accentColor),
         const Spacer(),
-        Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: accentColor)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 22, fontWeight: FontWeight.bold, color: accentColor)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 11, color: GlassColors.textTertiary)),
+        Text(label,
+            style:
+                const TextStyle(fontSize: 11, color: GlassColors.textTertiary)),
       ]),
     );
   }
@@ -628,16 +689,31 @@ class GlassBreakingBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [GlassColors.accentOrangeSurface, GlassColors.accentOrange.withOpacity(0.08)],
+            colors: [
+              GlassColors.accentOrangeSurface,
+              GlassColors.accentOrange.withOpacity(0.08)
+            ],
           ),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: GlassColors.accentOrangeBorder, width: 0.8),
         ),
         child: Row(children: [
-          Container(width: 7, height: 7, decoration: const BoxDecoration(color: GlassColors.accentOrange, shape: BoxShape.circle)),
+          Container(
+              width: 7,
+              height: 7,
+              decoration: const BoxDecoration(
+                  color: GlassColors.accentOrange, shape: BoxShape.circle)),
           const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: GlassColors.accentOrangeLight), overflow: TextOverflow.ellipsis)),
-          if (onTap != null) const Icon(Icons.refresh, size: 14, color: GlassColors.accentOrangeLight),
+          Expanded(
+              child: Text(text,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: GlassColors.accentOrangeLight),
+                  overflow: TextOverflow.ellipsis)),
+          if (onTap != null)
+            const Icon(Icons.refresh,
+                size: 14, color: GlassColors.accentOrangeLight),
         ]),
       ),
     );
@@ -651,7 +727,11 @@ class GlassLocationBar extends StatelessWidget {
   final String? locationText;
   final VoidCallback onRefresh;
 
-  const GlassLocationBar({super.key, required this.loading, this.locationText, required this.onRefresh});
+  const GlassLocationBar(
+      {super.key,
+      required this.loading,
+      this.locationText,
+      required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -660,31 +740,47 @@ class GlassLocationBar extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: hasLocation ? GlassColors.accentGreen.withOpacity(0.1) : GlassColors.accentOrange.withOpacity(0.1),
+        color: hasLocation
+            ? GlassColors.accentGreen.withOpacity(0.1)
+            : GlassColors.accentOrange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasLocation ? GlassColors.accentGreenBorder : GlassColors.accentOrangeBorder,
+          color: hasLocation
+              ? GlassColors.accentGreenBorder
+              : GlassColors.accentOrangeBorder,
           width: 0.8,
         ),
       ),
       child: Row(children: [
         Icon(
-          loading ? Icons.gps_not_fixed : (hasLocation ? Icons.gps_fixed : Icons.location_off),
+          loading
+              ? Icons.gps_not_fixed
+              : (hasLocation ? Icons.gps_fixed : Icons.location_off),
           size: 16,
-          color: hasLocation ? GlassColors.accentGreenLight : GlassColors.accentOrangeLight,
+          color: hasLocation
+              ? GlassColors.accentGreenLight
+              : GlassColors.accentOrangeLight,
         ),
         const SizedBox(width: 8),
         Expanded(
           child: loading
-              ? const Text('Capturing GPS location...', style: TextStyle(fontSize: 13, color: GlassColors.textSecondary))
+              ? const Text('Capturing GPS location...',
+                  style:
+                      TextStyle(fontSize: 13, color: GlassColors.textSecondary))
               : hasLocation
-                  ? Text('📍 $locationText', style: const TextStyle(fontSize: 13, color: GlassColors.accentGreenLight))
-                  : const Text('Location unavailable — story posted without GPS', style: TextStyle(fontSize: 12, color: GlassColors.accentOrangeLight)),
+                  ? Text('📍 $locationText',
+                      style: const TextStyle(
+                          fontSize: 13, color: GlassColors.accentGreenLight))
+                  : const Text(
+                      'Location unavailable — story posted without GPS',
+                      style: TextStyle(
+                          fontSize: 12, color: GlassColors.accentOrangeLight)),
         ),
         if (!loading)
           GestureDetector(
             onTap: onRefresh,
-            child: const Icon(Icons.refresh, size: 16, color: GlassColors.textTertiary),
+            child: const Icon(Icons.refresh,
+                size: 16, color: GlassColors.textTertiary),
           ),
       ]),
     );

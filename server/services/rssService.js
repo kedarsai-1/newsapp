@@ -229,6 +229,29 @@ async function translateEnglishToFeedLanguage(text, feedLang) {
   return raw;
 }
 
+/**
+ * Generic translation helper for UI/API use.
+ * Supports target: en, hi, te. Falls back to input when unsupported/failure.
+ */
+async function translateTextForFeed(text, targetLanguage) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+
+  const target = String(targetLanguage || '').toLowerCase().trim();
+  if (!['en', 'hi', 'te'].includes(target)) return raw;
+
+  const detected = detectLanguage(raw.slice(0, 500));
+  const looksEnglish = detected === 'eng';
+
+  if (target === 'en') {
+    return translateToEnglish(raw);
+  }
+
+  // hi/te models are most reliable from English source.
+  const sourceForModel = looksEnglish ? raw : await translateToEnglish(raw);
+  return translateEnglishToFeedLanguage(sourceForModel, target);
+}
+
 /** Detect language on first 800 chars; keep text in original language (no EN translate) for summarization. */
 function prepareForSummarization(strippedText) {
   const raw = String(strippedText || '').replace(/\s+/g, ' ').trim();
@@ -544,6 +567,7 @@ module.exports = {
   prepareForHfSummaryFromRssItem,
   summarizeForRssIngest,
   translateEnglishToFeedLanguage,
+  translateTextForFeed,
   extractiveSummaryNative,
 };
 

@@ -5,6 +5,7 @@ const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const { extractReadableArticle } = require('../services/articleExtractionService');
+const { translateTextForFeed } = require('../services/rssService');
 
 function cleanTextForClient(input) {
   return String(input || '')
@@ -389,6 +390,34 @@ const addComment = async (req, res) => {
   }
 };
 
+// POST /api/news/translate
+const translateText = async (req, res) => {
+  try {
+    const { text, targetLanguage } = req.body || {};
+    const input = String(text || '').trim();
+    const target = String(targetLanguage || '').trim().toLowerCase();
+
+    if (!input) {
+      return res.status(400).json({ success: false, message: 'text is required.' });
+    }
+    if (!['en', 'hi', 'te'].includes(target)) {
+      return res.status(400).json({
+        success: false,
+        message: 'targetLanguage must be one of: en, hi, te.',
+      });
+    }
+
+    const translatedText = await translateTextForFeed(input, target);
+    return res.json({
+      success: true,
+      targetLanguage: target,
+      translatedText: String(translatedText || input),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 /** Public image proxy so the app can show hotlinked thumbnails (many sites block non-browser clients). */
 const getProxyImage = async (req, res) => {
   const target = req.query.url;
@@ -504,4 +533,5 @@ module.exports = {
   getBookmarks,
   getComments,
   addComment,
+  translateText,
 };

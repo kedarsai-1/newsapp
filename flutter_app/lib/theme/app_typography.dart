@@ -19,10 +19,48 @@ class AppTypography {
   static const double metaHeight = 1.28;
   static const double bodyHeight = 1.82;
 
+  static const TextStyle headline = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.w800,
+    height: 1.12,
+    letterSpacing: -0.6,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+
+  static const TextStyle body = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w400,
+    height: bodyHeight,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+
+  static const TextStyle caption = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: metaHeight,
+    leadingDistribution: TextLeadingDistribution.even,
+  );
+
   static TextTheme buildTextTheme(TextTheme base, AppPalette p) {
     // Map our hierarchy to standard TextTheme slots so most Text widgets
     // automatically get correct defaults.
     return base.copyWith(
+      headlineLarge: base.headlineLarge?.copyWith(
+        fontSize: headline.fontSize,
+        fontWeight: headline.fontWeight,
+        height: headline.height,
+        letterSpacing: headline.letterSpacing,
+        leadingDistribution: TextLeadingDistribution.even,
+        color: p.textPrimary,
+      ),
+      headlineMedium: base.headlineMedium?.copyWith(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        height: 1.16,
+        letterSpacing: -0.4,
+        leadingDistribution: TextLeadingDistribution.even,
+        color: p.textPrimary,
+      ),
       titleMedium: base.titleMedium?.copyWith(
         fontSize: 17,
         fontWeight: FontWeight.w600,
@@ -38,9 +76,9 @@ class AppTypography {
         color: p.textPrimary,
       ),
       bodyMedium: base.bodyMedium?.copyWith(
-        fontSize: 14,
-        fontWeight: FontWeight.w400,
-        height: bodyHeight,
+        fontSize: body.fontSize,
+        fontWeight: body.fontWeight,
+        height: body.height,
         leadingDistribution: TextLeadingDistribution.even,
         color: p.textPrimary,
       ),
@@ -52,9 +90,9 @@ class AppTypography {
         color: p.textSecondary,
       ),
       labelSmall: base.labelSmall?.copyWith(
-        fontSize: 11.5,
-        fontWeight: FontWeight.w500,
-        height: metaHeight,
+        fontSize: caption.fontSize,
+        fontWeight: caption.fontWeight,
+        height: caption.height,
         leadingDistribution: TextLeadingDistribution.even,
         color: p.textHint,
       ),
@@ -64,6 +102,15 @@ class AppTypography {
 
 extension AppTextStyles on BuildContext {
   TextTheme get textStyles => Theme.of(this).textTheme;
+
+  TextStyle get headlineText =>
+      textStyles.headlineMedium ??
+      const TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        height: 1.16,
+        leadingDistribution: TextLeadingDistribution.even,
+      );
 
   TextStyle get titleText =>
       textStyles.titleMedium ??
@@ -86,10 +133,9 @@ extension AppTextStyles on BuildContext {
   TextStyle get metaText =>
       textStyles.labelSmall ??
       const TextStyle(
-        fontSize: 11.5,
+        fontSize: 12,
         fontWeight: FontWeight.w500,
         height: AppTypography.metaHeight,
         leadingDistribution: TextLeadingDistribution.even,
       );
 }
-

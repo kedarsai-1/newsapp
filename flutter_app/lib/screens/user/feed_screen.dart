@@ -1,1207 +1,842 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
-import 'package:timeago/timeago.dart' as timeago;
 import 'package:provider/provider.dart';
-import 'package:pull_to_refresh/pull_to_refresh.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../constants.dart';
+import '../../models/models.dart';
 import '../../providers/news_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/auth_provider.dart';
-import '../../services/socket_service.dart';
-import '../../models/models.dart';
-import '../../widgets/news_card.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/category_chip.dart';
 import '../../widgets/news_shimmer_loader.dart';
-import '../../constants.dart';
-import '../../theme/app_typography.dart';
-import '../../theme/app_spacing.dart';
-import '../../utils/i18n.dart';
+import '../../widgets/premium_news_ui.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
+
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  final _refreshController = RefreshController(initialRefresh: false);
-  final _scrollController = ScrollController();
-  bool _showBanner = false;
-  String? _bannerTitle;
+  late final PageController _pageController;
+  int _currentIndex = 0;
+  final Map<String, String?> _translatedByPostId = {};
 
   @override
   void initState() {
     super.initState();
-    // Avoid triggering provider notifyListeners() during router's first build on web.
+    _pageController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _bootstrap();
-    });
-
-    _scrollController.addListener(() {
       final provider = context.read<NewsProvider>();
-      // Load more slightly before reaching the end.
-      if (_scrollController.position.pixels >=
-          _scrollController.position.maxScrollExtent - 600) {
-        if (!provider.loading && provider.hasMore) {
-          provider.loadMore();
-        }
-      }
+      if (provider.posts.isEmpty && !provider.refreshing) provider.refresh();
     });
-
-    SocketService.connect();
-    SocketService.onNewPost((data) {
-      if (mounted) {
-        setState(() {
-          _showBanner = true;
-          _bannerTitle = data['title'] as String?;
-        });
-        Future.delayed(const Duration(seconds: 5), () {
-          if (mounted) setState(() => _showBanner = false);
-        });
-      }
-    });
-  }
-
-  Future<void> _bootstrap() async {
-    final p = context.read<NewsProvider>();
-    // [NewsProvider.init] already ran at app start; do not call again here.
-    // Avoid duplicate full refresh after language onboarding (which already refreshes).
-    if (p.posts.isEmpty && !p.refreshing) {
-      await p.refresh();
-    }
   }
 
   @override
   void dispose() {
-    _refreshController.dispose();
-    _scrollController.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+
+  void _maybeLoadMore(int index) {
+    final provider = context.read<NewsProvider>();
+    if (index >= provider.posts.length - 3 &&
+        provider.hasMore &&
+        !provider.loading) {
+      provider.loadMore();
+    }
+  }
+
+  Future<void> _openArticleSheet(NewsPost post) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ArticlePreviewSheet(post: post),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<NewsProvider>();
     final p = context.palette;
-    return Scaffold(
-      backgroundColor: p.scaffoldBackground,
-      body: Stack(
+
+    return PremiumScaffold(
+      child: Stack(
         fit: StackFit.expand,
         children: [
+          if (provider.error != null)
+            SafeArea(
+              child: ErrorState(
+                message: provider.error!,
+                onRetry: provider.refresh,
+              ),
+            )
+          else if (provider.posts.isEmpty && provider.refreshing)
+            const SafeArea(child: NewsShimmerLoader(count: 5))
+          else if (provider.posts.isEmpty)
+            const SafeArea(
+              child: EmptyState(
+                icon: AppIcons.categories,
+                title: 'No stories yet',
+                subtitle: 'Pull down or adjust filters to load fresh news.',
+              ),
+            )
+          else
+            RefreshIndicator(
+              color: p.primary,
+              backgroundColor: p.surface,
+              onRefresh: provider.refresh,
+              child: PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                physics: const BouncingScrollPhysics(),
+                itemCount: provider.posts.length,
+                onPageChanged: (index) {
+                  setState(() => _currentIndex = index);
+                  _maybeLoadMore(index);
+                },
+                itemBuilder: (context, index) {
+                  return RepaintBoundary(
+                    child: _NewsReelCard(
+                      post: provider.posts[index],
+                      index: index,
+                      total: provider.posts.length,
+                      controller: _pageController,
+                      initialTranslatedSummary:
+                          _translatedByPostId[provider.posts[index].id],
+                      onTranslatedSummaryChanged: (value) {
+                        if (!mounted) return;
+                        setState(() {
+                          _translatedByPostId[provider.posts[index].id] = value;
+                        });
+                      },
+                      onReadMore: () =>
+                          _openArticleSheet(provider.posts[index]),
+                    ),
+                  );
+                },
+              ),
+            ),
           SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _Way2NewsTopBar(
-                  onSearch: () => showSearch(
-                    context: context,
-                    delegate: FeedSearchDelegate(provider),
-                  ),
-                ),
-                // Live update banner
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  height: _showBanner ? 42 : 0,
-                  child: _showBanner
-                      ? GestureDetector(
-                          onTap: () {
-                            setState(() => _showBanner = false);
-                            provider.refresh();
-                            if (_scrollController.hasClients) {
-                              _scrollController.animateTo(
-                                0,
-                                duration: const Duration(milliseconds: 350),
-                                curve: Curves.easeOut,
-                              );
-                            }
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.fromLTRB(AppSpacing.s12, 4, AppSpacing.s12, 4),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.s12,
-                              vertical: AppSpacing.s8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: p.breaking.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: p.breaking.withValues(alpha: 0.35)),
-                            ),
-                            child: Row(children: [
-                              Icon(Icons.fiber_manual_record,
-                                  size: 10, color: p.breaking),
-                              const SizedBox(width: AppSpacing.s8),
-                              Expanded(
-                                child: Text(
-                                  _bannerTitle != null
-                                      ? 'New: $_bannerTitle'
-                                      : 'New story published - tap to refresh',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: p.textSecondary,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                            ]),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 2, AppSpacing.s16, 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        I18n.t(context, 'feed_language'),
-                        style: context.metaText.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                          color: p.textHint,
+                      PremiumIconButton(
+                        icon: AppIcons.profile,
+                        onTap: () => context.push('/settings'),
+                      ),
+                      FrostedPanel(
+                        radius: 18,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        color: Colors.black.withValues(alpha: 0.22),
+                        boxShadow: const [],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              AppIcons.home,
+                              size: 18,
+                              color: p.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              AppConstants.appName,
+                              style: TextStyle(
+                                color: p.textPrimary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.s8),
-                      _FeedLanguageDropdown(
-                        selectedCode: provider.selectedLanguage,
-                        onChanged: (code) {
-                          provider.selectLanguage(code);
-                        },
+                      PremiumIconButton(
+                        icon: AppIcons.notification,
+                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No new notifications'),
+                            duration: Duration(milliseconds: 1200),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ),
-
-                if (provider.shouldShowPoliticalScopeDropdown)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 0, AppSpacing.s16, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Political Region',
-                          style: context.metaText.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: p.textHint,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.s8),
-                        _PoliticalRegionDropdown(
-                          selectedCode: provider.selectedPoliticsScope,
-                          languageCode: provider.selectedLanguage,
-                          onChanged: (v) => provider.selectPoliticsScope(v),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                if (provider.shouldShowAndhraConstituencyFilter)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 0, AppSpacing.s16, 6),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Andhra Constituency',
-                          style: context.metaText.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: p.textHint,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.s8),
-                        _PoliticalConstituencyDropdown(
-                          selectedConstituency: provider.selectedConstituency,
-                          options: provider.availablePoliticalConstituencies,
-                          onChanged: (v) => provider.selectConstituency(v),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                if (provider.categoriesError != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.s12, 4, AppSpacing.s12, AppSpacing.s8),
-                    child: Material(
-                      color: p.error.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        onTap: () => provider.loadCategories(),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.warning_amber_rounded,
-                                  color: p.error, size: 20),
-                              const SizedBox(width: AppSpacing.s8),
-                              Expanded(
-                                child: Text(
-                                  provider.categoriesError!,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: p.textSecondary,
-                                      height: 1.35),
-                                ),
-                              ),
-                              Text('Retry',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: p.primary,
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                if (provider.categories.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(AppSpacing.s16, 6, AppSpacing.s16, 0),
-                    child: Row(
-                      children: [
-                        Text(
-                          I18n.t(context, 'feed_categories'),
-                          style: context.metaText.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: p.textHint,
-                          ),
-                        ),
-                        const Spacer(),
-                        if (provider.posts.isNotEmpty)
-                          Text(
-                            '${provider.posts.length} stories',
-                            style: context.metaText.copyWith(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: p.textHint.withValues(alpha: 0.85),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    height: 46,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.s12,
-                        vertical: 6,
-                      ),
-                      itemCount: provider.categories.length + 1,
-                      separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.s8),
-                      itemBuilder: (_, i) {
-                        if (i == 0) {
-                          return CategoryChip(
-                            label: I18n.t(context, 'feed_all'),
-                            icon: '📰',
-                            selected: provider.selectedCategoryId == null,
-                            onTap: () => provider.selectCategory(null),
-                          );
-                        }
-                        final cat = provider.categories[i - 1];
-                        final localizedName = I18n.t(context, 'cat_${cat.slug.toLowerCase()}');
-                        return CategoryChip(
-                          label: localizedName == 'cat_${cat.slug.toLowerCase()}' ? cat.name : localizedName,
-                          icon: cat.icon,
-                          selected: provider.selectedCategoryId == cat.id,
-                          onTap: () => provider.selectCategory(cat.id),
-                        );
-                      },
-                    ),
-                  ),
                 ],
-
-                Expanded(
-                  child: provider.error != null
-                      ? ErrorState(
-                          message: provider.error!,
-                          onRetry: provider.refresh)
-                      : provider.posts.isEmpty
-                          ? provider.refreshing
-                              ? const NewsShimmerLoader(count: 6)
-                              : EmptyState(
-                                  icon: Icons.newspaper,
-                                  title: I18n.t(context, 'feed_empty_title'),
-                                  subtitle: I18n.t(context, 'feed_empty_subtitle'),
-                                )
-                          : SmartRefresher(
-                              controller: _refreshController,
-                              enablePullUp: provider.hasMore,
-                              header: WaterDropMaterialHeader(
-                                color: p.primary,
-                                backgroundColor: p.surface,
-                              ),
-                              footer: CustomFooter(
-                                builder: (context, mode) {
-                                  if (!provider.hasMore) {
-                                    return const SizedBox(height: 24);
-                                  }
-                                  return SizedBox(
-                                    height: 56,
-                                    child: Center(
-                                      child: SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: p.accentGreen,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              onRefresh: () {
-                                final news = context.read<NewsProvider>();
-                                news.refresh().then((_) {
-                                  if (!mounted) return;
-                                  if (news.error != null) {
-                                    _refreshController.refreshFailed();
-                                  } else {
-                                    _refreshController.refreshCompleted();
-                                  }
-                                });
-                              },
-                              onLoading: () {
-                                final news = context.read<NewsProvider>();
-                                news.loadMore().then((_) {
-                                  if (!mounted) return;
-                                  _refreshController.loadComplete();
-                                });
-                              },
-                              child: ListView.builder(
-                                controller: _scrollController,
-                                physics: const BouncingScrollPhysics(),
-                                padding: const EdgeInsets.only(bottom: AppSpacing.s12),
-                                itemCount: provider.posts.length +
-                                    (provider.hasMore ? 1 : 0),
-                                itemBuilder: (_, i) {
-                                  if (i >= provider.posts.length) {
-                                    // Bottom loader spacer; real loader is in footer.
-                                    return const SizedBox(height: AppSpacing.s8);
-                                  }
-                                  return NewsCard(
-                                    post: provider.posts[i],
-                                  );
-                                },
-                              ),
-                            ),
-                ),
-              ],
+              ),
             ),
           ),
+          if (provider.posts.isNotEmpty)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 24 + MediaQuery.of(context).padding.bottom,
+              child: StoryProgressDots(
+                total: provider.posts.length,
+                index: _currentIndex,
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _Way2NewsTopBar extends StatelessWidget {
-  final VoidCallback onSearch;
-  const _Way2NewsTopBar({required this.onSearch});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final t = Theme.of(context).textTheme;
-    return Material(
-      color: p.scaffoldBackground,
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.s16,
-          AppSpacing.s12,
-          AppSpacing.s16,
-          AppSpacing.s12,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'NewsNow',
-                    style: (t.headlineSmall ?? t.titleLarge)?.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.6,
-                      height: 1.05,
-                      color: p.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.s8),
-                  Text(
-                    'Top headlines for you',
-                    style: t.labelMedium?.copyWith(
-                      color: p.textHint,
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: onSearch,
-              icon: Icon(Icons.search_rounded, color: p.textPrimary),
-              tooltip: 'Search',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StoryReaderPage extends StatefulWidget {
+class _NewsReelCard extends StatefulWidget {
   final NewsPost post;
   final int index;
   final int total;
-  final PageController pageController;
-  const _StoryReaderPage({
+  final PageController controller;
+  final String? initialTranslatedSummary;
+  final ValueChanged<String?> onTranslatedSummaryChanged;
+  final VoidCallback onReadMore;
+
+  const _NewsReelCard({
     required this.post,
     required this.index,
     required this.total,
-    required this.pageController,
+    required this.controller,
+    required this.initialTranslatedSummary,
+    required this.onTranslatedSummaryChanged,
+    required this.onReadMore,
   });
 
   @override
-  State<_StoryReaderPage> createState() => _StoryReaderPageState();
+  State<_NewsReelCard> createState() => _NewsReelCardState();
 }
 
-class _StoryReaderPageState extends State<_StoryReaderPage>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _anim;
-  late Animation<double> _fade;
-  late Animation<Offset> _slide;
-  late Animation<double> _imgScale;
+class _NewsReelCardState extends State<_NewsReelCard>
+    with TickerProviderStateMixin {
+  late final AnimationController _entry;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+  late final AnimationController _likePop;
+  late final AnimationController _savePop;
+  final FlutterTts _tts = FlutterTts();
+  bool _liked = false;
+  bool _saved = false;
+  bool _likeSyncing = false;
+  bool _translating = false;
+  String? _translatedSummary;
 
   NewsPost get post => widget.post;
-
-  String _previewText() {
-    final fromSummary = post.summary?.replaceAll(RegExp(r'\s+'), ' ').trim();
-    final base = (fromSummary != null && fromSummary.isNotEmpty)
-        ? fromSummary
-        : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (base.length <= 320) return base;
-    return '${base.substring(0, 320).trim()}...';
-  }
 
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 520));
-    _fade = CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic);
-    _slide =
-        Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
-      CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic),
+    _entry = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 560),
+    )..forward();
+    _fade = CurvedAnimation(parent: _entry, curve: Curves.easeOutCubic);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _entry, curve: Curves.easeOutCubic));
+    _likePop = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
     );
-    _imgScale = Tween<double>(begin: 1.08, end: 1.0).animate(
-      CurvedAnimation(
-          parent: _anim,
-          curve: const Interval(0.0, 0.65, curve: Curves.easeOutCubic)),
+    _savePop = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
     );
-    _anim.forward();
+    _translatedSummary = widget.initialTranslatedSummary;
+    _configureTts();
+    _hydrateInteractionState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NewsReelCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id) {
+      _translatedSummary = widget.initialTranslatedSummary;
+      _hydrateInteractionState();
+      return;
+    }
+    if (oldWidget.initialTranslatedSummary != widget.initialTranslatedSummary &&
+        widget.initialTranslatedSummary != _translatedSummary) {
+      _translatedSummary = widget.initialTranslatedSummary;
+    }
+  }
+
+  Future<void> _configureTts() async {
+    await _tts.setSpeechRate(0.42);
+    await _tts.setPitch(1.0);
+    await _tts.setVolume(1.0);
+  }
+
+  Future<void> _hydrateInteractionState() async {
+    final liked = await ApiService.isGuestLiked(post.id);
+    final saved = await ApiService.isGuestBookmarked(post.id);
+    if (!mounted) return;
+    setState(() {
+      _liked = liked;
+      _saved = saved;
+    });
   }
 
   @override
   void dispose() {
-    _anim.dispose();
+    _tts.stop();
+    _likePop.dispose();
+    _savePop.dispose();
+    _entry.dispose();
     super.dispose();
   }
 
-  Future<void> _quickLike() async {
-    final loggedIn = context.read<AuthProvider>().isLoggedIn;
-    if (loggedIn) {
-      final res = await ApiService.toggleLike(post.id);
-      if (!mounted) return;
-      if (res['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              res['liked'] == true
-                  ? 'Thanks for the like!'
-                  : 'Like removed',
-            ),
-            duration: const Duration(milliseconds: 1400),
-          ),
-        );
-      }
-    } else {
-      await ApiService.toggleGuestLike(post.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Saved to your likes on this device'),
-          duration: Duration(milliseconds: 1400),
-        ),
-      );
+  Future<void> _toggleLike() async {
+    if (_likeSyncing) return;
+    setState(() => _likeSyncing = true);
+    final liked = await ApiService.toggleGuestLike(post.id);
+    if (!mounted) return;
+    setState(() {
+      _liked = liked;
+      _likeSyncing = false;
+    });
+    _likePop.forward(from: 0);
+  }
+
+  Future<void> _toggleSave() async {
+    final saved = await ApiService.toggleGuestBookmark(post);
+    if (mounted) {
+      setState(() => _saved = saved);
+      _savePop.forward(from: 0);
     }
   }
 
-  Future<void> _shareToWhatsApp(BuildContext context) async {
-    final shareText = [
-      post.title,
-      '',
-      post.summary?.trim().isNotEmpty == true ? post.summary! : post.body,
-      if (post.sourceUrl != null && post.sourceUrl!.isNotEmpty) '',
-      if (post.sourceUrl != null && post.sourceUrl!.isNotEmpty) post.sourceUrl!,
-      '',
-      'Shared via ${AppConstants.appName}'
-    ].join('\n');
+  Future<void> _share() async {
+    final text = '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}';
+    await Share.share(text, subject: post.title);
+  }
 
-    final encoded = Uri.encodeComponent(shareText);
-    final whatsappUri = Uri.parse('https://wa.me/?text=$encoded');
-    final launched =
-        await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
-    if (!launched && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('WhatsApp not available on this device')),
-      );
+  Future<void> _translate() async {
+    if (_translating) return;
+    if (_translatedSummary != null) {
+      setState(() => _translatedSummary = null);
+      widget.onTranslatedSummaryChanged(null);
+      return;
     }
+    setState(() => _translating = true);
+    final lang = context.read<NewsProvider>().selectedLanguage;
+    final target = lang == 'all' ? 'te' : lang;
+    final res = await ApiService.translateText(
+      text: premiumSnippet(post, maxLength: 220),
+      targetLanguage: target,
+    );
+    if (!mounted) return;
+    setState(() {
+      _translating = false;
+      if (res['success'] == true) {
+        _translatedSummary = res['translatedText']?.toString().trim();
+        widget.onTranslatedSummaryChanged(_translatedSummary);
+      }
+    });
+  }
+
+  Future<void> _speak() async {
+    await _tts.stop();
+    await _tts.speak('${post.title}. ${premiumSnippet(post, maxLength: 220)}');
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final t = Theme.of(context).textTheme;
-    final rawUrl = post.firstImage?.url;
-    final imageUrl = rawUrl != null && rawUrl.trim().isNotEmpty
-        ? AppConstants.imageUrlForDisplay(rawUrl, articleReferer: post.sourceUrl)
-        : '';
-    final timeLabel = timeago.format(post.createdAt, allowFromNow: true);
-    final badge = post.sourceName?.trim().isNotEmpty == true
-        ? post.sourceName!
-        : (post.category?.name ?? '');
+    final imageUrl = premiumImageUrl(post);
 
     return GestureDetector(
-      onTap: () => context.push('/article/${post.id}'),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
-        child: Column(
-          children: [
-            Expanded(
-              flex: 46,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ScaleTransition(
-                      scale: _imgScale,
-                      child: AnimatedBuilder(
-                        animation: widget.pageController,
-                        builder: (context, child) {
-                          var delta = 0.0;
-                          final pc = widget.pageController;
-                          if (pc.hasClients) {
-                            delta =
-                                (pc.page ?? widget.index.toDouble()) -
-                                    widget.index;
-                          }
-                          delta = delta.clamp(-1.0, 1.0);
-                          return Transform.translate(
-                            offset: Offset(0, delta * 20),
-                            child: Transform.scale(
-                              scale: 1.0 + (1.0 - delta.abs()) * 0.035,
-                              alignment: Alignment.center,
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: GestureDetector(
-                          onDoubleTap: _quickLike,
-                          behavior: HitTestBehavior.opaque,
-                          child: imageUrl.isNotEmpty
-                              ? Hero(
-                                  tag: 'post-hero-${post.id}',
-                                  child: Material(
-                                    type: MaterialType.transparency,
-                                    child: CachedNetworkImage(
-                                      imageUrl: imageUrl,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      memCacheWidth: 1200,
-                                      fadeInDuration: const Duration(
-                                          milliseconds: 280),
-                                      fadeInCurve: Curves.easeOut,
-                                      placeholder: (_, __) => Container(
-                                        color: p.inputFill,
-                                        alignment: Alignment.center,
-                                        child: SizedBox(
-                                          width: 32,
-                                          height: 32,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2.5,
-                                              color: p.primary),
-                                        ),
-                                      ),
-                                      errorWidget: (_, __, ___) => Container(
-                                        color: p.inputFill,
-                                        alignment: Alignment.center,
-                                        child: Icon(
-                                            Icons.image_not_supported_outlined,
-                                            color: p.textHint,
-                                            size: 52),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              : Container(
-                                  color: p.inputFill,
-                                  alignment: Alignment.center,
-                                  child: Icon(Icons.article_outlined,
-                                      color: p.textHint, size: 56),
-                                ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: 100,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.55),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (badge.isNotEmpty)
-                      Positioned(
-                        left: 14,
-                        bottom: 14,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.2)),
-                          ),
-                          child: Text(
-                            badge,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
+      onTap: widget.onReadMore,
+      onDoubleTap: _toggleLike,
+      onLongPress: _speak,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AnimatedBuilder(
+            animation: widget.controller,
+            builder: (context, child) {
+              var delta = 0.0;
+              if (widget.controller.hasClients) {
+                delta = (widget.controller.page ?? widget.index.toDouble()) -
+                    widget.index;
+              }
+              delta = delta.clamp(-1.0, 1.0);
+              return Transform.scale(
+                scale: 1.04 - (delta.abs() * 0.04),
+                child: Transform.translate(
+                  offset: Offset(0, delta * 18),
+                  child: child,
                 ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              flex: 54,
-              child: FadeTransition(
-                opacity: _fade,
-                child: SlideTransition(
-                  position: _slide,
-                  child: DecoratedBox(
+              );
+            },
+            child: imageUrl.isEmpty
+                ? Container(
                     decoration: BoxDecoration(
-                      color: p.surface,
-                      borderRadius: const BorderRadius.all(Radius.circular(24)),
-                      border: Border.all(
-                          color: p.cardBorder.withValues(alpha: 0.65)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.18),
-                          blurRadius: 18,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                      gradient: LinearGradient(
+                        colors: [p.gradientStart, p.gradientMid, p.gradientEnd],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 10),
-                        Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: p.textHint.withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  post.title,
-                                  style: t.headlineSmall?.copyWith(
-                                    height: 1.22,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.4,
-                                    color: p.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  _previewText(),
-                                  maxLines: 8,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: t.bodyLarge?.copyWith(
-                                    height: 1.55,
-                                    color: p.textSecondary,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Tap to read full story',
-                                      style: t.labelLarge?.copyWith(
-                                        color: p.primary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(Icons.arrow_forward_rounded,
-                                        size: 18, color: p.primary),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                          decoration: BoxDecoration(
-                            border: Border(
-                                top: BorderSide(
-                                    color:
-                                        p.cardBorder.withValues(alpha: 0.5))),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.schedule_rounded,
-                                  size: 16, color: p.textHint),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  timeLabel,
-                                  style: t.labelSmall?.copyWith(
-                                      color: p.textHint,
-                                      fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: p.primary.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '${widget.index + 1} / ${widget.total}',
-                                  style: t.labelSmall?.copyWith(
-                                    color: p.primary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              _ActionIcon(
-                                  icon: Icons.favorite_border_rounded,
-                                  label: '${post.likes}'),
-                              const SizedBox(width: 8),
-                              _ActionIcon(
-                                icon: Icons.chat_rounded,
-                                label: 'Share',
-                                iconColor: const Color(0xFF25D366),
-                                labelColor: const Color(0xFF25D366),
-                                onTap: () => _shareToWhatsApp(context),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                  )
+                : Hero(
+                    tag: 'post-hero-${post.id}',
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 1200,
+                      fadeInDuration: const Duration(milliseconds: 240),
+                      placeholder: (_, __) => ColoredBox(color: p.inputFill),
+                      errorWidget: (_, __, ___) => ColoredBox(
+                        color: p.inputFill,
+                        child: Icon(Icons.image_not_supported_outlined,
+                            color: p.textHint),
+                      ),
                     ),
+                  ),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.52),
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.36),
+                  Colors.black.withValues(alpha: 0.92),
+                ],
+                stops: const [0, 0.34, 0.58, 1],
+              ),
+            ),
+          ),
+          Positioned(
+            right: 14,
+            bottom: 132,
+            child: Column(
+              children: [
+                PremiumIconButton(
+                  icon: _liked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  label: '${post.likes + (_liked ? 1 : 0)}',
+                  color: _liked ? Colors.redAccent : null,
+                  onTap: _toggleLike,
+                  scale: Tween<double>(begin: 1, end: 1.2).animate(
+                    CurvedAnimation(parent: _likePop, curve: Curves.elasticOut),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                PremiumIconButton(
+                  icon: _saved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_border_rounded,
+                  label: 'Save',
+                  color: _saved ? p.primary : null,
+                  onTap: _toggleSave,
+                  scale: Tween<double>(begin: 1, end: 1.16).animate(
+                    CurvedAnimation(parent: _savePop, curve: Curves.elasticOut),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                PremiumIconButton(
+                  icon: AppIcons.share,
+                  label: 'Share',
+                  onTap: _share,
+                ),
+                const SizedBox(height: 12),
+                PremiumIconButton(
+                  icon: AppIcons.translate,
+                  label: _translating
+                      ? '...'
+                      : (_translatedSummary == null ? 'Translate' : 'Original'),
+                  onTap: _translate,
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 16,
+            right: 78,
+            bottom: 100,
+            child: FadeTransition(
+              opacity: _fade,
+              child: SlideTransition(
+                position: _slide,
+                child: FrostedPanel(
+                  radius: 22,
+                  padding: const EdgeInsets.all(16),
+                  color: Colors.black.withValues(alpha: 0.28),
+                  boxShadow: const [],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        post.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          height: 1.15,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        _translatedSummary ??
+                            premiumSnippet(post, maxLength: 170),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: t.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          height: 1.45,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '${post.sourceName ?? post.category?.name ?? 'News'} • ${timeago.format(post.createdAt)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.metaText.copyWith(
+                          color: Colors.white.withValues(alpha: 0.76),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _FeedLanguageDropdown extends StatelessWidget {
-  final String selectedCode;
-  final void Function(String code) onChanged;
-
-  const _FeedLanguageDropdown({
-    required this.selectedCode,
-    required this.onChanged,
-  });
-
-  static const _codes = ['all', 'en', 'te', 'hi'];
-
-  static String _label(String code) {
-    switch (code) {
-      case 'en':
-        return 'English';
-      case 'te':
-        return 'Telugu';
-      case 'hi':
-        return 'Hindi';
-      case 'all':
-      default:
-        return 'All';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final value =
-        _codes.contains(selectedCode) ? selectedCode : 'all';
-    return SizedBox(
-      height: 48,
-      child: PopupMenuButton<String>(
-        initialValue: value,
-        tooltip: 'Select language',
-        color: p.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onSelected: onChanged,
-        itemBuilder: (context) => _codes.map((code) {
-          final selected = code == value;
-          return PopupMenuItem<String>(
-            value: code,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _label(code),
-                    style: TextStyle(
-                      color: p.textPrimary,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (selected) Icon(Icons.check_rounded, size: 18, color: p.primary),
-              ],
-            ),
-          );
-        }).toList(),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: p.primary,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: p.primary.withValues(alpha: 0.22),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _label(value),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white.withValues(alpha: 0.95),
-                  size: 22,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PoliticalRegionDropdown extends StatelessWidget {
-  final String selectedCode;
-  final String languageCode;
-  final void Function(String code) onChanged;
-
-  const _PoliticalRegionDropdown({
-    required this.selectedCode,
-    required this.languageCode,
-    required this.onChanged,
-  });
-
-  List<String> get _codes {
-    if (languageCode == 'te') return const ['all', 'andhra', 'telangana'];
-    if (languageCode == 'hi' || languageCode == 'en') return const ['all', 'india', 'international'];
-    return const ['all'];
-  }
-
-  String _label(String code) {
-    if (languageCode == 'te') {
-      switch (code) {
-        case 'andhra':
-          return 'Andhra Pradesh';
-        case 'telangana':
-          return 'Telangana';
-        case 'all':
-        default:
-          return 'All (AP/Telangana/India)';
-      }
-    }
-    switch (code) {
-      case 'india':
-        return 'India';
-      case 'international':
-        return 'International';
-      case 'all':
-      default:
-        return 'All (India + International)';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final codes = _codes;
-    final value = codes.contains(selectedCode) ? selectedCode : 'all';
-    return SizedBox(
-      height: 48,
-      child: PopupMenuButton<String>(
-        initialValue: value,
-        tooltip: 'Select political region',
-        color: p.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onSelected: onChanged,
-        itemBuilder: (context) => codes.map((code) {
-          final selected = code == value;
-          return PopupMenuItem<String>(
-            value: code,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _label(code),
-                    style: TextStyle(
-                      color: p.textPrimary,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (selected) Icon(Icons.check_rounded, size: 18, color: p.primary),
-              ],
-            ),
-          );
-        }).toList(),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: p.primary,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: p.primary.withValues(alpha: 0.22),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _label(value),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white.withValues(alpha: 0.95),
-                  size: 22,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PoliticalConstituencyDropdown extends StatelessWidget {
-  final String selectedConstituency;
-  final List<String> options;
-  final void Function(String value) onChanged;
-
-  const _PoliticalConstituencyDropdown({
-    required this.selectedConstituency,
-    required this.options,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final values = ['all', ...options];
-    final selected = values.contains(selectedConstituency) ? selectedConstituency : 'all';
-    String labelFor(String v) => v == 'all' ? 'All Andhra Constituencies' : v;
-
-    return SizedBox(
-      height: 48,
-      child: PopupMenuButton<String>(
-        initialValue: selected,
-        tooltip: 'Select Andhra constituency',
-        color: p.surface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onSelected: onChanged,
-        itemBuilder: (context) => values.map((v) {
-          final isSelected = v == selected;
-          return PopupMenuItem<String>(
-            value: v,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    labelFor(v),
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: p.textPrimary,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (isSelected) Icon(Icons.check_rounded, size: 18, color: p.primary),
-              ],
-            ),
-          );
-        }).toList(),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: p.primary,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: p.primary.withValues(alpha: 0.22),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    labelFor(selected),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white.withValues(alpha: 0.95),
-                  size: 22,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionIcon extends StatelessWidget {
-  final IconData icon;
+class _MetaPill extends StatelessWidget {
   final String label;
-  final VoidCallback? onTap;
-  final Color? iconColor;
-  final Color? labelColor;
-  const _ActionIcon({
-    required this.icon,
+  final IconData icon;
+
+  const _MetaPill({
     required this.label,
-    this.onTap,
-    this.iconColor,
-    this.labelColor,
+    required this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    final ic = iconColor ?? p.textSecondary;
-    final lc = labelColor ?? p.textSecondary;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 17, color: ic),
-          const SizedBox(width: 3),
-          Text(label, style: TextStyle(fontSize: 12, color: lc)),
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _ArticlePreviewSheet extends StatelessWidget {
+  final NewsPost post;
+
+  const _ArticlePreviewSheet({required this.post});
+
+  @override
+  Widget build(BuildContext context) => _ArticlePreviewSheetBody(post: post);
+}
+
+class _ArticlePreviewSheetBody extends StatefulWidget {
+  final NewsPost post;
+
+  const _ArticlePreviewSheetBody({required this.post});
+
+  @override
+  State<_ArticlePreviewSheetBody> createState() =>
+      _ArticlePreviewSheetBodyState();
+}
+
+class _ArticlePreviewSheetBodyState extends State<_ArticlePreviewSheetBody> {
+  final FlutterTts _tts = FlutterTts();
+  bool _translated = false;
+  bool _translating = false;
+  String? _translatedText;
+  bool _speaking = false;
+
+  NewsPost get post => widget.post;
+
+  String get _summary {
+    final base = post.summary?.trim().isNotEmpty == true
+        ? post.summary!.trim()
+        : premiumSnippet(post, maxLength: 1200);
+    if (_translated && _translatedText != null && _translatedText!.isNotEmpty) {
+      return _translatedText!;
+    }
+    return base;
+  }
+
+  Future<void> _toggleSpeak() async {
+    if (_speaking) {
+      await _tts.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    await _tts.setSpeechRate(0.42);
+    await _tts.setPitch(1.0);
+    await _tts.speak('${post.title}. $_summary');
+    if (mounted) setState(() => _speaking = true);
+  }
+
+  Future<void> _openSource() async {
+    final raw = post.sourceUrl?.trim();
+    if (raw == null || raw.isEmpty) return;
+    final uri = Uri.tryParse(raw);
+    if (uri == null) return;
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open source link')),
+      );
+    }
+  }
+
+  Future<void> _share() async {
+    await Share.share(
+      '${post.title}\n\n$_summary\n\n${post.sourceUrl ?? ''}',
+      subject: post.title,
+    );
+  }
+
+  Future<void> _toggleTranslation() async {
+    if (_translating) return;
+    if (_translated) {
+      setState(() => _translated = false);
+      return;
+    }
+    setState(() => _translating = true);
+    final target = context.read<NewsProvider>().selectedLanguage == 'all'
+        ? 'te'
+        : context.read<NewsProvider>().selectedLanguage;
+    final res = await ApiService.translateText(
+      text: _summary,
+      targetLanguage: target,
+    );
+    if (!mounted) return;
+    setState(() {
+      _translating = false;
+      if (res['success'] == true) {
+        _translatedText = res['translatedText']?.toString();
+        _translated = true;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tts.stop();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final bottom = MediaQuery.of(context).padding.bottom;
+    final imageUrl = premiumImageUrl(post);
+    return FrostedPanel(
+      radius: 30,
+      margin: const EdgeInsets.all(10),
+      padding: EdgeInsets.fromLTRB(12, 10, 12, 12 + bottom),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.86,
+        minChildSize: 0.50,
+        maxChildSize: 0.98,
+        builder: (context, controller) {
+          return ListView(
+            controller: controller,
+            physics: const BouncingScrollPhysics(),
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: p.textHint.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: imageUrl.isEmpty
+                      ? ColoredBox(
+                          color: p.inputFill,
+                          child: Icon(
+                            Icons.article_outlined,
+                            color: p.textHint,
+                            size: 42,
+                          ),
+                        )
+                      : Hero(
+                          tag: 'post-hero-${post.id}',
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) =>
+                                ColoredBox(color: p.inputFill),
+                            errorWidget: (_, __, ___) => ColoredBox(
+                              color: p.inputFill,
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                color: p.textHint,
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                post.title,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: p.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      height: 1.18,
+                      letterSpacing: -0.6,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MetaPill(
+                    label: post.category?.name ?? 'Article',
+                    icon: Icons.grid_view_rounded,
+                  ),
+                  _MetaPill(
+                    label: timeago.format(post.createdAt),
+                    icon: Icons.schedule_rounded,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: GradientPillButton(
+                      label: _speaking ? 'Stop TTS' : 'Listen',
+                      icon: _speaking
+                          ? Icons.stop_rounded
+                          : Icons.volume_up_rounded,
+                      compact: true,
+                      onPressed: _toggleSpeak,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GradientPillButton(
+                      label: _translating
+                          ? '...'
+                          : (_translated ? 'Original' : 'Translate'),
+                      icon: AppIcons.translate,
+                      compact: true,
+                      onPressed: _toggleTranslation,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: GradientPillButton(
+                      label: 'Share',
+                      icon: AppIcons.share,
+                      compact: true,
+                      onPressed: _share,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                _summary,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: p.textSecondary,
+                      height: 1.72,
+                    ),
+              ),
+              const SizedBox(height: 16),
+              if ((post.sourceUrl ?? '').trim().isNotEmpty)
+                InkWell(
+                  onTap: _openSource,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.link_rounded, color: p.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            post.sourceUrl!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.metaText.copyWith(
+                              color: p.primary,
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.open_in_new_rounded,
+                            color: p.primary, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 22),
+              GradientPillButton(
+                label: 'Open full article',
+                icon: Icons.open_in_full_rounded,
+                onPressed: () {
+                  Navigator.pop(context);
+                  context.push('/article/${post.id}');
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1209,65 +844,59 @@ class _ActionIcon extends StatelessWidget {
 
 class FeedSearchDelegate extends SearchDelegate<String> {
   final NewsProvider provider;
-  FeedSearchDelegate(this.provider);
 
-  @override
-  ThemeData appBarTheme(BuildContext context) => Theme.of(context).copyWith(
-        inputDecorationTheme: InputDecorationTheme(
-          border: InputBorder.none,
-          hintStyle: TextStyle(color: context.palette.textHint),
-        ),
-      );
+  FeedSearchDelegate(this.provider);
 
   @override
   List<Widget> buildActions(BuildContext context) => [
         IconButton(
-            icon: Icon(Icons.clear, color: context.palette.textSecondary),
-            onPressed: () => query = '')
+          onPressed: () => query = '',
+          icon: const Icon(Icons.clear_rounded),
+        ),
       ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
-      icon: Icon(Icons.arrow_back_ios_new_rounded,
-          size: 18, color: context.palette.textSecondary),
-      onPressed: () => close(context, ''));
+        onPressed: () => close(context, ''),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+      );
 
   @override
   Widget buildResults(BuildContext context) =>
-      _FeedSearchResults(query: query, provider: provider);
+      _SearchResults(provider: provider, query: query);
 
   @override
   Widget buildSuggestions(BuildContext context) => query.isEmpty
-      ? Center(
-          child: Text('Search for news...',
-              style: TextStyle(color: context.palette.textHint)))
-      : _FeedSearchResults(query: query, provider: provider);
+      ? const Center(child: Text('Search news, topics, places...'))
+      : _SearchResults(provider: provider, query: query);
 }
 
-class _FeedSearchResults extends StatefulWidget {
-  final String query;
+class _SearchResults extends StatefulWidget {
   final NewsProvider provider;
-  const _FeedSearchResults({required this.query, required this.provider});
+  final String query;
+
+  const _SearchResults({required this.provider, required this.query});
+
   @override
-  State<_FeedSearchResults> createState() => _FeedSearchResultsState();
+  State<_SearchResults> createState() => _SearchResultsState();
 }
 
-class _FeedSearchResultsState extends State<_FeedSearchResults> {
+class _SearchResultsState extends State<_SearchResults> {
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _search();
+    _run();
   }
 
   @override
-  void didUpdateWidget(_FeedSearchResults old) {
-    super.didUpdateWidget(old);
-    if (old.query != widget.query) _search();
+  void didUpdateWidget(covariant _SearchResults oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) _run();
   }
 
-  Future<void> _search() async {
+  Future<void> _run() async {
     setState(() => _loading = true);
     await widget.provider.search(widget.query);
     if (mounted) setState(() => _loading = false);
@@ -1275,24 +904,22 @@ class _FeedSearchResultsState extends State<_FeedSearchResults> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return Center(
-          child: CircularProgressIndicator(color: context.palette.accentGreen));
-    }
-    final posts = widget.provider.posts;
-    if (posts.isEmpty) {
-      return const EmptyState(
-          icon: Icons.search_off, title: 'No results found');
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (widget.provider.posts.isEmpty) {
+      return const EmptyState(icon: Icons.search_off, title: 'No results');
     }
     return ListView.builder(
-        itemCount: posts.length,
-        itemBuilder: (_, i) => NewsCard(
-              post: posts[i],
-            ));
+      padding: const EdgeInsets.all(16),
+      itemCount: widget.provider.posts.length,
+      itemBuilder: (context, index) => PremiumNewsTile(
+        post: widget.provider.posts[index],
+        onTap: () =>
+            context.push('/article/${widget.provider.posts[index].id}'),
+      ),
+    );
   }
 }
 
-/// Opens feed search with the shared [NewsProvider] delegate.
 void openFeedSearch(BuildContext context) {
   final provider = context.read<NewsProvider>();
   showSearch(context: context, delegate: FeedSearchDelegate(provider));

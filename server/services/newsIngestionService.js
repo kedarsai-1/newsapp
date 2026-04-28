@@ -73,6 +73,47 @@ function matchesExpectedFeedLanguage(rawItem, feedLang) {
   return scriptRatio(sample, /[\u0C00-\u0C7F]/g) >= 0.18;
 }
 
+function isTeluguPoliticalStory(postLike) {
+  const text = stripMarkup(
+    `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
+  ).toLowerCase();
+  if (!text) return false;
+
+  // Hard-negative topical filters: reject common non-political story types.
+  const noisePatterns = [
+    /రాశి|జాతకం|హోరోస్కోప్|వాస్తు|పూజ|దేవాలయం|ధ్యానం|ఆధ్యాత్మిక/,
+    /సినిమా|మూవీ|ట్రైలర్|టీజర్|ఓటిటి|బాక్సాఫీస్|హీరో|హీరోయిన్|సెలబ్రిటీ/,
+    /క్రికెట్|ఐపీఎల్|ఐపిఎల్|ఫుట్‌బాల్|కబడ్డీ|టోర్నమెంట్|మ్యాచ్|స్కోర్/,
+    /హెల్త్|ఆరోగ్యం|డైట్|బ్యూటీ|రెసిపీ|లైఫ్‌స్టైల్|టిప్స్/,
+    /జాబ్స్|ఉద్యోగ|ఎడ్యుకేషన్|ఎగ్జామ్|అడ్మిట్\s*కార్డ్|ఫలితాలు/,
+  ];
+  for (const re of noisePatterns) {
+    if (re.test(text)) return false;
+  }
+
+  // Strict political scoring: require at least two independent signals.
+  const partyOrLeader = [
+    /\b(ysrcp|ycp|tdp|bjp|congress|janasena|jsp|b(?:rs|rs)|trs|cpi|cpm|aimim)\b/i,
+    /\b(jagan|ys\s*jagan|chandrababu|lokesh|pawan\s*kalyan|revanth|modi|rahul|kcr|kavitha)\b/i,
+  ];
+  const institutional = [
+    /ఎన్నిక|పోలింగ్|ఓటు|పార్టీ|ప్రభుత్వం|ప్రతిపక్షం|మంత్రి|మంత్రివర్గం|కేబినెట్|ఎమ్మెల్యే|ఎంపీ|ఎమ్మెల్సీ|శాసనసభ|అసెంబ్లీ|లోక్‌సభ|రాజ్యసభ|కూటమి|మానిఫెస్టో|రాజకీయ/,
+    /\b(election|poll|vote|assembly|parliament|cabinet|minister|mla|mp|m[ -]?l[ -]?c|party|alliance|manifesto|politics?)\b/i,
+  ];
+  const apTgContext = [
+    /ఆంధ్రప్రదేశ్|తెలంగాణ|అమరావతి|విజయవాడ|తాడేపల్లి|హైదరాబాద్|సచివాలయం/,
+    /\b(andhra\s*pradesh|telangana|amaravati|hyderabad)\b/i,
+  ];
+
+  let score = 0;
+  if (partyOrLeader.some((re) => re.test(text))) score += 1;
+  if (institutional.some((re) => re.test(text))) score += 1;
+  if (apTgContext.some((re) => re.test(text))) score += 1;
+
+  // Need strong confidence to keep category clean.
+  return score >= 2;
+}
+
 function hashUrl(url) {
   return crypto.createHash('sha256').update(url).digest('hex');
 }
@@ -273,6 +314,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     failed: 0,
     fallbacks: 0,
     languageFiltered: 0,
+    politicsFiltered: 0,
     sourceRuns: [],
   };
 
@@ -415,6 +457,16 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             }
             if (!matchesExpectedFeedLanguage(raw, feed.language || '')) {
               stats.languageFiltered += 1;
+              continue;
+            }
+            // Telugu politics feeds can contain lifestyle/astrology/clickbait.
+            // Keep only party/government/election-related stories in Politics.
+            if (
+              String(feed.language || '').toLowerCase() === 'te'
+              && String(feed.categorySlug || '').toLowerCase() === 'politics'
+              && !isTeluguPoliticalStory(item)
+            ) {
+              stats.politicsFiltered += 1;
               continue;
             }
             if (await isDuplicate(item)) {

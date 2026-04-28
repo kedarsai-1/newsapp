@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_palette.dart';
+import 'app_components.dart';
 import 'app_typography.dart';
 
 /// Material [ThemeData] for light (paper) and dark (glass night) appearances.
@@ -20,10 +21,17 @@ class AppTheme {
   static ThemeData _base(AppPalette p, Brightness brightness) {
     final isLight = brightness == Brightness.light;
     final baseText = ThemeData(brightness: brightness).textTheme;
+    const indicFallback = <String>[
+      'Noto Sans Telugu',
+      'Noto Sans Devanagari',
+      'Noto Sans',
+      'sans-serif',
+    ];
     final textTheme = AppTypography.buildTextTheme(
-      GoogleFonts.plusJakartaSansTextTheme(baseText).apply(
-      bodyColor: p.textPrimary,
-      displayColor: p.textPrimary,
+      GoogleFonts.notoSansTextTheme(baseText).apply(
+        bodyColor: p.textPrimary,
+        displayColor: p.textPrimary,
+        fontFamilyFallback: indicFallback,
       ),
       p,
     );
@@ -64,14 +72,10 @@ class AppTheme {
         iconTheme: IconThemeData(color: p.textPrimary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: p.primary,
-          foregroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-        ),
+        style: AppButtonStyles.primary(p),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: AppButtonStyles.tonal(p),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: isLight ? p.surface : Colors.transparent,

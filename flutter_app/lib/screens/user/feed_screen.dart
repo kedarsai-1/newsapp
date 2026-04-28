@@ -1,15 +1,19 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants.dart';
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
+import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/news_shimmer_loader.dart';
@@ -23,17 +27,94 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  static const _translatedCacheKey = 'feed_translated_summary_cache_v1';
+  static const _translatedCacheMaxEntries = 120;
   late final PageController _pageController;
   int _currentIndex = 0;
   final Map<String, String?> _translatedByPostId = {};
+  final Map<String, bool> _bookmarkedByPostId = {};
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _restoreTranslatedCache();
+    _primeBookmarkState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<NewsProvider>();
       if (provider.posts.isEmpty && !provider.refreshing) provider.refresh();
+    });
+  }
+
+  Future<void> _restoreTranslatedCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_translatedCacheKey);
+    if (raw == null || raw.trim().isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+      final restored = <String, String?>{};
+      decoded.forEach((key, value) {
+        if (key.trim().isEmpty) return;
+        final text = value?.toString().trim();
+        if (text == null || text.isEmpty) return;
+        restored[key] = text;
+      });
+      if (!mounted) return;
+      setState(() => _translatedByPostId
+        ..clear()
+        ..addAll(restored));
+    } catch (_) {
+      // Ignore malformed cached data.
+    }
+  }
+
+  Future<void> _persistTranslatedCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final entries = _translatedByPostId.entries
+        .where((e) => e.value != null && e.value!.trim().isNotEmpty)
+        .toList();
+    // Keep latest N entries to avoid unbounded growth.
+    final start = entries.length > _translatedCacheMaxEntries
+        ? entries.length - _translatedCacheMaxEntries
+        : 0;
+    final capped = <String, String?>{};
+    for (var i = start; i < entries.length; i++) {
+      capped[entries[i].key] = entries[i].value;
+    }
+    await prefs.setString(_translatedCacheKey, jsonEncode(capped));
+  }
+
+  Future<void> _primeBookmarkState() async {
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (loggedIn) {
+      final res = await ApiService.getBookmarks();
+      if (!mounted) return;
+      if (res['success'] == true && res['bookmarks'] is List) {
+        final map = <String, bool>{};
+        for (final item in (res['bookmarks'] as List)) {
+          if (item is Map<String, dynamic>) {
+            final id = item['_id']?.toString() ?? '';
+            if (id.isNotEmpty) map[id] = true;
+          } else if (item is Map) {
+            final id = item['_id']?.toString() ?? '';
+            if (id.isNotEmpty) map[id] = true;
+          }
+        }
+        setState(() {
+          _bookmarkedByPostId
+            ..clear()
+            ..addAll(map);
+        });
+      }
+      return;
+    }
+    final guest = await ApiService.getGuestBookmarks();
+    if (!mounted) return;
+    setState(() {
+      _bookmarkedByPostId
+        ..clear()
+        ..addEntries(guest.map((post) => MapEntry(post.id, true)));
     });
   }
 
@@ -111,10 +192,30 @@ class _FeedScreenState extends State<FeedScreen> {
                       controller: _pageController,
                       initialTranslatedSummary:
                           _translatedByPostId[provider.posts[index].id],
+                      initialSaved:
+                          _bookmarkedByPostId[provider.posts[index].id] ??
+                              false,
                       onTranslatedSummaryChanged: (value) {
                         if (!mounted) return;
                         setState(() {
-                          _translatedByPostId[provider.posts[index].id] = value;
+                          final id = provider.posts[index].id;
+                          if (value == null || value.trim().isEmpty) {
+                            _translatedByPostId.remove(id);
+                          } else {
+                            _translatedByPostId[id] = value;
+                          }
+                        });
+                        _persistTranslatedCache();
+                      },
+                      onSavedChanged: (saved) {
+                        if (!mounted) return;
+                        final id = provider.posts[index].id;
+                        setState(() {
+                          if (saved) {
+                            _bookmarkedByPostId[id] = true;
+                          } else {
+                            _bookmarkedByPostId.remove(id);
+                          }
                         });
                       },
                       onReadMore: () =>
@@ -134,6 +235,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     children: [
                       PremiumIconButton(
                         icon: AppIcons.profile,
+                        panelColor: Colors.black.withValues(alpha: 0.44),
                         onTap: () => context.push('/settings'),
                       ),
                       FrostedPanel(
@@ -142,7 +244,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           horizontal: 16,
                           vertical: 10,
                         ),
-                        color: Colors.black.withValues(alpha: 0.22),
+                        color: Colors.black.withValues(alpha: 0.44),
                         boxShadow: const [],
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -156,7 +258,7 @@ class _FeedScreenState extends State<FeedScreen> {
                             Text(
                               AppConstants.appName,
                               style: TextStyle(
-                                color: p.textPrimary,
+                                color: Colors.white.withValues(alpha: 0.96),
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -0.3,
                               ),
@@ -166,6 +268,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       ),
                       PremiumIconButton(
                         icon: AppIcons.notification,
+                        panelColor: Colors.black.withValues(alpha: 0.44),
                         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('No new notifications'),
@@ -201,7 +304,9 @@ class _NewsReelCard extends StatefulWidget {
   final int total;
   final PageController controller;
   final String? initialTranslatedSummary;
+  final bool initialSaved;
   final ValueChanged<String?> onTranslatedSummaryChanged;
+  final ValueChanged<bool> onSavedChanged;
   final VoidCallback onReadMore;
 
   const _NewsReelCard({
@@ -210,7 +315,9 @@ class _NewsReelCard extends StatefulWidget {
     required this.total,
     required this.controller,
     required this.initialTranslatedSummary,
+    required this.initialSaved,
     required this.onTranslatedSummaryChanged,
+    required this.onSavedChanged,
     required this.onReadMore,
   });
 
@@ -255,6 +362,7 @@ class _NewsReelCardState extends State<_NewsReelCard>
       duration: const Duration(milliseconds: 260),
     );
     _translatedSummary = widget.initialTranslatedSummary;
+    _saved = widget.initialSaved;
     _configureTts();
     _hydrateInteractionState();
   }
@@ -264,8 +372,13 @@ class _NewsReelCardState extends State<_NewsReelCard>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post.id != widget.post.id) {
       _translatedSummary = widget.initialTranslatedSummary;
+      _saved = widget.initialSaved;
       _hydrateInteractionState();
       return;
+    }
+    if (oldWidget.initialSaved != widget.initialSaved &&
+        widget.initialSaved != _saved) {
+      _saved = widget.initialSaved;
     }
     if (oldWidget.initialTranslatedSummary != widget.initialTranslatedSummary &&
         widget.initialTranslatedSummary != _translatedSummary) {
@@ -280,6 +393,8 @@ class _NewsReelCardState extends State<_NewsReelCard>
   }
 
   Future<void> _hydrateInteractionState() async {
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (loggedIn) return;
     final liked = await ApiService.isGuestLiked(post.id);
     final saved = await ApiService.isGuestBookmarked(post.id);
     if (!mounted) return;
@@ -301,21 +416,60 @@ class _NewsReelCardState extends State<_NewsReelCard>
   Future<void> _toggleLike() async {
     if (_likeSyncing) return;
     setState(() => _likeSyncing = true);
-    final liked = await ApiService.toggleGuestLike(post.id);
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      final liked = await ApiService.toggleGuestLike(post.id);
+      if (!mounted) return;
+      setState(() {
+        _liked = liked;
+        _likeSyncing = false;
+      });
+      _likePop.forward(from: 0);
+      return;
+    }
+    final res = await ApiService.toggleLike(post.id);
     if (!mounted) return;
+    if (res['success'] != true) {
+      setState(() => _likeSyncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message']?.toString() ?? 'Failed to like story'),
+        ),
+      );
+      return;
+    }
     setState(() {
-      _liked = liked;
+      _liked = res['liked'] == true;
       _likeSyncing = false;
     });
     _likePop.forward(from: 0);
   }
 
   Future<void> _toggleSave() async {
-    final saved = await ApiService.toggleGuestBookmark(post);
-    if (mounted) {
-      setState(() => _saved = saved);
-      _savePop.forward(from: 0);
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      final saved = await ApiService.toggleGuestBookmark(post);
+      if (mounted) {
+        setState(() => _saved = saved);
+        widget.onSavedChanged(saved);
+        _savePop.forward(from: 0);
+      }
+      return;
     }
+    final res = await ApiService.toggleBookmark(post.id);
+    if (!mounted) return;
+    if (res['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(res['message']?.toString() ?? 'Failed to save story'),
+        ),
+      );
+      return;
+    }
+    final saved = res['bookmarked'] == true;
+    setState(() => _saved = saved);
+    widget.onSavedChanged(saved);
+    _savePop.forward(from: 0);
   }
 
   Future<void> _share() async {
@@ -357,6 +511,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
     final p = context.palette;
     final t = Theme.of(context).textTheme;
     final imageUrl = premiumImageUrl(post);
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final widthPx = MediaQuery.of(context).size.width * dpr;
+    final targetCacheWidth = widthPx.clamp(1080, 2400).round();
 
     return GestureDetector(
       onTap: widget.onReadMore,
@@ -397,7 +554,8 @@ class _NewsReelCardState extends State<_NewsReelCard>
                     child: CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
-                      memCacheWidth: 1200,
+                      memCacheWidth: targetCacheWidth,
+                      filterQuality: FilterQuality.high,
                       fadeInDuration: const Duration(milliseconds: 240),
                       placeholder: (_, __) => ColoredBox(color: p.inputFill),
                       errorWidget: (_, __, ___) => ColoredBox(
@@ -414,12 +572,12 @@ class _NewsReelCardState extends State<_NewsReelCard>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.52),
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.36),
-                  Colors.black.withValues(alpha: 0.92),
+                  Colors.black.withValues(alpha: 0.66),
+                  Colors.black.withValues(alpha: 0.18),
+                  Colors.black.withValues(alpha: 0.48),
+                  Colors.black.withValues(alpha: 0.96),
                 ],
-                stops: const [0, 0.34, 0.58, 1],
+                stops: const [0, 0.30, 0.60, 1],
               ),
             ),
           ),
@@ -434,6 +592,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
                       : Icons.favorite_border_rounded,
                   label: '${post.likes + (_liked ? 1 : 0)}',
                   color: _liked ? Colors.redAccent : null,
+                  labelColor: Colors.white.withValues(alpha: 0.9),
+                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  circular: true,
                   onTap: _toggleLike,
                   scale: Tween<double>(begin: 1, end: 1.2).animate(
                     CurvedAnimation(parent: _likePop, curve: Curves.elasticOut),
@@ -446,6 +607,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
                       : Icons.bookmark_border_rounded,
                   label: 'Save',
                   color: _saved ? p.primary : null,
+                  labelColor: Colors.white.withValues(alpha: 0.9),
+                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  circular: true,
                   onTap: _toggleSave,
                   scale: Tween<double>(begin: 1, end: 1.16).animate(
                     CurvedAnimation(parent: _savePop, curve: Curves.elasticOut),
@@ -455,6 +619,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
                 PremiumIconButton(
                   icon: AppIcons.share,
                   label: 'Share',
+                  labelColor: Colors.white.withValues(alpha: 0.9),
+                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  circular: true,
                   onTap: _share,
                 ),
                 const SizedBox(height: 12),
@@ -463,6 +630,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
                   label: _translating
                       ? '...'
                       : (_translatedSummary == null ? 'Translate' : 'Original'),
+                  labelColor: Colors.white.withValues(alpha: 0.9),
+                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  circular: true,
                   onTap: _translate,
                 ),
               ],
@@ -470,7 +640,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
           ),
           Positioned(
             left: 16,
-            right: 78,
+            // Keep a strong safety gutter from the right action rail
+            // so long Telugu/Hindi headlines never visually collide.
+            right: 102,
             bottom: 100,
             child: FadeTransition(
               opacity: _fade,
@@ -494,6 +666,12 @@ class _NewsReelCardState extends State<_NewsReelCard>
                           fontWeight: FontWeight.w900,
                           height: 1.15,
                           letterSpacing: -0.6,
+                          shadows: const [
+                            Shadow(
+                                color: Color(0x88000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 2)),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -506,6 +684,12 @@ class _NewsReelCardState extends State<_NewsReelCard>
                           color: Colors.white.withValues(alpha: 0.9),
                           height: 1.45,
                           fontWeight: FontWeight.w500,
+                          shadows: const [
+                            Shadow(
+                                color: Color(0x66000000),
+                                blurRadius: 6,
+                                offset: Offset(0, 1)),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -516,6 +700,12 @@ class _NewsReelCardState extends State<_NewsReelCard>
                         style: context.metaText.copyWith(
                           color: Colors.white.withValues(alpha: 0.76),
                           fontWeight: FontWeight.w600,
+                          shadows: const [
+                            Shadow(
+                                color: Color(0x66000000),
+                                blurRadius: 5,
+                                offset: Offset(0, 1)),
+                          ],
                         ),
                       ),
                     ],
@@ -715,6 +905,8 @@ class _ArticlePreviewSheetBodyState extends State<_ArticlePreviewSheetBody> {
                           child: CachedNetworkImage(
                             imageUrl: imageUrl,
                             fit: BoxFit.cover,
+                            memCacheWidth: 1800,
+                            filterQuality: FilterQuality.high,
                             placeholder: (_, __) =>
                                 ColoredBox(color: p.inputFill),
                             errorWidget: (_, __, ___) => ColoredBox(

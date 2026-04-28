@@ -22,6 +22,14 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
   int _index = 0;
   bool _quickMode = true;
 
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/feed');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -102,7 +110,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
                 children: [
                   PremiumIconButton(
                     icon: AppIcons.back,
-                    onTap: () => context.pop(),
+                    onTap: _handleBack,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -301,6 +309,8 @@ class _QuickHeadlineCard extends StatelessWidget {
                       child: CachedNetworkImage(
                         imageUrl: thumb,
                         fit: BoxFit.cover,
+                        filterQuality: FilterQuality.high,
+                        memCacheWidth: 420,
                         placeholder: (_, __) => ColoredBox(color: p.inputFill),
                         errorWidget: (_, __, ___) =>
                             Icon(AppIcons.image, color: p.textHint),
@@ -319,6 +329,13 @@ class _QuickHeadlineCard extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                       fontSize: 20,
                       height: 1.2,
+                      shadows: const [
+                        Shadow(
+                          color: Color(0x77000000),
+                          blurRadius: 6,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
                     ),
                   ),
                 ),

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -84,7 +86,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
   String _displayText(NewsPost post) {
     final short = post.summary?.trim();
-    if (_fullText != null && _fullText!.trim().isNotEmpty) return _fullText!.trim();
+    if (_fullText != null && _fullText!.trim().isNotEmpty)
+      return _fullText!.trim();
     if (short != null && short.isNotEmpty) return short;
     final body = post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (body.length <= 420) return body;
@@ -129,7 +132,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     }
     setState(() {
       _fullLoading = false;
-      _fullError = (res['message'] ?? 'Could not load full article.').toString();
+      _fullError =
+          (res['message'] ?? 'Could not load full article.').toString();
     });
   }
 
@@ -141,9 +145,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       setState(() {
         _liked = liked;
         if (_post != null) {
-          final likes = liked
-              ? _post!.likes + 1
-              : (_post!.likes - 1).clamp(0, 1 << 30);
+          final likes =
+              liked ? _post!.likes + 1 : (_post!.likes - 1).clamp(0, 1 << 30);
           _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
         }
       });
@@ -199,8 +202,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     buf.writeln();
     final preview =
         post.summary?.trim().isNotEmpty == true ? post.summary! : post.body;
-    final ex =
-        preview.length > 600 ? '${preview.substring(0, 600)}…' : preview;
+    final ex = preview.length > 600 ? '${preview.substring(0, 600)}…' : preview;
     buf.writeln(ex);
     if (post.sourceUrl?.trim().isNotEmpty == true) {
       buf.writeln();
@@ -318,6 +320,37 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     ];
   }
 
+  Widget _glassActionShell({required Widget child}) {
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          width: 34,
+          height: 34,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.50),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _glassActionIcon({
+    required Widget icon,
+    required VoidCallback? onPressed,
+    String? tooltip,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: _glassActionShell(child: icon),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -343,14 +376,19 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           slivers: [
             SliverAppBar(
               stretch: true,
-              expandedHeight: (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url)) ? 220 : 0,
+              expandedHeight:
+                  (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url))
+                      ? 220
+                      : 0,
               pinned: true,
-              backgroundColor: (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url))
-                  ? p.surface.withValues(alpha: 0.62)
-                  : p.surface,
+              backgroundColor:
+                  (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url))
+                      ? p.surface.withValues(alpha: 0.62)
+                      : p.surface,
               foregroundColor: Colors.white,
               iconTheme: const IconThemeData(color: Colors.white),
-              flexibleSpace: (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url))
+              flexibleSpace: (post.hasImages &&
+                      !_looksLikeLogoUrl(post.firstImage!.url))
                   ? FlexibleSpaceBar(
                       stretchModes: const [
                         StretchMode.zoomBackground,
@@ -382,13 +420,15 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                       image: provider,
                                       width: double.infinity,
                                       height: double.infinity,
-                                      fit: isLogo ? BoxFit.contain : BoxFit.cover,
+                                      fit: isLogo
+                                          ? BoxFit.contain
+                                          : BoxFit.cover,
                                       alignment: Alignment.center,
-                                      filterQuality: FilterQuality.medium,
+                                      filterQuality: FilterQuality.high,
                                     ),
                                   );
                                 },
-                                memCacheWidth: kIsWeb ? null : 1400,
+                                memCacheWidth: kIsWeb ? null : 2200,
                                 fadeInDuration:
                                     const Duration(milliseconds: 280),
                                 placeholder: (_, __) => Container(
@@ -415,11 +455,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: [
-                                          Colors.black
-                                              .withValues(alpha: 0.72),
-                                          Colors.transparent,
-                                          Colors.black
-                                              .withValues(alpha: 0.42),
+                                          Colors.black.withValues(alpha: 0.78),
+                                          Colors.black.withValues(alpha: 0.16),
+                                          Colors.black.withValues(alpha: 0.56),
                                         ],
                                         stops: const [0.0, 0.50, 1.0],
                                       ),
@@ -434,12 +472,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                     )
                   : null,
               actions: [
-                IconButton(
-                  tooltip:
-                      _fullText != null ? 'Full article loaded' : 'Load full article',
+                _glassActionIcon(
+                  tooltip: _fullText != null
+                      ? 'Full article loaded'
+                      : 'Load full article',
                   icon: Icon(
                     Icons.article_outlined,
-                    color: _fullText != null ? p.primary : null,
+                    color: _fullText != null ? p.primary : Colors.white,
                   ),
                   onPressed: _fullLoading
                       ? null
@@ -450,328 +489,343 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                 ),
                 PopupMenuButton<double>(
                   tooltip: 'Text size',
-                  icon: const Icon(Icons.text_fields_rounded),
+                  icon: _glassActionShell(
+                    child: const Icon(Icons.text_fields_rounded,
+                        color: Colors.white),
+                  ),
                   onSelected: (v) => setState(() => _readScale = v),
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
-                        value: 0.92, child: Text('Smaller')),
-                    const PopupMenuItem(
-                        value: 1.0, child: Text('Default')),
-                    const PopupMenuItem(
-                        value: 1.1, child: Text('Larger')),
-                    const PopupMenuItem(
-                        value: 1.22, child: Text('Largest')),
+                    const PopupMenuItem(value: 0.92, child: Text('Smaller')),
+                    const PopupMenuItem(value: 1.0, child: Text('Default')),
+                    const PopupMenuItem(value: 1.1, child: Text('Larger')),
+                    const PopupMenuItem(value: 1.22, child: Text('Largest')),
                   ],
                 ),
-                IconButton(
+                _glassActionIcon(
                   icon: Icon(_liked ? Icons.favorite : Icons.favorite_border,
-                      color: _liked ? Colors.red : null),
+                      color: _liked ? Colors.red : Colors.white),
                   onPressed: _toggleLike,
                 ),
-                IconButton(
+                _glassActionIcon(
                   icon: Icon(
                       _bookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: _bookmarked ? p.primary : null),
+                      color: _bookmarked ? p.primary : Colors.white),
                   onPressed: _toggleBookmark,
                 ),
-                IconButton(
+                _glassActionIcon(
                   icon: const Icon(Icons.share_outlined),
                   onPressed: _shareArticle,
                 ),
               ],
             ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: AppSpacing.page,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  // Category & breaking badge
-                  Wrap(spacing: AppSpacing.s8, children: [
-                    if (post.isBreaking)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.s8, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: p.breaking,
-                            borderRadius: BorderRadius.circular(10)),
-                        child: const Text(
-                          'BREAKING',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.2),
-                        ),
-                      ),
-                    if (post.category != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.s8, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: p.categoryChipBg,
-                            borderRadius: BorderRadius.circular(10)),
-                        child: Text(
-                            '${post.category!.icon} ${post.category!.name}',
-                            style: TextStyle(
-                                color: p.primaryDark,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    if ((post.constituency ?? '').trim().isNotEmpty
-                        && (post.constituency ?? '').trim().toLowerCase() != 'unknown')
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.s8, vertical: 4),
-                        decoration: BoxDecoration(
-                            color: p.primary.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(10)),
-                        child: Text(
-                            '📍 ${(post.constituency ?? '').trim()}',
-                            style: TextStyle(
-                                color: p.primary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                  ]),
-                  const SizedBox(height: AppSpacing.s16),
-
-                  // Title
-                  Text(
-                    post.title,
-                    style: context.titleText.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      height: 1.18,
-                      letterSpacing: -0.3,
-                      color: p.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.s16),
-
-                  // Meta
-                  Wrap(
-                    spacing: AppSpacing.s12,
-                    runSpacing: AppSpacing.s8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      if (post.reporter != null)
-                        Row(mainAxisSize: MainAxisSize.min, children: [
-                          CircleAvatar(
-                              radius: 14,
-                              backgroundColor: p.primary,
-                              child: Text(post.reporter!.name[0],
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 12))),
-                          const SizedBox(width: AppSpacing.s8),
-                          Text(
-                            post.reporter!.name,
-                            style: context.subtitleText.copyWith(
-                              color: p.textSecondary,
-                              fontWeight: FontWeight.w600,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: AppSpacing.page,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Category & breaking badge
+                        Wrap(spacing: AppSpacing.s8, children: [
+                          if (post.isBreaking)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.s8, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: p.breaking,
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: const Text(
+                                'BREAKING',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.2),
+                              ),
                             ),
-                          ),
+                          if (post.category != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.s8, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: p.categoryChipBg,
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: Text(
+                                  '${post.category!.icon} ${post.category!.name}',
+                                  style: TextStyle(
+                                      color: p.primaryDark,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          if ((post.constituency ?? '').trim().isNotEmpty &&
+                              (post.constituency ?? '').trim().toLowerCase() !=
+                                  'unknown')
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.s8, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: p.primary.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(10)),
+                              child: Text(
+                                  '📍 ${(post.constituency ?? '').trim()}',
+                                  style: TextStyle(
+                                      color: p.primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
+                            ),
                         ]),
-                      Text(
-                        timeago.format(post.createdAt),
-                        style: context.metaText.copyWith(color: p.textHint),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: AppSpacing.s16),
 
-                  if (post.location != null) ...[
-                    const SizedBox(height: AppSpacing.s8),
-                    LocationLabel(
-                      location: post.location!,
-                      style: TextStyle(fontSize: 12, color: p.textHint),
-                      iconSize: 14,
-                    ),
-                  ],
-
-                  if (_bodyMediaForGallery(post).isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.s16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: MediaGallery(media: _bodyMediaForGallery(post)),
-                    ),
-                  ],
-
-                  const SizedBox(height: AppSpacing.s24),
-                  Divider(height: 1, color: p.glassBorder),
-                  const SizedBox(height: AppSpacing.s16),
-
-                  // Article body
-                  if (_fullLoading)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.s12),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: p.primary,
-                            ),
+                        // Title
+                        Text(
+                          post.title,
+                          style: context.titleText.copyWith(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            height: 1.18,
+                            letterSpacing: -0.3,
+                            color: p.textPrimary,
                           ),
-                          const SizedBox(width: AppSpacing.s12),
-                          Text(
-                            'Loading full article…',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: p.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (_fullError != null && _fullTriedByUser)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.s12),
-                      child: Text(
-                        _fullError!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: p.error,
-                          height: 1.35,
                         ),
-                      ),
-                    ),
-                  ..._paragraphs(
-                    _displayText(post),
-                    Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: p.textPrimary,
-                          fontSize: 15,
-                          height: 1.85,
-                        ) ??
-                        TextStyle(
-                          fontSize: 15,
-                          height: 1.85,
-                          color: p.textPrimary,
-                        ),
-                  ),
+                        const SizedBox(height: AppSpacing.s16),
 
-                  // Tags
-                  if (post.tags.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.s24),
-                    Wrap(
-                      spacing: AppSpacing.s8,
-                      runSpacing: AppSpacing.s8,
-                      children: post.tags
-                          .map((tag) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.s12, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: p.inputFill,
-                                    borderRadius: BorderRadius.circular(20)),
-                                child: Text('#$tag',
-                                    style: TextStyle(
-                                        fontSize: 12, color: p.textSecondary)),
-                              ))
-                          .toList(),
-                    ),
-                  ],
-
-                  // Stats row
-                  const SizedBox(height: AppSpacing.s24),
-                  Row(children: [
-                    Icon(Icons.visibility_outlined,
-                        size: 16, color: p.textHint),
-                    const SizedBox(width: 4),
-                    Text('${post.views} views',
-                        style: TextStyle(fontSize: 13, color: p.textHint)),
-                    const SizedBox(width: 16),
-                    Icon(_liked ? Icons.favorite : Icons.favorite_border,
-                        size: 16, color: _liked ? Colors.red : p.textHint),
-                    const SizedBox(width: 4),
-                    Text('${post.likes} likes',
-                        style: TextStyle(fontSize: 13, color: p.textHint)),
-                  ]),
-
-                  const SizedBox(height: AppSpacing.s24),
-                  Divider(height: 1, color: p.glassBorder),
-                  const SizedBox(height: AppSpacing.s16),
-
-                  // Comments section
-                  Text('Comments (${_comments.length})',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: p.textPrimary)),
-                  const SizedBox(height: AppSpacing.s12),
-
-                  // Add comment
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _commentCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Write a comment...',
-                          hintStyle: const TextStyle(fontSize: 14),
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.s12, vertical: 10),
-                          border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.s8),
-                    IconButton(
-                      icon: Icon(Icons.send, color: p.primary),
-                      onPressed: _submitComment,
-                    ),
-                  ]),
-
-                  const SizedBox(height: AppSpacing.s16),
-
-                  // Comments list
-                  ..._comments.map((c) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.s12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        // Meta
+                        Wrap(
+                          spacing: AppSpacing.s12,
+                          runSpacing: AppSpacing.s8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            CircleAvatar(
-                                radius: 16,
-                                backgroundColor: p.primary,
-                                child: Text(c.user?.name[0] ?? '?',
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 12))),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(c.user?.name ?? 'User',
+                            if (post.reporter != null)
+                              Row(mainAxisSize: MainAxisSize.min, children: [
+                                CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: p.primary,
+                                    child: Text(post.reporter!.name[0],
                                         style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500)),
-                                    const SizedBox(height: 2),
-                                    Text(c.text,
-                                        style: TextStyle(
-                                            fontSize: 14,
-                                            color: p.textPrimary)),
-                                    const SizedBox(height: 3),
-                                    Text(timeago.format(c.createdAt),
-                                        style: TextStyle(
-                                            fontSize: 11, color: p.textHint)),
-                                  ]),
+                                            color: Colors.white,
+                                            fontSize: 12))),
+                                const SizedBox(width: AppSpacing.s8),
+                                Text(
+                                  post.reporter!.name,
+                                  style: context.subtitleText.copyWith(
+                                    color: p.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ]),
+                            Text(
+                              timeago.format(post.createdAt),
+                              style:
+                                  context.metaText.copyWith(color: p.textHint),
                             ),
                           ],
                         ),
-                      )),
 
-                  const SizedBox(height: 40),
-                    ],
+                        if (post.location != null) ...[
+                          const SizedBox(height: AppSpacing.s8),
+                          LocationLabel(
+                            location: post.location!,
+                            style: TextStyle(fontSize: 12, color: p.textHint),
+                            iconSize: 14,
+                          ),
+                        ],
+
+                        if (_bodyMediaForGallery(post).isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.s16),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child:
+                                MediaGallery(media: _bodyMediaForGallery(post)),
+                          ),
+                        ],
+
+                        const SizedBox(height: AppSpacing.s24),
+                        Divider(height: 1, color: p.glassBorder),
+                        const SizedBox(height: AppSpacing.s16),
+
+                        // Article body
+                        if (_fullLoading)
+                          Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: AppSpacing.s12),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: p.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.s12),
+                                Text(
+                                  'Loading full article…',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: p.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (_fullError != null && _fullTriedByUser)
+                          Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: AppSpacing.s12),
+                            child: Text(
+                              _fullError!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: p.error,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ..._paragraphs(
+                          _displayText(post),
+                          Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: p.textPrimary,
+                                    fontSize: 15,
+                                    height: 1.85,
+                                  ) ??
+                              TextStyle(
+                                fontSize: 15,
+                                height: 1.85,
+                                color: p.textPrimary,
+                              ),
+                        ),
+
+                        // Tags
+                        if (post.tags.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.s24),
+                          Wrap(
+                            spacing: AppSpacing.s8,
+                            runSpacing: AppSpacing.s8,
+                            children: post.tags
+                                .map((tag) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.s12,
+                                          vertical: 4),
+                                      decoration: BoxDecoration(
+                                          color: p.inputFill,
+                                          borderRadius:
+                                              BorderRadius.circular(20)),
+                                      child: Text('#$tag',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              color: p.textSecondary)),
+                                    ))
+                                .toList(),
+                          ),
+                        ],
+
+                        // Stats row
+                        const SizedBox(height: AppSpacing.s24),
+                        Row(children: [
+                          Icon(Icons.visibility_outlined,
+                              size: 16, color: p.textHint),
+                          const SizedBox(width: 4),
+                          Text('${post.views} views',
+                              style:
+                                  TextStyle(fontSize: 13, color: p.textHint)),
+                          const SizedBox(width: 16),
+                          Icon(_liked ? Icons.favorite : Icons.favorite_border,
+                              size: 16,
+                              color: _liked ? Colors.red : p.textHint),
+                          const SizedBox(width: 4),
+                          Text('${post.likes} likes',
+                              style:
+                                  TextStyle(fontSize: 13, color: p.textHint)),
+                        ]),
+
+                        const SizedBox(height: AppSpacing.s24),
+                        Divider(height: 1, color: p.glassBorder),
+                        const SizedBox(height: AppSpacing.s16),
+
+                        // Comments section
+                        Text('Comments (${_comments.length})',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: p.textPrimary)),
+                        const SizedBox(height: AppSpacing.s12),
+
+                        // Add comment
+                        Row(children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _commentCtrl,
+                              decoration: InputDecoration(
+                                hintText: 'Write a comment...',
+                                hintStyle: const TextStyle(fontSize: 14),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.s12, vertical: 10),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(20)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.s8),
+                          IconButton(
+                            icon: Icon(Icons.send, color: p.primary),
+                            onPressed: _submitComment,
+                          ),
+                        ]),
+
+                        const SizedBox(height: AppSpacing.s16),
+
+                        // Comments list
+                        ..._comments.map((c) => Padding(
+                              padding:
+                                  const EdgeInsets.only(bottom: AppSpacing.s12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: p.primary,
+                                      child: Text(c.user?.name[0] ?? '?',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12))),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(c.user?.name ?? 'User',
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500)),
+                                          const SizedBox(height: 2),
+                                          Text(c.text,
+                                              style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: p.textPrimary)),
+                                          const SizedBox(height: 3),
+                                          Text(timeago.format(c.createdAt),
+                                              style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: p.textHint)),
+                                        ]),
+                                  ),
+                                ],
+                              ),
+                            )),
+
+                        const SizedBox(height: 40),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );

@@ -22,6 +22,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   String _selectedCity = 'all';
   String _selectedConstituency = 'all';
 
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/feed');
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -90,7 +98,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 children: [
                   PremiumIconButton(
                     icon: AppIcons.back,
-                    onTap: () => context.pop(),
+                    onTap: _handleBack,
                   ),
                   const SizedBox(width: 12),
                   Expanded(

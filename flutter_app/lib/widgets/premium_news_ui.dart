@@ -205,6 +205,9 @@ class PremiumIconButton extends StatefulWidget {
   final String? label;
   final VoidCallback? onTap;
   final Color? color;
+  final Color? labelColor;
+  final Color? panelColor;
+  final bool circular;
   final Animation<double>? scale;
 
   const PremiumIconButton({
@@ -213,6 +216,9 @@ class PremiumIconButton extends StatefulWidget {
     this.label,
     this.onTap,
     this.color,
+    this.labelColor,
+    this.panelColor,
+    this.circular = false,
     this.scale,
   });
 
@@ -249,10 +255,17 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final iconOnly = FrostedPanel(
+      radius: 999,
+      padding: const EdgeInsets.all(12),
+      color: widget.panelColor ?? Colors.black.withValues(alpha: 0.44),
+      boxShadow: const [],
+      child: Icon(widget.icon, color: widget.color ?? p.textPrimary, size: 22),
+    );
     final content = FrostedPanel(
-      radius: 18,
+      radius: widget.circular ? 999 : 18,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      color: Colors.black.withValues(alpha: 0.22),
+      color: widget.panelColor ?? Colors.black.withValues(alpha: 0.22),
       boxShadow: const [],
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -263,7 +276,7 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
             Text(
               widget.label!,
               style: TextStyle(
-                color: p.textSecondary,
+                color: widget.labelColor ?? p.textSecondary,
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
               ),
@@ -272,6 +285,29 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
         ],
       ),
     );
+    final shapedContent = widget.circular && widget.label != null
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              iconOnly,
+              const SizedBox(height: 6),
+              Text(
+                widget.label!,
+                style: TextStyle(
+                  color: widget.labelColor ?? p.textSecondary,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  shadows: const [
+                    Shadow(
+                        color: Color(0x66000000),
+                        blurRadius: 4,
+                        offset: Offset(0, 1)),
+                  ],
+                ),
+              ),
+            ],
+          )
+        : (widget.circular ? iconOnly : content);
     return TapScale(
       onTap: _handleTap,
       child: AnimatedBuilder(
@@ -281,10 +317,10 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
           return Transform.scale(scale: localScale, child: child);
         },
         child: widget.scale == null
-            ? content
+            ? shapedContent
             : ScaleTransition(
                 scale: widget.scale!,
-                child: content,
+                child: shapedContent,
               ),
       ),
     );

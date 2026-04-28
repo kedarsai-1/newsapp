@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/news_provider.dart';
 import '../../services/auth_provider.dart';
@@ -17,6 +18,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const _translatedCacheKey = 'feed_translated_summary_cache_v1';
   final Set<String> _interests = {
     'Politics',
     'Sports',
@@ -251,6 +253,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onChanged: (v) => setState(() => _recommendedAlerts = v),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _SettingsCard(
+            title: 'Storage',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.cleaning_services_rounded, color: p.primary),
+              title: Text(
+                'Clear translated stories cache',
+                style: context.subtitleText.copyWith(color: p.textPrimary),
+              ),
+              subtitle: Text(
+                'Removes saved translated text from local device storage.',
+                style: context.metaText.copyWith(color: p.textHint),
+              ),
+              trailing: Icon(Icons.chevron_right_rounded, color: p.textHint),
+              onTap: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.remove(_translatedCacheKey);
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Translated cache cleared'),
+                    duration: Duration(milliseconds: 1200),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),

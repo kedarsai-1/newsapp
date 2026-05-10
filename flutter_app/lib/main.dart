@@ -465,18 +465,13 @@ class UserShell extends StatelessWidget {
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: isLight ? Colors.white : p.surface.withValues(alpha: 0.70),
+            color: isLight ? Colors.white : p.surface,
             border: Border(
               top: BorderSide(
                   color: p.cardBorder.withValues(alpha: isLight ? 1.0 : 0.55)),
             ),
           ),
-          child: isLight
-              ? _buildNavBar(context, loc, idx)
-              : BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                  child: _buildNavBar(context, loc, idx),
-                ),
+          child: _buildNavBar(context, loc, idx),
         ),
       ),
     );

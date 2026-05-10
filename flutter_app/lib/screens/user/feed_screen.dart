@@ -1,22 +1,20 @@
 import 'dart:convert';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timeago/timeago.dart' as timeago;
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants.dart';
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
 import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/news_shimmer_loader.dart';
+import '../../widgets/feed/dailyhunt_feed_article_card.dart';
+import '../../widgets/feed/dailyhunt_feed_skeleton.dart';
 import '../../widgets/premium_news_ui.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -26,21 +24,28 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
+/// Feed tab labels → API category slugs (`null` = Top News / all).
+const List<(String, String?)> _kFeedTabs = [
+  ('Top News', null),
+  ('Politics', 'politics'),
+  ('Sports', 'sports'),
+  ('Entertainment', 'entertainment'),
+  ('Technology', 'technology'),
+  ('Local', 'local'),
+  ('Business', 'business'),
+];
+
 class _FeedScreenState extends State<FeedScreen> {
-  static const _translatedCacheKey = 'feed_translated_summary_cache_v1';
   static const _likedCacheKey = 'feed_liked_state_cache_v1';
-  static const _translatedCacheMaxEntries = 120;
-  late final PageController _pageController;
-  int _currentIndex = 0;
-  final Map<String, String?> _translatedByPostId = {};
+
+  final ScrollController _scrollController = ScrollController();
   final Map<String, bool> _bookmarkedByPostId = {};
   final Map<String, bool> _likedByPostId = {};
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
-    _restoreTranslatedCache();
+    _scrollController.addListener(_onScroll);
     _restoreLikedCache();
     _primeBookmarkState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -49,43 +54,21 @@ class _FeedScreenState extends State<FeedScreen> {
     });
   }
 
-  Future<void> _restoreTranslatedCache() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_translatedCacheKey);
-    if (raw == null || raw.trim().isEmpty) return;
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
-      final restored = <String, String?>{};
-      decoded.forEach((key, value) {
-        if (key.trim().isEmpty) return;
-        final text = value?.toString().trim();
-        if (text == null || text.isEmpty) return;
-        restored[key] = text;
-      });
-      if (!mounted) return;
-      setState(() => _translatedByPostId
-        ..clear()
-        ..addAll(restored));
-    } catch (_) {
-      // Ignore malformed cached data.
-    }
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
   }
 
-  Future<void> _persistTranslatedCache() async {
-    final prefs = await SharedPreferences.getInstance();
-    final entries = _translatedByPostId.entries
-        .where((e) => e.value != null && e.value!.trim().isNotEmpty)
-        .toList();
-    // Keep latest N entries to avoid unbounded growth.
-    final start = entries.length > _translatedCacheMaxEntries
-        ? entries.length - _translatedCacheMaxEntries
-        : 0;
-    final capped = <String, String?>{};
-    for (var i = start; i < entries.length; i++) {
-      capped[entries[i].key] = entries[i].value;
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.maxScrollExtent <= 0) return;
+    if (pos.pixels >= pos.maxScrollExtent - 480) {
+      final news = context.read<NewsProvider>();
+      if (news.hasMore && !news.loading) news.loadMore();
     }
-    await prefs.setString(_translatedCacheKey, jsonEncode(capped));
   }
 
   Future<void> _restoreLikedCache() async {
@@ -106,9 +89,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ..clear()
           ..addAll(restored);
       });
-    } catch (_) {
-      // Ignore malformed cache.
-    }
+    } catch (_) {}
   }
 
   Future<void> _persistLikedCache() async {
@@ -149,1014 +130,338 @@ class _FeedScreenState extends State<FeedScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _maybeLoadMore(int index) {
-    final provider = context.read<NewsProvider>();
-    if (index >= provider.posts.length - 3 &&
-        provider.hasMore &&
-        !provider.loading) {
-      provider.loadMore();
+  int _chipIndexForProvider(NewsProvider news) {
+    final sel = news.selectedCategoryId;
+    if (sel == null) return 0;
+    for (var i = 1; i < _kFeedTabs.length; i++) {
+      final slug = _kFeedTabs[i].$2;
+      if (slug == null) continue;
+      for (final c in news.categories) {
+        if (c.slug.toLowerCase() == slug && c.id == sel) return i;
+      }
     }
+    return 0;
   }
 
-  Future<void> _openArticleSheet(NewsPost post) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ArticlePreviewSheet(post: post),
-    );
+  Future<void> _selectCategoryChip(int index) async {
+    final news = context.read<NewsProvider>();
+    final slug = _kFeedTabs[index].$2;
+    if (slug == null) {
+      await news.selectCategory(null);
+      return;
+    }
+    Category? match;
+    for (final c in news.categories) {
+      if (c.slug.toLowerCase() == slug) {
+        match = c;
+        break;
+      }
+    }
+    if (match == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '“${_kFeedTabs[index].$1}” is not available yet. Try again after categories load.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          width: 360,
+        ),
+      );
+      return;
+    }
+    await news.selectCategory(match.id);
+  }
+
+  Future<void> _toggleLike(NewsPost post) async {
+    final id = post.id;
+    final prev = _likedByPostId[id] ?? false;
+    setState(() => _likedByPostId[id] = !prev);
+
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      final liked = await ApiService.toggleGuestLike(id);
+      if (!mounted) return;
+      setState(() => _likedByPostId[id] = liked);
+      _persistLikedCache();
+      return;
+    }
+    final res = await ApiService.toggleLike(id);
+    if (!mounted) return;
+    if (res['success'] != true) {
+      setState(() => _likedByPostId[id] = prev);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['message']?.toString() ?? 'Could not update')),
+      );
+      return;
+    }
+    setState(() => _likedByPostId[id] = res['liked'] == true);
+    _persistLikedCache();
+  }
+
+  Future<void> _toggleBookmark(NewsPost post) async {
+    final id = post.id;
+    final prev = _bookmarkedByPostId[id] ?? false;
+    setState(() => _bookmarkedByPostId[id] = !prev);
+
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      final saved = await ApiService.toggleGuestBookmark(post);
+      if (!mounted) return;
+      setState(() => _bookmarkedByPostId[id] = saved);
+      return;
+    }
+    final res = await ApiService.toggleBookmark(id);
+    if (!mounted) return;
+    if (res['success'] != true) {
+      setState(() => _bookmarkedByPostId[id] = prev);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['message']?.toString() ?? 'Could not save')),
+      );
+      return;
+    }
+    setState(() => _bookmarkedByPostId[id] = res['bookmarked'] == true);
+  }
+
+  Future<void> _share(NewsPost post) async {
+    final text =
+        '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n${post.sourceUrl ?? ''}';
+    await Share.share(text, subject: post.title);
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<NewsProvider>();
-    final p = context.palette;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chromePanelColor = isDark
-        ? Colors.black.withValues(alpha: 0.44)
-        : Colors.white.withValues(alpha: 0.78);
-    final chromeIconColor = isDark ? Colors.white : Colors.black;
-    final chromeTextColor = isDark ? Colors.white : Colors.black;
+    final bottomInset = MediaQuery.paddingOf(context).bottom + 72;
+    final chipIndex = _chipIndexForProvider(provider);
 
-    return PremiumScaffold(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (provider.error != null)
-            SafeArea(
-              child: ErrorState(
-                message: provider.error!,
-                onRetry: provider.refresh,
-              ),
-            )
-          else if (provider.posts.isEmpty && provider.refreshing)
-            const SafeArea(child: NewsShimmerLoader(count: 5))
-          else if (provider.posts.isEmpty)
-            const SafeArea(
-              child: EmptyState(
-                icon: AppIcons.categories,
-                title: 'No stories yet',
-                subtitle: 'Pull down or adjust filters to load fresh news.',
-              ),
-            )
-          else
-            RefreshIndicator(
-              color: p.primary,
-              backgroundColor: p.surface,
-              onRefresh: provider.refresh,
-              child: PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                physics: const BouncingScrollPhysics(),
-                itemCount: provider.posts.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                  _maybeLoadMore(index);
-                },
-                itemBuilder: (context, index) {
-                  return RepaintBoundary(
-                    child: _NewsReelCard(
-                      post: provider.posts[index],
-                      index: index,
-                      total: provider.posts.length,
-                      controller: _pageController,
-                      initialTranslatedSummary:
-                          _translatedByPostId[provider.posts[index].id],
-                      initialSaved:
-                          _bookmarkedByPostId[provider.posts[index].id] ??
-                              false,
-                      initialLiked:
-                          _likedByPostId[provider.posts[index].id] ?? false,
-                      onTranslatedSummaryChanged: (value) {
-                        if (!mounted) return;
-                        setState(() {
-                          final id = provider.posts[index].id;
-                          if (value == null || value.trim().isEmpty) {
-                            _translatedByPostId.remove(id);
-                          } else {
-                            _translatedByPostId[id] = value;
-                          }
-                        });
-                        _persistTranslatedCache();
-                      },
-                      onSavedChanged: (saved) {
-                        if (!mounted) return;
-                        final id = provider.posts[index].id;
-                        setState(() {
-                          if (saved) {
-                            _bookmarkedByPostId[id] = true;
-                          } else {
-                            _bookmarkedByPostId.remove(id);
-                          }
-                        });
-                      },
-                      onLikedChanged: (liked) {
-                        if (!mounted) return;
-                        final id = provider.posts[index].id;
-                        setState(() {
-                          if (liked) {
-                            _likedByPostId[id] = true;
-                          } else {
-                            _likedByPostId.remove(id);
-                          }
-                        });
-                        _persistLikedCache();
-                      },
-                      onReadMore: () =>
-                          _openArticleSheet(provider.posts[index]),
-                    ),
-                  );
-                },
-              ),
+    return Theme(
+      data: DailyhuntTheme.overlay(context),
+      child: Builder(
+        builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          return Scaffold(
+            backgroundColor: const Color(0xFFF5F6F8),
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _DailyhuntFeedAppBar(colorScheme: cs),
+                _CategoryChipStrip(
+                  selectedIndex: chipIndex,
+                  onSelect: _selectCategoryChip,
+                ),
+                Expanded(
+                  child: _buildBody(provider, bottomInset, cs),
+                ),
+              ],
             ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      PremiumIconButton(
-                        icon: AppIcons.profile,
-                        panelColor: chromePanelColor,
-                        color: chromeIconColor,
-                        onTap: () => context.push('/settings'),
-                      ),
-                      FrostedPanel(
-                        radius: 18,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        color: chromePanelColor,
-                        boxShadow: const [],
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              AppIcons.home,
-                              size: 18,
-                              color: chromeIconColor,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              AppConstants.appName,
-                              style: TextStyle(
-                                color: chromeTextColor.withValues(alpha: 0.96),
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PremiumIconButton(
-                        icon: AppIcons.notification,
-                        panelColor: chromePanelColor,
-                        color: chromeIconColor,
-                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('No new notifications'),
-                            duration: Duration(milliseconds: 1200),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBody(NewsProvider provider, double bottomInset, ColorScheme cs) {
+    if (provider.error != null) {
+      return ErrorState(message: provider.error!, onRetry: provider.refresh);
+    }
+    if (provider.posts.isEmpty && provider.refreshing) {
+      return const DailyhuntFeedSkeleton(rowCount: 10);
+    }
+    if (provider.posts.isEmpty) {
+      return const EmptyState(
+        icon: Icons.article_outlined,
+        title: 'No stories yet',
+        subtitle: 'Pull down to refresh or pick another category.',
+      );
+    }
+
+    return RefreshIndicator(
+      color: DailyhuntTheme.accentGreen,
+      onRefresh: provider.refresh,
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: EdgeInsets.only(top: 6, bottom: bottomInset),
+        itemCount: provider.posts.length + (provider.loading && provider.hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= provider.posts.length) {
+            return const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
               ),
-            ),
-          ),
-          if (provider.posts.isNotEmpty)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 24 + MediaQuery.of(context).padding.bottom,
-              child: StoryProgressDots(
-                total: provider.posts.length,
-                index: _currentIndex,
-              ),
-            ),
-        ],
+            );
+          }
+          final post = provider.posts[index];
+          final liked = _likedByPostId[post.id] ?? false;
+          final saved = _bookmarkedByPostId[post.id] ?? false;
+          return DailyhuntFeedArticleCard(
+            post: post,
+            liked: liked,
+            saved: saved,
+            onTap: () => context.push('/article/${post.id}'),
+            onLike: () => _toggleLike(post),
+            onShare: () => _share(post),
+            onBookmark: () => _toggleBookmark(post),
+          );
+        },
       ),
     );
   }
 }
 
-class _NewsReelCard extends StatefulWidget {
-  final NewsPost post;
-  final int index;
-  final int total;
-  final PageController controller;
-  final String? initialTranslatedSummary;
-  final bool initialSaved;
-  final bool initialLiked;
-  final ValueChanged<String?> onTranslatedSummaryChanged;
-  final ValueChanged<bool> onSavedChanged;
-  final ValueChanged<bool> onLikedChanged;
-  final VoidCallback onReadMore;
+class _DailyhuntFeedAppBar extends StatelessWidget {
+  final ColorScheme colorScheme;
 
-  const _NewsReelCard({
-    required this.post,
-    required this.index,
-    required this.total,
-    required this.controller,
-    required this.initialTranslatedSummary,
-    required this.initialSaved,
-    required this.initialLiked,
-    required this.onTranslatedSummaryChanged,
-    required this.onSavedChanged,
-    required this.onLikedChanged,
-    required this.onReadMore,
-  });
-
-  @override
-  State<_NewsReelCard> createState() => _NewsReelCardState();
-}
-
-class _NewsReelCardState extends State<_NewsReelCard>
-    with TickerProviderStateMixin {
-  late final AnimationController _entry;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-  late final AnimationController _likePop;
-  late final AnimationController _savePop;
-  final FlutterTts _tts = FlutterTts();
-  bool _liked = false;
-  bool _saved = false;
-  bool _likeSyncing = false;
-  bool _translating = false;
-  String? _translatedSummary;
-
-  NewsPost get post => widget.post;
-
-  @override
-  void initState() {
-    super.initState();
-    _entry = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 560),
-    )..forward();
-    _fade = CurvedAnimation(parent: _entry, curve: Curves.easeOutCubic);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _entry, curve: Curves.easeOutCubic));
-    _likePop = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 260),
-    );
-    _savePop = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 260),
-    );
-    _translatedSummary = widget.initialTranslatedSummary;
-    _saved = widget.initialSaved;
-    _liked = widget.initialLiked;
-    _configureTts();
-    _hydrateInteractionState();
-  }
-
-  @override
-  void didUpdateWidget(covariant _NewsReelCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.post.id != widget.post.id) {
-      _translatedSummary = widget.initialTranslatedSummary;
-      _saved = widget.initialSaved;
-      _liked = widget.initialLiked;
-      _hydrateInteractionState();
-      return;
-    }
-    if (oldWidget.initialLiked != widget.initialLiked &&
-        widget.initialLiked != _liked) {
-      _liked = widget.initialLiked;
-    }
-    if (oldWidget.initialSaved != widget.initialSaved &&
-        widget.initialSaved != _saved) {
-      _saved = widget.initialSaved;
-    }
-    if (oldWidget.initialTranslatedSummary != widget.initialTranslatedSummary &&
-        widget.initialTranslatedSummary != _translatedSummary) {
-      _translatedSummary = widget.initialTranslatedSummary;
-    }
-  }
-
-  Future<void> _configureTts() async {
-    await _tts.setSpeechRate(0.42);
-    await _tts.setPitch(1.0);
-    await _tts.setVolume(1.0);
-  }
-
-  Future<void> _hydrateInteractionState() async {
-    final loggedIn = context.read<AuthProvider>().isLoggedIn;
-    if (loggedIn) return;
-    final liked = await ApiService.isGuestLiked(post.id);
-    final saved = await ApiService.isGuestBookmarked(post.id);
-    if (!mounted) return;
-    setState(() {
-      _liked = liked;
-      _saved = saved;
-    });
-  }
-
-  @override
-  void dispose() {
-    _tts.stop();
-    _likePop.dispose();
-    _savePop.dispose();
-    _entry.dispose();
-    super.dispose();
-  }
-
-  Future<void> _toggleLike() async {
-    if (_likeSyncing) return;
-    final previous = _liked;
-    setState(() {
-      _likeSyncing = true;
-      _liked = !previous;
-    });
-    _likePop.forward(from: 0);
-    final loggedIn = context.read<AuthProvider>().isLoggedIn;
-    if (!loggedIn) {
-      final liked = await ApiService.toggleGuestLike(post.id);
-      if (!mounted) return;
-      setState(() {
-        _liked = liked;
-        _likeSyncing = false;
-      });
-      widget.onLikedChanged(liked);
-      return;
-    }
-    final res = await ApiService.toggleLike(post.id);
-    if (!mounted) return;
-    if (res['success'] != true) {
-      setState(() {
-        _liked = previous;
-        _likeSyncing = false;
-      });
-      widget.onLikedChanged(previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res['message']?.toString() ?? 'Failed to like story'),
-        ),
-      );
-      return;
-    }
-    setState(() {
-      _liked = res['liked'] == true;
-      _likeSyncing = false;
-    });
-    widget.onLikedChanged(_liked);
-  }
-
-  Future<void> _toggleSave() async {
-    final previous = _saved;
-    setState(() => _saved = !previous);
-    widget.onSavedChanged(_saved);
-    _savePop.forward(from: 0);
-    final loggedIn = context.read<AuthProvider>().isLoggedIn;
-    if (!loggedIn) {
-      final saved = await ApiService.toggleGuestBookmark(post);
-      if (mounted) {
-        setState(() => _saved = saved);
-        widget.onSavedChanged(saved);
-      }
-      return;
-    }
-    final res = await ApiService.toggleBookmark(post.id);
-    if (!mounted) return;
-    if (res['success'] != true) {
-      setState(() => _saved = previous);
-      widget.onSavedChanged(previous);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(res['message']?.toString() ?? 'Failed to save story'),
-        ),
-      );
-      return;
-    }
-    final saved = res['bookmarked'] == true;
-    setState(() => _saved = saved);
-    widget.onSavedChanged(saved);
-  }
-
-  Future<void> _share() async {
-    final text = '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}';
-    await Share.share(text, subject: post.title);
-  }
-
-  Future<void> _translate() async {
-    if (_translating) return;
-    if (_translatedSummary != null) {
-      setState(() => _translatedSummary = null);
-      widget.onTranslatedSummaryChanged(null);
-      return;
-    }
-    setState(() => _translating = true);
-    final lang = context.read<NewsProvider>().selectedLanguage;
-    final target = lang == 'all' ? 'te' : lang;
-    final res = await ApiService.translateText(
-      text: premiumSnippet(post, maxLength: 220),
-      targetLanguage: target,
-    );
-    if (!mounted) return;
-    setState(() {
-      _translating = false;
-      if (res['success'] == true) {
-        _translatedSummary = res['translatedText']?.toString().trim();
-        widget.onTranslatedSummaryChanged(_translatedSummary);
-      }
-    });
-  }
-
-  Future<void> _speak() async {
-    await _tts.stop();
-    await _tts.speak('${post.title}. ${premiumSnippet(post, maxLength: 220)}');
-  }
+  const _DailyhuntFeedAppBar({required this.colorScheme});
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    final t = Theme.of(context).textTheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final imageUrl = premiumImageUrl(post);
-    final dpr = MediaQuery.of(context).devicePixelRatio;
-    final widthPx = MediaQuery.of(context).size.width * dpr;
-    final targetCacheWidth = widthPx.clamp(1080, 2400).round();
-
-    return GestureDetector(
-      onTap: widget.onReadMore,
-      onDoubleTap: _toggleLike,
-      onLongPress: _speak,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedBuilder(
-            animation: widget.controller,
-            builder: (context, child) {
-              var delta = 0.0;
-              if (widget.controller.hasClients) {
-                delta = (widget.controller.page ?? widget.index.toDouble()) -
-                    widget.index;
-              }
-              delta = delta.clamp(-1.0, 1.0);
-              return Transform.scale(
-                scale: 1.04 - (delta.abs() * 0.04),
-                child: Transform.translate(
-                  offset: Offset(0, delta * 18),
-                  child: child,
-                ),
-              );
-            },
-            child: imageUrl.isEmpty
-                ? Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [p.gradientStart, p.gradientMid, p.gradientEnd],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  )
-                : Hero(
-                    tag: 'post-hero-${post.id}',
-                    child: CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.cover,
-                      memCacheWidth: targetCacheWidth,
-                      filterQuality: FilterQuality.high,
-                      fadeInDuration: const Duration(milliseconds: 240),
-                      placeholder: (_, __) => ColoredBox(color: p.inputFill),
-                      errorWidget: (_, __, ___) => ColoredBox(
-                        color: p.inputFill,
-                        child: Icon(Icons.image_not_supported_outlined,
-                            color: p.textHint),
-                      ),
-                    ),
-                  ),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.66),
-                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.18),
-                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.48),
-                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.96),
-                ],
-                stops: const [0, 0.30, 0.60, 1],
-              ),
-            ),
-          ),
-          Positioned(
-            right: 12,
-            bottom: 144,
-            child: Column(
+    return Material(
+      color: Colors.white,
+      elevation: 0.5,
+      shadowColor: Colors.black26,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: kToolbarHeight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
               children: [
-                PremiumIconButton(
-                  icon: _liked
-                      ? Icons.favorite_rounded
-                      : Icons.favorite_border_rounded,
-                  label: null,
-                  labelColor: (isDark ? Colors.white : Colors.black)
-                      .withValues(alpha: 0.9),
-                  panelColor: isDark
-                      ? Colors.black.withValues(alpha: 0.50)
-                      : Colors.white.withValues(alpha: 0.78),
-                  color: _liked
-                      ? Colors.redAccent
-                      : (isDark ? Colors.white : Colors.black),
-                  circular: true,
-                  onTap: _toggleLike,
-                  scale: Tween<double>(begin: 1, end: 1.2).animate(
-                    CurvedAnimation(parent: _likePop, curve: Curves.elasticOut),
-                  ),
-                ),
-                SizedBox(
-                  height: 16,
-                  child: Center(
-                    child: Text(
-                      '${post.likes + (_liked ? 1 : 0)}',
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        color: (isDark ? Colors.white : Colors.black)
-                            .withValues(alpha: 0.92),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        shadows: const [
-                          Shadow(
-                            color: Color(0x66000000),
-                            blurRadius: 4,
-                            offset: Offset(0, 1),
-                          ),
-                        ],
-                      ),
+                IconButton(
+                  tooltip: 'Profile',
+                  onPressed: () => context.go('/settings'),
+                  icon: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: const Color(0xFFE8EAED),
+                    child: Icon(
+                      Icons.person_rounded,
+                      size: 20,
+                      color: colorScheme.onSurface.withValues(alpha: 0.75),
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
-                PremiumIconButton(
-                  icon: _saved
-                      ? Icons.bookmark_rounded
-                      : Icons.bookmark_border_rounded,
-                  label: 'Save',
-                  labelColor: (isDark ? Colors.white : Colors.black)
-                      .withValues(alpha: 0.9),
-                  panelColor: isDark
-                      ? Colors.black.withValues(alpha: 0.50)
-                      : Colors.white.withValues(alpha: 0.78),
-                  color: _saved
-                      ? p.primary
-                      : (isDark ? Colors.white : Colors.black),
-                  circular: true,
-                  onTap: _toggleSave,
-                  scale: Tween<double>(begin: 1, end: 1.16).animate(
-                    CurvedAnimation(parent: _savePop, curve: Curves.elasticOut),
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: DailyhuntTheme.accentGreen,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.article_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          AppConstants.appName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 17,
+                            letterSpacing: -0.4,
+                            color: colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                PremiumIconButton(
-                  icon: AppIcons.share,
-                  label: 'Share',
-                  color: isDark ? Colors.white : Colors.black,
-                  labelColor: (isDark ? Colors.white : Colors.black)
-                      .withValues(alpha: 0.9),
-                  panelColor: isDark
-                      ? Colors.black.withValues(alpha: 0.50)
-                      : Colors.white.withValues(alpha: 0.78),
-                  circular: true,
-                  onTap: _share,
-                ),
-                const SizedBox(height: 16),
-                PremiumIconButton(
-                  icon: AppIcons.translate,
-                  label: _translating
-                      ? '...'
-                      : (_translatedSummary == null ? 'Translate' : 'Original'),
-                  color: isDark ? Colors.white : Colors.black,
-                  labelColor: (isDark ? Colors.white : Colors.black)
-                      .withValues(alpha: 0.9),
-                  panelColor: isDark
-                      ? Colors.black.withValues(alpha: 0.50)
-                      : Colors.white.withValues(alpha: 0.78),
-                  circular: true,
-                  onTap: _translate,
+                IconButton(
+                  tooltip: 'Notifications',
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('No new notifications'),
+                        duration: Duration(milliseconds: 1200),
+                        behavior: SnackBarBehavior.floating,
+                        width: 300,
+                      ),
+                    );
+                  },
+                  icon: Icon(
+                    Icons.notifications_none_rounded,
+                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                  ),
                 ),
               ],
             ),
           ),
-          Positioned(
-            left: 16,
-            // Keep a strong safety gutter from the right action rail
-            // so long Telugu/Hindi headlines never visually collide.
-            right: 122,
-            bottom: 100,
-            child: FadeTransition(
-              opacity: _fade,
-              child: SlideTransition(
-                position: _slide,
-                child: FrostedPanel(
-                  radius: 22,
-                  padding: const EdgeInsets.all(16),
-                  color: isDark
-                      ? Colors.black.withValues(alpha: 0.28)
-                      : Colors.white.withValues(alpha: 0.76),
-                  boxShadow: const [],
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.headlineSmall?.copyWith(
-                          color: isDark ? Colors.white : Colors.black,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          height: 1.15,
-                          letterSpacing: -0.6,
-                          shadows: const [
-                            Shadow(
-                                color: Color(0x88000000),
-                                blurRadius: 8,
-                                offset: Offset(0, 2)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        _translatedSummary ??
-                            premiumSnippet(post, maxLength: 170),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: t.bodyMedium?.copyWith(
-                          color: (isDark ? Colors.white : Colors.black)
-                              .withValues(alpha: 0.9),
-                          height: 1.45,
-                          fontWeight: FontWeight.w500,
-                          shadows: const [
-                            Shadow(
-                                color: Color(0x66000000),
-                                blurRadius: 6,
-                                offset: Offset(0, 1)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '${post.sourceName ?? post.category?.name ?? 'News'} • ${timeago.format(post.createdAt)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.metaText.copyWith(
-                          color: (isDark ? Colors.white : Colors.black)
-                              .withValues(alpha: 0.76),
-                          fontWeight: FontWeight.w600,
-                          shadows: const [
-                            Shadow(
-                                color: Color(0x66000000),
-                                blurRadius: 5,
-                                offset: Offset(0, 1)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _MetaPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
+class _CategoryChipStrip extends StatelessWidget {
+  final int selectedIndex;
+  final ValueChanged<int> onSelect;
 
-  const _MetaPill({
-    required this.label,
-    required this.icon,
+  const _CategoryChipStrip({
+    required this.selectedIndex,
+    required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.black.withValues(alpha: 0.36)
-            : Colors.white.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.14)
-              : Colors.black.withValues(alpha: 0.14),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: isDark ? Colors.white : Colors.black),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: isDark ? Colors.white : Colors.black,
-              fontWeight: FontWeight.w800,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ArticlePreviewSheet extends StatelessWidget {
-  final NewsPost post;
-
-  const _ArticlePreviewSheet({required this.post});
-
-  @override
-  Widget build(BuildContext context) => _ArticlePreviewSheetBody(post: post);
-}
-
-class _ArticlePreviewSheetBody extends StatefulWidget {
-  final NewsPost post;
-
-  const _ArticlePreviewSheetBody({required this.post});
-
-  @override
-  State<_ArticlePreviewSheetBody> createState() =>
-      _ArticlePreviewSheetBodyState();
-}
-
-class _ArticlePreviewSheetBodyState extends State<_ArticlePreviewSheetBody> {
-  final FlutterTts _tts = FlutterTts();
-  bool _translated = false;
-  bool _translating = false;
-  String? _translatedText;
-  bool _speaking = false;
-
-  NewsPost get post => widget.post;
-
-  String get _summary {
-    final base = post.summary?.trim().isNotEmpty == true
-        ? post.summary!.trim()
-        : premiumSnippet(post, maxLength: 1200);
-    if (_translated && _translatedText != null && _translatedText!.isNotEmpty) {
-      return _translatedText!;
-    }
-    return base;
-  }
-
-  Future<void> _toggleSpeak() async {
-    if (_speaking) {
-      await _tts.stop();
-      if (mounted) setState(() => _speaking = false);
-      return;
-    }
-    await _tts.setSpeechRate(0.42);
-    await _tts.setPitch(1.0);
-    await _tts.speak('${post.title}. $_summary');
-    if (mounted) setState(() => _speaking = true);
-  }
-
-  Future<void> _openSource() async {
-    final raw = post.sourceUrl?.trim();
-    if (raw == null || raw.isEmpty) return;
-    final uri = Uri.tryParse(raw);
-    if (uri == null) return;
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open source link')),
-      );
-    }
-  }
-
-  Future<void> _share() async {
-    await Share.share(
-      '${post.title}\n\n$_summary\n\n${post.sourceUrl ?? ''}',
-      subject: post.title,
-    );
-  }
-
-  Future<void> _toggleTranslation() async {
-    if (_translating) return;
-    if (_translated) {
-      setState(() => _translated = false);
-      return;
-    }
-    setState(() => _translating = true);
-    final target = context.read<NewsProvider>().selectedLanguage == 'all'
-        ? 'te'
-        : context.read<NewsProvider>().selectedLanguage;
-    final res = await ApiService.translateText(
-      text: _summary,
-      targetLanguage: target,
-    );
-    if (!mounted) return;
-    setState(() {
-      _translating = false;
-      if (res['success'] == true) {
-        _translatedText = res['translatedText']?.toString();
-        _translated = true;
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _tts.stop();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final bottom = MediaQuery.of(context).padding.bottom;
-    final imageUrl = premiumImageUrl(post);
-    return FrostedPanel(
-      radius: 30,
-      margin: const EdgeInsets.all(10),
-      padding: EdgeInsets.fromLTRB(12, 10, 12, 12 + bottom),
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.86,
-        minChildSize: 0.50,
-        maxChildSize: 0.98,
-        builder: (context, controller) {
-          return ListView(
-            controller: controller,
-            physics: const BouncingScrollPhysics(),
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: p.textHint.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              ClipRRect(
+    return Material(
+      color: Colors.white,
+      child: SizedBox(
+        height: 46,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          itemCount: _kFeedTabs.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final selected = i == selectedIndex;
+            final label = _kFeedTabs[i].$1;
+            return Center(
+              child: Material(
+                color: selected
+                    ? DailyhuntTheme.accentGreen.withValues(alpha: 0.12)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: imageUrl.isEmpty
-                      ? ColoredBox(
-                          color: p.inputFill,
-                          child: Icon(
-                            Icons.article_outlined,
-                            color: p.textHint,
-                            size: 42,
-                          ),
-                        )
-                      : Hero(
-                          tag: 'post-hero-${post.id}',
-                          child: CachedNetworkImage(
-                            imageUrl: imageUrl,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 1800,
-                            filterQuality: FilterQuality.high,
-                            placeholder: (_, __) =>
-                                ColoredBox(color: p.inputFill),
-                            errorWidget: (_, __, ___) => ColoredBox(
-                              color: p.inputFill,
-                              child: Icon(
-                                Icons.image_not_supported_outlined,
-                                color: p.textHint,
-                              ),
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                post.title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: p.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      height: 1.18,
-                      letterSpacing: -0.6,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _MetaPill(
-                    label: post.category?.name ?? 'Article',
-                    icon: Icons.grid_view_rounded,
-                  ),
-                  _MetaPill(
-                    label: timeago.format(post.createdAt),
-                    icon: Icons.schedule_rounded,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: GradientPillButton(
-                      label: _speaking ? 'Stop TTS' : 'Listen',
-                      icon: _speaking
-                          ? Icons.stop_rounded
-                          : Icons.volume_up_rounded,
-                      compact: true,
-                      onPressed: _toggleSpeak,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GradientPillButton(
-                      label: _translating
-                          ? '...'
-                          : (_translated ? 'Original' : 'Translate'),
-                      icon: AppIcons.translate,
-                      compact: true,
-                      onPressed: _toggleTranslation,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: GradientPillButton(
-                      label: 'Share',
-                      icon: AppIcons.share,
-                      compact: true,
-                      onPressed: _share,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(
-                _summary,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: p.textSecondary,
-                      height: 1.72,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              if ((post.sourceUrl ?? '').trim().isNotEmpty)
-                InkWell(
-                  onTap: _openSource,
-                  borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap: () => onSelect(i),
+                  borderRadius: BorderRadius.circular(20),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.link_rounded, color: p.primary, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            post.sourceUrl!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.metaText.copyWith(
-                              color: p.primary,
-                              fontWeight: FontWeight.w800,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ),
-                        Icon(Icons.open_in_new_rounded,
-                            color: p.primary, size: 16),
-                      ],
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                        color: selected
+                            ? DailyhuntTheme.accentGreen
+                            : const Color(0xFF5F6368),
+                      ),
                     ),
                   ),
                 ),
-              const SizedBox(height: 22),
-              GradientPillButton(
-                label: 'Open full article',
-                icon: Icons.open_in_full_rounded,
-                onPressed: () {
-                  Navigator.pop(context);
-                  context.push('/article/${post.id}');
-                },
               ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1229,7 +534,7 @@ class _SearchResultsState extends State<_SearchResults> {
       return const EmptyState(icon: Icons.search_off, title: 'No results');
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       itemCount: widget.provider.posts.length,
       itemBuilder: (context, index) => PremiumNewsTile(
         post: widget.provider.posts[index],

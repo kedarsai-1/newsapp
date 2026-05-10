@@ -215,7 +215,12 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
     if (news.posts.isEmpty && news.refreshing) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: SafeArea(child: NewsShimmerLoader(count: 4)),
+        body: SafeArea(
+          child: NewsShimmerLoader(
+            count: 6,
+            backgroundColor: Colors.black,
+          ),
+        ),
       );
     }
 

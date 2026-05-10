@@ -28,7 +28,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>We need camera access to let you capture photos for your story.</string>
-	<key>NSMicrophoneUsageDescription</key>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We use your location to suggest nearby cities for local news.</string>
 	<string>We need microphone access to let you record videos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need photo library access to select images and videos from your device.</string>

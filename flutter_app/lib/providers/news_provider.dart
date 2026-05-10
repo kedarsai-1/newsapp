@@ -22,9 +22,15 @@ class NewsProvider extends ChangeNotifier {
   List<NewsPost> get posts => _posts;
   List<Category> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
-  String get selectedLanguage => (_selectedLanguage as dynamic) == null ? 'all' : _selectedLanguage;
-  String get selectedConstituency => (_selectedConstituency as dynamic) == null ? 'all' : _selectedConstituency;
-  String get selectedPoliticsScope => (_selectedPoliticsScope as dynamic) == null ? 'all' : _selectedPoliticsScope;
+  String get selectedLanguage =>
+      (_selectedLanguage as dynamic) == null ? 'all' : _selectedLanguage;
+  String get selectedConstituency => (_selectedConstituency as dynamic) == null
+      ? 'all'
+      : _selectedConstituency;
+  String get selectedPoliticsScope =>
+      (_selectedPoliticsScope as dynamic) == null
+          ? 'all'
+          : _selectedPoliticsScope;
   bool get loading => _loading;
   bool get refreshing => _refreshing;
   bool get hasMore => _hasMore;
@@ -35,9 +41,28 @@ class NewsProvider extends ChangeNotifier {
 
   static const String _languagePrefKey = 'preferred_feed_language';
   static const String _languageOnboardingKey = 'language_onboarding_completed';
+  static const String _onboardingUiLangKey = 'onboarding_ui_language';
+  static const String _onboardingInterestsKey = 'onboarding_interests';
+  static const String _onboardingCityKey = 'onboarding_city';
+  static const String _onboardingNotifKey = 'onboarding_notifications_enabled';
 
   bool _prefsLoaded = false;
   bool _languageOnboardingCompleted = false;
+
+  /// Optional city label from onboarding; applied as feed `city` filter on **Local** category.
+  String? _preferredCity;
+
+  /// Maps onboarding picks (Tamil/Kannada/Malayalam) to a feed language the API supports.
+  static String feedLanguageFromUiChoice(String uiCode) {
+    switch (uiCode.toLowerCase()) {
+      case 'ta':
+      case 'kn':
+      case 'ml':
+        return 'all';
+      default:
+        return uiCode.toLowerCase();
+    }
+  }
 
   String _formatError(Object e, {String fallback = 'Request failed.'}) {
     final msg = e.toString().replaceFirst('Exception: ', '').trim();
@@ -48,6 +73,7 @@ class NewsProvider extends ChangeNotifier {
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     _selectedLanguage = prefs.getString(_languagePrefKey) ?? 'all';
+    _preferredCity = prefs.getString(_onboardingCityKey);
 
     final done = prefs.getBool(_languageOnboardingKey);
     if (done != null) {
@@ -83,13 +109,76 @@ class NewsProvider extends ChangeNotifier {
 
   /// Call after user picks a language on the onboarding screen.
   Future<void> completeLanguageOnboarding(String languageCode) async {
-    _selectedLanguage = languageCode;
+    final feedLang = feedLanguageFromUiChoice(languageCode);
+    _selectedLanguage = feedLang;
     _languageOnboardingCompleted = true;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_languagePrefKey, languageCode);
+    await prefs.setString(_languagePrefKey, feedLang);
+    await prefs.setString(_onboardingUiLangKey, languageCode);
     await prefs.setBool(_languageOnboardingKey, true);
     notifyListeners();
     await refresh();
+  }
+
+  /// Persists the full Dailyhunt-style onboarding flow and applies feed language, interests, and city.
+  Future<void> completeFullOnboarding({
+    required String uiLanguageCode,
+    required List<String> interestSlugs,
+    required String cityLabel,
+    bool notificationsEnabled = false,
+  }) async {
+    final feedLang = feedLanguageFromUiChoice(uiLanguageCode);
+    _selectedLanguage = feedLang;
+    _languageOnboardingCompleted = true;
+    final trimmedCity = cityLabel.trim();
+    _preferredCity = trimmedCity.isEmpty ? null : trimmedCity;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_languagePrefKey, feedLang);
+    await prefs.setString(_onboardingUiLangKey, uiLanguageCode);
+    await prefs.setBool(_languageOnboardingKey, true);
+    await prefs.setStringList(_onboardingInterestsKey, interestSlugs);
+    if (_preferredCity != null) {
+      await prefs.setString(_onboardingCityKey, _preferredCity!);
+    } else {
+      await prefs.remove(_onboardingCityKey);
+    }
+    await prefs.setBool(_onboardingNotifKey, notificationsEnabled);
+
+    notifyListeners();
+    await loadCategories();
+    await _selectFirstMatchingInterest(interestSlugs);
+    await refresh();
+  }
+
+  Future<void> _selectFirstMatchingInterest(List<String> slugs) async {
+    if (slugs.isEmpty) return;
+    for (final slug in slugs) {
+      final s = slug.toLowerCase().trim();
+      if (s.isEmpty) continue;
+      for (final c in _categories) {
+        if (c.slug.toLowerCase() == s) {
+          _selectedCategoryId = c.id;
+          _searchQuery = null;
+          if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
+          if (!isPoliticsMode) _selectedConstituency = 'all';
+          notifyListeners();
+          return;
+        }
+      }
+    }
+  }
+
+  String? _cityForFeedQuery() {
+    final city = _preferredCity?.trim();
+    if (city == null || city.isEmpty) return null;
+    if (_selectedCategoryId == null) return null;
+    for (final c in _categories) {
+      if (c.id == _selectedCategoryId && c.slug.toLowerCase() == 'local') {
+        return city;
+      }
+    }
+    return null;
   }
 
   Future<void> loadCategories() async {
@@ -130,8 +219,9 @@ class NewsProvider extends ChangeNotifier {
           _categoriesError =
               'News server is unavailable ($code). Pull to refresh or try again shortly.';
         } else {
-          _categoriesError =
-              (msg != null && msg.isNotEmpty) ? msg : 'Could not load categories.';
+          _categoriesError = (msg != null && msg.isNotEmpty)
+              ? msg
+              : 'Could not load categories.';
         }
       }
     } catch (e) {
@@ -189,13 +279,17 @@ class NewsProvider extends ChangeNotifier {
   }
 
   Future<void> selectConstituency(String constituency) async {
-    _selectedConstituency = constituency.trim().isEmpty ? 'all' : constituency.trim();
+    _selectedConstituency =
+        constituency.trim().isEmpty ? 'all' : constituency.trim();
     await refresh();
   }
 
   Future<void> selectPoliticsScope(String scope) async {
     final s = scope.trim().toLowerCase();
-    _selectedPoliticsScope = ['andhra', 'telangana', 'india', 'international'].contains(s) ? s : 'all';
+    _selectedPoliticsScope =
+        ['andhra', 'telangana', 'india', 'international'].contains(s)
+            ? s
+            : 'all';
     if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
     await refresh();
   }
@@ -216,14 +310,17 @@ class NewsProvider extends ChangeNotifier {
   bool get isPoliticsMode {
     if (_selectedCategoryId == null) return false;
     for (final c in _categories) {
-      if (c.id == _selectedCategoryId) return c.slug.toLowerCase() == 'politics';
+      if (c.id == _selectedCategoryId)
+        return c.slug.toLowerCase() == 'politics';
     }
     return false;
   }
 
   bool get shouldShowPoliticalScopeDropdown {
     if (!isPoliticsMode) return false;
-    return selectedLanguage == 'te' || selectedLanguage == 'hi' || selectedLanguage == 'en';
+    return selectedLanguage == 'te' ||
+        selectedLanguage == 'hi' ||
+        selectedLanguage == 'en';
   }
 
   List<String> get availablePoliticalConstituencies {
@@ -233,7 +330,8 @@ class NewsProvider extends ChangeNotifier {
       if (c.isEmpty || c.toLowerCase() == 'unknown') continue;
       set.add(c);
     }
-    final out = set.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final out = set.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return out;
   }
 
@@ -247,8 +345,10 @@ class NewsProvider extends ChangeNotifier {
         page: reset ? 1 : _page,
         categoryId: _selectedCategoryId,
         language: selectedLanguage,
-        constituency: shouldShowAndhraConstituencyFilter ? selectedConstituency : 'all',
+        constituency:
+            shouldShowAndhraConstituencyFilter ? selectedConstituency : 'all',
         politicsScope: selectedPoliticsScope,
+        city: _cityForFeedQuery(),
         search: _searchQuery,
         // Keep the feed fresh by default (Way2News behavior).
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).

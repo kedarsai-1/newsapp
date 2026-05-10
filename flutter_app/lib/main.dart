@@ -5,15 +5,22 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'services/auth_provider.dart';
 import 'providers/news_provider.dart';
+import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
 import 'providers/reporter_provider.dart';
 import 'providers/admin_provider.dart';
 import 'constants.dart';
 import 'providers/theme_provider.dart';
 
-import 'screens/splash_screen.dart';
-import 'screens/onboarding/select_language_screen.dart';
+import 'screens/onboarding/dailyhunt_splash_screen.dart';
+import 'screens/onboarding/onboarding_interests_screen.dart';
+import 'screens/onboarding/onboarding_language_screen.dart';
+import 'screens/onboarding/onboarding_location_screen.dart';
+import 'screens/onboarding/onboarding_notifications_screen.dart';
+import 'screens/onboarding/onboarding_welcome_screen.dart';
+import 'screens/onboarding/onboarding_design.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/otp_verify_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/user/feed_screen.dart' show FeedScreen;
 import 'screens/user/dailyhunt_home_screen.dart';
@@ -71,30 +78,75 @@ CustomTransitionPage<void> _smoothAppPage({
   );
 }
 
+CustomTransitionPage<void> _onboardingFadePage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 280),
+    reverseTransitionDuration: const Duration(milliseconds: 220),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final fade =
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(opacity: fade, child: child);
+    },
+  );
+}
+
 /// Single [GoRouter] for the app lifetime. Must not be recreated in [build] —
 /// [NewsProvider] notifies often (feed loads) and a new router each time tanks performance.
 GoRouter createAppRouter(BuildContext context) {
   final auth = context.read<AuthProvider>();
   final news = context.read<NewsProvider>();
   return GoRouter(
-    initialLocation: auth.homeRoute,
+    initialLocation: auth.isLoggedIn && (auth.isAdmin || auth.isReporter)
+        ? auth.homeRoute
+        : '/splash',
     refreshListenable: Listenable.merge([auth, news]),
     redirect: (context, state) {
       final auth = context.read<AuthProvider>();
       final news = context.read<NewsProvider>();
       final loc = state.matchedLocation;
 
-      if (!news.languageOnboardingCompleted) {
-        if (loc != '/select-language') return '/select-language';
-        return null;
+      if (loc == '/select-language') return '/onboarding/language';
+
+      if (auth.isLoggedIn && (auth.isAdmin || auth.isReporter)) {
+        if (loc == '/splash' || loc.startsWith('/onboarding')) {
+          return auth.homeRoute;
+        }
       }
-      if (loc == '/select-language') {
-        return auth.homeRoute;
+
+      final guestIncomplete =
+          !auth.isLoggedIn && !news.languageOnboardingCompleted;
+
+      if (guestIncomplete) {
+        const allowed = {
+          '/splash',
+          '/onboarding/language',
+          '/onboarding/interests',
+          '/onboarding/location',
+          '/onboarding/notifications',
+          '/onboarding/welcome',
+          '/login',
+          '/login/otp',
+          '/register',
+        };
+        if (!allowed.contains(loc)) return '/splash';
+      }
+
+      if (!auth.isLoggedIn &&
+          news.languageOnboardingCompleted &&
+          loc.startsWith('/onboarding')) {
+        return '/feed';
       }
 
       final loggedIn = auth.isLoggedIn;
 
-      final goingToAuth = loc == '/login' || loc == '/register';
+      final goingToAuth = loc == '/login' ||
+          loc == '/login/otp' ||
+          loc == '/register';
       final goingToAdmin = loc.startsWith('/admin');
       final goingToReporter = loc.startsWith('/reporter');
       final goingToUserRoute = loc == '/feed' ||
@@ -124,19 +176,60 @@ GoRouter createAppRouter(BuildContext context) {
       return null;
     },
     routes: [
-      // Default web entrypoint (/) → user feed.
-      // This prevents "Could not navigate to initial route" when the app is opened at /
-      // or when the browser reloads on an unknown path.
       GoRoute(
         path: '/',
-        redirect: (_, __) => '/feed',
+        redirect: (context, state) {
+          final auth = context.read<AuthProvider>();
+          final news = context.read<NewsProvider>();
+          if (auth.isLoggedIn && (auth.isAdmin || auth.isReporter)) {
+            return auth.homeRoute;
+          }
+          if (!news.languageOnboardingCompleted) return '/splash';
+          return '/feed';
+        },
       ),
 
       GoRoute(
-        path: '/select-language',
-        pageBuilder: (context, state) => _smoothAppPage(
+        path: '/splash',
+        pageBuilder: (context, state) => NoTransitionPage<void>(
+          key: state.pageKey,
+          child: const DailyhuntSplashScreen(),
+        ),
+      ),
+
+      GoRoute(
+        path: '/onboarding/language',
+        pageBuilder: (context, state) => _onboardingFadePage(
           state: state,
-          child: const SelectLanguageScreen(),
+          child: const OnboardingLanguageScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding/interests',
+        pageBuilder: (context, state) => _onboardingFadePage(
+          state: state,
+          child: const OnboardingInterestsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding/location',
+        pageBuilder: (context, state) => _onboardingFadePage(
+          state: state,
+          child: const OnboardingLocationScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding/notifications',
+        pageBuilder: (context, state) => _onboardingFadePage(
+          state: state,
+          child: const OnboardingNotificationsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/onboarding/welcome',
+        pageBuilder: (context, state) => _onboardingFadePage(
+          state: state,
+          child: const OnboardingWelcomeScreen(),
         ),
       ),
 
@@ -145,6 +238,19 @@ GoRouter createAppRouter(BuildContext context) {
         path: '/login',
         pageBuilder: (context, state) =>
             _smoothAppPage(state: state, child: const LoginScreen()),
+      ),
+      GoRoute(
+        path: '/login/otp',
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final target = (extra is Map && extra['target'] is String)
+              ? extra['target'] as String
+              : '';
+          return _smoothAppPage(
+            state: state,
+            child: OtpVerifyScreen(target: target),
+          );
+        },
       ),
       GoRoute(
         path: '/register',
@@ -299,6 +405,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
         ChangeNotifierProvider(create: (_) => NewsProvider()..init()),
+        ChangeNotifierProvider(create: (_) => OnboardingDraftProvider()),
         ChangeNotifierProvider(create: (_) => ShortsProvider()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
@@ -312,7 +419,19 @@ class NewsApp extends StatelessWidget {
                 theme: AppTheme.light(),
                 darkTheme: AppTheme.dark(),
                 themeMode: theme.themeMode,
-                home: const SplashScreen(),
+                home: ColoredBox(
+                  color: OnboardingDesign.background,
+                  child: Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: OnboardingDesign.accent.withValues(alpha: 0.72),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             );
           }

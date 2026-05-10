@@ -20,7 +20,7 @@ class OnboardingWelcomeScreen extends StatelessWidget {
       notificationsEnabled: draft.notificationsRequested,
     );
     if (!context.mounted) return;
-    context.go('/feed');
+    context.go('/home');
   }
 
   @override

@@ -51,7 +51,7 @@ class _DailyhuntSplashScreenState extends State<DailyhuntSplashScreen>
       return;
     }
 
-    context.go('/feed');
+    context.go('/home');
   }
 
   @override

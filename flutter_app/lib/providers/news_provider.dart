@@ -52,6 +52,13 @@ class NewsProvider extends ChangeNotifier {
   /// Optional city label from onboarding; applied as feed `city` filter on **Local** category.
   String? _preferredCity;
 
+  /// Public read-only access to the onboarding-selected city (e.g. for the super home feed).
+  String? get preferredCity {
+    final c = _preferredCity?.trim();
+    if (c == null || c.isEmpty) return null;
+    return c;
+  }
+
   /// Maps onboarding picks (Tamil/Kannada/Malayalam) to a feed language the API supports.
   static String feedLanguageFromUiChoice(String uiCode) {
     switch (uiCode.toLowerCase()) {

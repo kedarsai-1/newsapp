@@ -7,6 +7,7 @@ import 'services/auth_provider.dart';
 import 'providers/news_provider.dart';
 import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
+import 'providers/super_home_provider.dart';
 import 'providers/reporter_provider.dart';
 import 'providers/admin_provider.dart';
 import 'constants.dart';
@@ -24,6 +25,7 @@ import 'screens/auth/otp_verify_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/user/feed_screen.dart' show FeedScreen;
 import 'screens/user/dailyhunt_home_screen.dart';
+import 'screens/user/super_home/super_home_screen.dart';
 import 'screens/user/shorts_news_screen.dart';
 import 'screens/user/quick_news_screen.dart';
 import 'screens/user/categories_screen.dart';
@@ -139,7 +141,7 @@ GoRouter createAppRouter(BuildContext context) {
       if (!auth.isLoggedIn &&
           news.languageOnboardingCompleted &&
           loc.startsWith('/onboarding')) {
-        return '/feed';
+        return '/home';
       }
 
       final loggedIn = auth.isLoggedIn;
@@ -152,6 +154,7 @@ GoRouter createAppRouter(BuildContext context) {
       final goingToUserRoute = loc == '/feed' ||
           loc == '/shorts' ||
           loc == '/home' ||
+          loc == '/home/classic' ||
           loc == '/quick-news' ||
           loc == '/categories' ||
           loc == '/bookmarks' ||
@@ -185,7 +188,7 @@ GoRouter createAppRouter(BuildContext context) {
             return auth.homeRoute;
           }
           if (!news.languageOnboardingCompleted) return '/splash';
-          return '/feed';
+          return '/home';
         },
       ),
 
@@ -276,6 +279,13 @@ GoRouter createAppRouter(BuildContext context) {
           ),
           GoRoute(
             path: '/home',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const SuperHomeScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/home/classic',
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
               child: const DailyhuntHomeScreen(),
@@ -407,6 +417,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NewsProvider()..init()),
         ChangeNotifierProvider(create: (_) => OnboardingDraftProvider()),
         ChangeNotifierProvider(create: (_) => ShortsProvider()),
+        ChangeNotifierProvider(create: (_) => SuperHomeProvider()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
@@ -538,25 +549,19 @@ class UserShell extends StatelessWidget {
     if (loc == '/categories') idx = 2;
     if (loc == '/bookmarks') idx = 3;
     if (loc == '/settings') idx = 4;
-    final isTabRoute = loc == '/feed' ||
+    final isTabRoute = loc == '/home' ||
+        loc == '/feed' ||
         loc == '/shorts' ||
         loc == '/categories' ||
         loc == '/bookmarks' ||
         loc == '/settings';
-
-    if (loc == '/home') {
-      return Scaffold(
-        extendBody: true,
-        body: child,
-      );
-    }
 
     return Scaffold(
       extendBody: true,
       body: GlassBackground(
         child: _HorizontalShellSwipe(
           tabRoutes: const [
-            '/feed',
+            '/home',
             '/shorts',
             '/categories',
             '/bookmarks',
@@ -635,7 +640,7 @@ class UserShell extends StatelessWidget {
           onDestinationSelected: (i) {
             switch (i) {
               case 0:
-                _goIfNeeded(context, loc, '/feed');
+                _goIfNeeded(context, loc, '/home');
                 return;
               case 1:
                 _goIfNeeded(context, loc, '/shorts');
@@ -655,7 +660,7 @@ class UserShell extends StatelessWidget {
             NavigationDestination(
               icon: const Icon(Icons.home_outlined),
               selectedIcon: const Icon(Icons.home_rounded),
-              label: I18n.t(context, 'tab_feed'),
+              label: I18n.t(context, 'tab_home'),
             ),
             NavigationDestination(
               icon: const Icon(Icons.view_stream_outlined),

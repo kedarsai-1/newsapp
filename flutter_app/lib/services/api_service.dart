@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -37,10 +38,32 @@ class ApiService {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
+  /// GET requests: no `Content-Type` so unauthenticated calls are browser "simple"
+  /// requests (fewer CORS preflight failures on Flutter web).
+  static Map<String, String> get _getHeaders => {
+        'Accept': 'application/json',
+        if (_token != null && _token!.isNotEmpty)
+          'Authorization': 'Bearer $_token',
+      };
+
+  static String _friendlyNetworkMessage(Object e) {
+    final raw = e.toString();
+    if (raw.contains('Failed to fetch')) {
+      return kIsWeb
+          ? 'Could not reach the news server from the browser. Check your connection and tap Try again.'
+          : 'Could not reach the news server. Check your connection and try again.';
+    }
+    if (raw.contains('SocketException') ||
+        raw.contains('Network is unreachable')) {
+      return 'No internet connection. Try again when you are online.';
+    }
+    return 'Something went wrong. Please try again.';
+  }
+
   static Future<Map<String, dynamic>> _get(String path) async {
     try {
       final res = await http
-          .get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _headers)
+          .get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _getHeaders)
           .timeout(_httpTimeout);
       if (res.statusCode < 200 || res.statusCode >= 300) {
         return {
@@ -72,7 +95,7 @@ class ApiService {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error: $e',
+        'message': _friendlyNetworkMessage(e),
       };
     }
   }
@@ -223,13 +246,43 @@ class ApiService {
     final uri = Uri.parse('${AppConstants.baseUrl}/news/feed')
         .replace(queryParameters: params);
     try {
-      final res = await http.get(uri, headers: _headers).timeout(_httpTimeout);
-      return jsonDecode(res.body);
+      final res =
+          await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message':
+              'News feed unavailable (${res.statusCode}). Try again in a moment.',
+        };
+      }
+      final body = res.body.trim();
+      if (body.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Empty response from news server.',
+        };
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return {'statusCode': res.statusCode, ...decoded};
+      }
+      return {'success': false, 'message': 'Unexpected feed response format.'};
     } on TimeoutException {
       return {
         'success': false,
         'message':
             'Feed request timed out. The server may be cold-starting — tap refresh or try again shortly.',
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Could not read feed data from the server.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _friendlyNetworkMessage(e),
       };
     }
   }
@@ -242,7 +295,8 @@ class ApiService {
     final uri = Uri.parse('${AppConstants.baseUrl}/news/extract')
         .replace(queryParameters: {'url': url});
     try {
-      final res = await http.get(uri, headers: _headers).timeout(_httpTimeout);
+      final res =
+          await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
       return jsonDecode(res.body);
     } on TimeoutException {
       return {
@@ -504,7 +558,7 @@ class ApiService {
     };
     final uri = Uri.parse('${AppConstants.baseUrl}/reporter/posts')
         .replace(queryParameters: params);
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(uri, headers: _getHeaders);
     return jsonDecode(res.body);
   }
 
@@ -539,7 +593,7 @@ class ApiService {
     final params = {'page': page.toString(), if (role != null) 'role': role};
     final uri = Uri.parse('${AppConstants.baseUrl}/admin/users')
         .replace(queryParameters: params);
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(uri, headers: _getHeaders);
     return jsonDecode(res.body);
   }
 

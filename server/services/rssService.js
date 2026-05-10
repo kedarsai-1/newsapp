@@ -343,26 +343,37 @@ async function summarize(text) {
     throw new Error('HF_TOKEN is missing');
   }
   try {
-    const response = await fetch(
-      'https://router.huggingface.co/hf-inference/models/sshleifer/distilbart-cnn-12-6',
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-        body: JSON.stringify({ inputs: input }),
-      },
+    const hfMs = Math.min(
+      120000,
+      Math.max(5000, Number(process.env.HF_SUMMARY_TIMEOUT_MS || 22000)),
     );
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      const detail = body ? ` - ${body.slice(0, 240)}` : '';
-      throw new Error(`HF ${response.status}${detail}`);
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), hfMs);
+    try {
+      const response = await fetch(
+        'https://router.huggingface.co/hf-inference/models/sshleifer/distilbart-cnn-12-6',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+          body: JSON.stringify({ inputs: input }),
+          signal: ac.signal,
+        },
+      );
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        const detail = body ? ` - ${body.slice(0, 240)}` : '';
+        throw new Error(`HF ${response.status}${detail}`);
+      }
+      const result = await response.json();
+      const out = parseHfSummarizationJson(result);
+      if (!out || looksMojibake(out)) return '';
+      return out;
+    } finally {
+      clearTimeout(to);
     }
-    const result = await response.json();
-    const out = parseHfSummarizationJson(result);
-    if (!out || looksMojibake(out)) return '';
-    return out;
   } catch (e) {
     throw new Error(`HuggingFace summarization failed: ${e.message || e}`);
   }

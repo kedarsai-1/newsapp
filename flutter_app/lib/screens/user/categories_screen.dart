@@ -8,6 +8,8 @@ import '../../services/api_service.dart';
 import '../../theme/dailyhunt_theme.dart';
 import '../../utils/i18n.dart';
 import '../../widgets/categories/dailyhunt_category_card.dart';
+import 'super_home/widgets/super_home_astrology.dart';
+import 'super_home/widgets/super_home_cricket.dart';
 
 /// Dailyhunt-inspired topic grid: light theme, green accent, compact rounded cards.
 class CategoriesScreen extends StatelessWidget {
@@ -170,6 +172,37 @@ class CategoriesScreen extends StatelessWidget {
                           onTap: () async => _openCategory(context, t.slug),
                         );
                       },
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Container(
+                    width: double.infinity,
+                    color: const Color(0xFFEEF0F3),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 10),
+                        SuperHomeCricketSection(
+                          onSeeAll: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'More cricket coverage opens from Sports news.',
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 8,
+                          color: const Color(0xFFEEF0F3),
+                        ),
+                        const SuperHomeAstrologySection(),
+                        const SizedBox(height: 16),
+                      ],
                     ),
                   ),
                 ),

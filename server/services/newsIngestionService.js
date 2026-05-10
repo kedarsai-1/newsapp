@@ -33,6 +33,42 @@ let ingestState = {
   lastError: null,
 };
 
+/**
+ * Hard wall-clock limit so a single run cannot hold `isRunning` forever (cron then skips every slot).
+ * RSS-only runs with many feeds + og:image + body enrich + HF summarize can exceed 15–30+ minutes otherwise.
+ * Set INGEST_MAX_RUNTIME_MS=0 for no limit (not recommended on PaaS).
+ */
+function createIngestBudget() {
+  const raw = process.env.INGEST_MAX_RUNTIME_MS;
+  let ms;
+  if (raw === undefined || raw === '') {
+    ms = 12 * 60 * 1000; // 12 minutes — fits typical hobby-tier deploy timeouts
+  } else {
+    ms = Number(raw);
+  }
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return {
+      limitMs: null,
+      throwIfExpired() {},
+      describe: () => 'unlimited',
+    };
+  }
+  const started = Date.now();
+  return {
+    limitMs: ms,
+    started,
+    throwIfExpired(phase) {
+      if (Date.now() - started > ms) {
+        throw new Error(
+          `[ingest] time budget exceeded (${ms}ms) at ${phase || '?'}. `
+            + 'Set INGEST_MAX_RUNTIME_MS higher, or lower RSS_ITEMS_PER_FEED, or RSS_ENRICH_BODY=false / RSS_OG_FALLBACK=false.',
+        );
+      }
+    },
+    describe: () => `${Math.round(ms / 1000)}s`,
+  };
+}
+
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
 const DEFAULT_CATEGORY_SLUG = process.env.SCRAPER_DEFAULT_CATEGORY || 'general';
@@ -181,19 +217,33 @@ async function rehostExternalImageToCloudinary(imageUrl, { referer } = {}) {
       : 'jpg';
 
     const dataUri = `data:${ct || 'image/jpeg'};base64,${buf.toString('base64')}`;
-    const upload = await cloudinary.uploader.upload(dataUri, {
-      folder: 'newsapp/external',
-      resource_type: 'image',
-      overwrite: false,
-      unique_filename: true,
-      format: ext,
-    });
+    const uploadTimeoutMs = Math.min(
+      120000,
+      Math.max(8000, Number(process.env.CLOUDINARY_UPLOAD_TIMEOUT_MS || 45000)),
+    );
+    const upload = await Promise.race([
+      cloudinary.uploader.upload(dataUri, {
+        folder: 'newsapp/external',
+        resource_type: 'image',
+        overwrite: false,
+        unique_filename: true,
+        format: ext,
+      }),
+      new Promise((_, rej) => {
+        setTimeout(() => rej(new Error('cloudinary_upload_timeout')), uploadTimeoutMs);
+      }),
+    ]);
     const secure = upload?.secure_url || upload?.url;
     if (!secure) return { ok: false, reason: 'upload_failed' };
     return { ok: true, url: secure, publicId: upload.public_id };
   } catch (e) {
     clearTimeout(to);
-    const msg = e?.name === 'AbortError' ? 'timeout' : 'fetch_failed';
+    const msg =
+      e?.message === 'cloudinary_upload_timeout'
+        ? 'upload_timeout'
+        : e?.name === 'AbortError'
+          ? 'timeout'
+          : 'fetch_failed';
     return { ok: false, reason: msg };
   }
 }
@@ -322,6 +372,12 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     const useGNews = Boolean(process.env.GNEWS_API_KEY?.trim());
     const useNewsApi = Boolean(process.env.NEWSAPI_KEY?.trim());
     const rssEnabled = process.env.RSS_ENABLED !== 'false';
+    const budget = createIngestBudget();
+
+    console.log(
+      `[ingest] begin (${triggeredBy}) maxRuntime=${budget.describe()} `
+        + `api=${Boolean(useGNews || useNewsApi)} rss=${rssEnabled}`,
+    );
 
     if (!useGNews && !useNewsApi && !rssEnabled) {
       const msg =
@@ -360,7 +416,9 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       );
 
       for (const ingestLang of ingestLanguages) {
+        budget.throwIfExpired(`api:lang:${ingestLang}`);
         for (const plan of plans) {
+          budget.throwIfExpired(`api:plan:${ingestLang}:${plan.categorySlug}`);
           let category;
           try {
             category = await getCategoryBySlug(plan.categorySlug);
@@ -382,7 +440,10 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             });
             stats.fetched += items.length;
 
+            let itemIdx = 0;
             for (const item of items) {
+              itemIdx += 1;
+              if (itemIdx % 25 === 1) budget.throwIfExpired(`api:items:${ingestLang}:${plan.categorySlug}`);
               if (!item.title) {
                 stats.failed += 1;
                 continue;
@@ -434,7 +495,19 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     // RSS ingestion (second source): reliable thumbnails + extra coverage.
     if (rssEnabled) {
       const feeds = getRssFeeds();
+      budget.throwIfExpired('rss:before-loop');
+      const maxPerFeed = Math.min(
+        50,
+        Math.max(5, Number(process.env.RSS_ITEMS_PER_FEED || 20)),
+      );
+      console.log(
+        `[ingest] RSS processing ${feeds.length} feeds (up to ${maxPerFeed} items each)`,
+      );
+
+      let feedIdx = 0;
       for (const feed of feeds) {
+        feedIdx += 1;
+        budget.throwIfExpired(`rss:feed-start:${feedIdx}/${feeds.length}`);
         if (!feed?.url) continue;
         let category;
         try {
@@ -450,14 +523,14 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
         try {
           const items = await fetchRssItems(feed.url);
-          const maxPerFeed = Math.min(
-            50,
-            Math.max(5, Number(process.env.RSS_ITEMS_PER_FEED || 20)),
-          );
           const slice = items.slice(0, maxPerFeed);
           stats.fetched += slice.length;
 
-          for (const raw of slice) {
+          for (let ri = 0; ri < slice.length; ri++) {
+            if (ri % 10 === 0) {
+              budget.throwIfExpired(`rss:${feedIdx}/${feeds.length}:${feed.name || 'feed'}`);
+            }
+            const raw = slice[ri];
             const item = normalizeRssItem(raw, feed);
             if (!item.title) {
               stats.failed += 1;
@@ -664,6 +737,10 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             stats.inserted += 1;
           }
 
+          console.log(
+            `[ingest] RSS ${feedIdx}/${feeds.length} done: ${feed.name || 'RSS'} (${slice.length} items processed)`,
+          );
+
           stats.sourceRuns.push({
             source: `RSS:${feed.name || 'RSS'}:${feed.categorySlug || DEFAULT_CATEGORY_SLUG}`,
             mode: 'rss',
@@ -696,6 +773,10 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
   } catch (error) {
     ingestState.lastError = error.message;
     stats.endedAt = new Date();
+    if (String(error.message || '').includes('time budget exceeded')) {
+      stats.timedOut = true;
+      console.warn('[ingest]', error.message);
+    }
     return { success: false, error: error.message, stats };
   } finally {
     ingestState.isRunning = false;

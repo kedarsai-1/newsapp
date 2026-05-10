@@ -83,7 +83,11 @@ mongoose.connect(process.env.MONGO_URI)
         return;
       }
       if (!result.success) {
-        console.error('[scraper] run failed:', result.error || result.message);
+        if (result.stats?.timedOut) {
+          console.warn('[scraper] time budget hit:', result.error || result.message);
+        } else {
+          console.error('[scraper] run failed:', result.error || result.message);
+        }
       } else {
         const s = result.stats || {};
         console.log(

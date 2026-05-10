@@ -137,10 +137,10 @@ class AuthProvider extends ChangeNotifier {
 
   // Returns the correct home route for the current user's role
   String get homeRoute {
-    if (_user == null) return '/home';
+    if (_user == null) return '/feed';
     if (_user!.isAdmin) return '/admin';
     if (_user!.isReporter) return '/reporter';
-    return '/home';
+    return '/feed';
   }
 
   Future<void> _saveUser(User user) async {

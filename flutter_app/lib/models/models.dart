@@ -137,6 +137,15 @@ class LocationData {
 }
 
 // models/news_post.dart
+
+DateTime? _parseOptionalDate(dynamic v) {
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  final s = v.toString().trim();
+  if (s.isEmpty) return null;
+  return DateTime.tryParse(s);
+}
+
 class NewsPost {
   final String id;
   final String title;
@@ -158,6 +167,8 @@ class NewsPost {
   final String? constituency;
   final String? sourceUrl;
   final String? sourceName;
+  /// When the publisher released the story (RSS/API). Prefer over [createdAt] for display.
+  final DateTime? sourcePublishedAt;
   final DateTime createdAt;
 
   NewsPost({
@@ -181,8 +192,12 @@ class NewsPost {
     this.constituency,
     this.sourceUrl,
     this.sourceName,
+    this.sourcePublishedAt,
     required this.createdAt,
   });
+
+  /// Prefer original publish time so cards don’t all show the same “ingested X ago”.
+  DateTime get displayTime => sourcePublishedAt ?? createdAt;
 
   factory NewsPost.fromJson(Map<String, dynamic> json) => NewsPost(
         id: json['_id'] ?? '',
@@ -212,6 +227,7 @@ class NewsPost {
         constituency: json['constituency']?.toString(),
         sourceUrl: json['sourceUrl'],
         sourceName: json['sourceName']?.toString(),
+        sourcePublishedAt: _parseOptionalDate(json['sourcePublishedAt']),
         createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
       );
 

@@ -31,6 +31,19 @@ const defaultRssFeeds = [
   // Tech feed id varies; keep as best-effort (if it fails it won't break whole run).
   { name: 'Times of India - Technology', url: 'https://timesofindia.indiatimes.com/rssfeeds/5880659.cms', categorySlug: 'technology', language: 'en' },
 
+  // Extra English sources — more stories per category + varied publish timestamps.
+  { name: 'NDTV Top Stories', url: 'https://feeds.feedburner.com/ndtvnews-top-stories', categorySlug: 'general', language: 'en' },
+  { name: 'Indian Express - Sports', url: 'https://indianexpress.com/section/sports/feed/', categorySlug: 'sports', language: 'en' },
+  { name: 'Indian Express - Technology', url: 'https://indianexpress.com/section/technology/feed/', categorySlug: 'technology', language: 'en' },
+  { name: 'Indian Express - Entertainment', url: 'https://indianexpress.com/section/entertainment/feed/', categorySlug: 'entertainment', language: 'en' },
+  { name: 'Indian Express - Education', url: 'https://indianexpress.com/section/education/feed/', categorySlug: 'education', language: 'en' },
+  { name: 'Indian Express - Cities', url: 'https://indianexpress.com/section/cities/feed/', categorySlug: 'local', language: 'en' },
+  { name: 'LiveMint News', url: 'https://www.livemint.com/rss/news', categorySlug: 'business', language: 'en' },
+  { name: 'Economic Times', url: 'https://economictimes.indiatimes.com/rssfeedsdefault.cms', categorySlug: 'business', language: 'en' },
+  { name: 'Gadgets 360', url: 'https://feeds.feedburner.com/gadgets360-latest', categorySlug: 'technology', language: 'en' },
+  { name: 'BBC India', url: 'https://feeds.bbci.co.uk/news/world/asia/india/rss.xml', categorySlug: 'general', language: 'en' },
+  { name: 'ESPN Cricinfo', url: 'https://www.espncricinfo.com/rss/content/story/feeds/0.xml', categorySlug: 'sports', language: 'en' },
+
   // ═══════════════════════════════════════════════════════════════════════════
   // HINDI - Mix of RSS images and og:image fallback
   // ═══════════════════════════════════════════════════════════════════════════

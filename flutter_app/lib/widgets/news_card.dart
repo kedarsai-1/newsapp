@@ -40,7 +40,7 @@ class NewsCard extends StatelessWidget {
     final source = (post.sourceName?.trim().isNotEmpty == true)
         ? post.sourceName!.trim()
         : (post.category?.name ?? 'News').trim();
-    final timeLabel = timeago.format(post.createdAt);
+    final timeLabel = timeago.format(post.displayTime);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),

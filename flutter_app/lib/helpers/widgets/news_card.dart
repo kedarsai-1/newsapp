@@ -150,7 +150,7 @@ class NewsCard extends StatelessWidget {
                       Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.access_time, size: 13, color: p.textHint),
                         const SizedBox(width: 3),
-                        Text(timeago.format(post.createdAt), style: TextStyle(fontSize: 12, color: p.textHint)),
+                        Text(timeago.format(post.displayTime), style: TextStyle(fontSize: 12, color: p.textHint)),
                       ]),
                       if (post.location != null)
                         LocationLabel(

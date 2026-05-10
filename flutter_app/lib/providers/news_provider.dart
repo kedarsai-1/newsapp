@@ -261,8 +261,9 @@ class NewsProvider extends ChangeNotifier {
       );
       if (res['success'] == true) {
         final fetched = (res['posts'] as List)
-            .map((p) => NewsPost.fromJson(p))
+            .map((p) => NewsPost.fromJson(Map<String, dynamic>.from(p as Map)))
             .toList();
+        fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
         if (reset) {
           _posts = fetched;
           _page = 2;

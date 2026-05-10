@@ -343,7 +343,7 @@ class _QuickHeadlineCard extends StatelessWidget {
             ),
             const Spacer(),
             Text(
-              '${post.sourceName ?? post.category?.name ?? 'News'} • ${timeago.format(post.createdAt)}',
+              '${post.sourceName ?? post.category?.name ?? 'News'} • ${timeago.format(post.displayTime)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: context.metaText.copyWith(

@@ -50,7 +50,7 @@ class DailyhuntShortsPage extends StatelessWidget {
         : (post.category?.name ?? 'RSS');
     final lang = post.language.trim().toUpperCase();
     final langBit = lang.isNotEmpty && lang != 'EN' ? ' · $lang' : '';
-    return '$src · ${timeago.format(post.createdAt)}$langBit';
+    return '$src · ${timeago.format(post.displayTime)}$langBit';
   }
 
   @override

@@ -517,7 +517,7 @@ class PremiumNewsTile extends StatelessWidget {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            timeago.format(post.createdAt),
+                            timeago.format(post.displayTime),
                             overflow: TextOverflow.ellipsis,
                             style: context.metaText.copyWith(color: p.textHint),
                           ),

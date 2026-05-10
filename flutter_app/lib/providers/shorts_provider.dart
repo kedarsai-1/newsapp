@@ -72,7 +72,7 @@ class ShortsProvider extends ChangeNotifier {
         breaking: false,
         days: 30,
         sourceTypes: const ['rss'],
-        hasVideo: true,
+        hasVideo: false,
       );
       if (res['success'] == true && res['posts'] is List) {
         final raw = res['posts'] as List;
@@ -87,6 +87,7 @@ class ShortsProvider extends ChangeNotifier {
             // Skip malformed API rows.
           }
         }
+        fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
         if (reset) {
           _posts = fetched;
           _page = 2;

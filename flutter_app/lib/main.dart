@@ -543,15 +543,15 @@ class UserShell extends StatelessWidget {
               selectedIcon: const Icon(Icons.view_stream_rounded),
               label: I18n.t(context, 'tab_shorts'),
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.grid_view_outlined),
-              selectedIcon: Icon(Icons.grid_view_rounded),
-              label: 'Categories',
+            NavigationDestination(
+              icon: const Icon(Icons.grid_view_outlined),
+              selectedIcon: const Icon(Icons.grid_view_rounded),
+              label: I18n.t(context, 'feed_categories'),
             ),
-            const NavigationDestination(
-              icon: Icon(Icons.bookmark_outline),
-              selectedIcon: Icon(Icons.bookmark_rounded),
-              label: 'Saved',
+            NavigationDestination(
+              icon: const Icon(Icons.bookmark_outline),
+              selectedIcon: const Icon(Icons.bookmark_rounded),
+              label: I18n.t(context, 'tab_saved'),
             ),
             NavigationDestination(
               icon: const Icon(Icons.person_outline),

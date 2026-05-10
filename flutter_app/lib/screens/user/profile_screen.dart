@@ -8,6 +8,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/auth_provider.dart';
 import '../../theme/dailyhunt_theme.dart';
 import '../../utils/app_utils.dart';
+import '../../utils/i18n.dart';
 import '../../widgets/profile/dailyhunt_settings_section.dart';
 
 /// Dailyhunt-style profile & settings: light cards, green accent, Material 3.
@@ -22,29 +23,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const _translatedCacheKey = 'feed_translated_summary_cache_v1';
 
   final Set<String> _interests = {
-    'Politics',
-    'Sports',
-    'Technology',
+    'politics',
+    'sports',
+    'technology',
   };
   bool _breakingAlerts = true;
   bool _dailyDigest = true;
   bool _recommendedAlerts = false;
 
-  static const _languages = [
-    ('te', 'Telugu'),
-    ('hi', 'Hindi'),
-    ('en', 'English'),
-    ('all', 'All languages'),
-  ];
+  static const _languageCodes = ['te', 'hi', 'en', 'all'];
 
-  static const _allInterests = [
-    'Politics',
-    'Sports',
-    'Technology',
-    'Business',
-    'Entertainment',
-    'Health',
-    'Local',
+  String _languageLabel(BuildContext context, String code) {
+    switch (code) {
+      case 'te':
+        return I18n.t(context, 'lang_telugu');
+      case 'hi':
+        return I18n.t(context, 'lang_hindi');
+      case 'en':
+        return I18n.t(context, 'lang_english');
+      case 'all':
+      default:
+        return I18n.t(context, 'lang_all');
+    }
+  }
+
+  static const _interestSlugs = [
+    'politics',
+    'sports',
+    'technology',
+    'business',
+    'entertainment',
+    'health',
+    'local',
   ];
 
   @override
@@ -77,7 +87,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   elevation: 0,
                   shadowColor: Colors.black.withValues(alpha: 0.06),
                   title: Text(
-                    'Profile',
+                    I18n.t(context, 'profile_title'),
                     style: TextStyle(
                       color: cs.onSurface,
                       fontWeight: FontWeight.w900,
@@ -87,7 +97,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   actions: [
                     IconButton(
-                      tooltip: 'Privacy policy',
+                      tooltip: I18n.t(context, 'profile_privacy_tooltip'),
                       onPressed: () => context.push('/privacy-policy'),
                       icon: Icon(
                         Icons.policy_outlined,
@@ -108,7 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 12),
                       ],
                       DailyhuntSettingsSection(
-                        title: 'Language',
+                        title: I18n.t(context, 'section_language'),
                         child: DropdownButtonFormField<String>(
                           key: ValueKey<String>(news.selectedLanguage),
                           initialValue: news.selectedLanguage,
@@ -129,11 +139,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           borderRadius: BorderRadius.circular(12),
-                          items: _languages
+                          items: _languageCodes
                               .map(
-                                (l) => DropdownMenuItem<String>(
-                                  value: l.$1,
-                                  child: Text(l.$2),
+                                (code) => DropdownMenuItem<String>(
+                                  value: code,
+                                  child: Text(_languageLabel(context, code)),
                                 ),
                               )
                               .toList(),
@@ -144,18 +154,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 10),
                       DailyhuntSettingsSection(
-                        title: 'Appearance',
+                        title: I18n.t(context, 'section_appearance'),
                         child: SegmentedButton<ThemeMode>(
-                          segments: const [
+                          segments: [
                             ButtonSegment<ThemeMode>(
                               value: ThemeMode.light,
-                              label: Text('Light'),
-                              icon: Icon(Icons.light_mode_outlined, size: 18),
+                              label: Text(I18n.t(context, 'appearance_light')),
+                              icon: const Icon(Icons.light_mode_outlined, size: 18),
                             ),
                             ButtonSegment<ThemeMode>(
                               value: ThemeMode.dark,
-                              label: Text('Dark'),
-                              icon: Icon(Icons.dark_mode_outlined, size: 18),
+                              label: Text(I18n.t(context, 'appearance_dark')),
+                              icon: const Icon(Icons.dark_mode_outlined, size: 18),
                             ),
                           ],
                           selected: {
@@ -181,15 +191,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 10),
                       DailyhuntSettingsSection(
-                        title: 'Interests',
+                        title: I18n.t(context, 'section_interests'),
                         child: Wrap(
                           spacing: 8,
                           runSpacing: 8,
-                          children: _allInterests.map((interest) {
-                            final selected = _interests.contains(interest);
+                          children: _interestSlugs.map((slug) {
+                            final selected = _interests.contains(slug);
                             return FilterChip(
                               label: Text(
-                                interest,
+                                I18n.t(context, 'cat_$slug'),
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 13,
@@ -200,9 +210,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               onSelected: (_) {
                                 setState(() {
                                   if (selected) {
-                                    _interests.remove(interest);
+                                    _interests.remove(slug);
                                   } else {
-                                    _interests.add(interest);
+                                    _interests.add(slug);
                                   }
                                 });
                               },
@@ -223,26 +233,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 10),
                       DailyhuntSettingsSection(
-                        title: 'Notifications',
+                        title: I18n.t(context, 'section_notifications'),
                         child: Column(
                           children: [
                             SwitchListTile.adaptive(
                               contentPadding: EdgeInsets.zero,
-                              title: const Text('Breaking news alerts'),
+                              title: Text(I18n.t(context, 'notif_breaking')),
                               value: _breakingAlerts,
                               activeThumbColor: DailyhuntTheme.accentGreen,
                               onChanged: (v) => setState(() => _breakingAlerts = v),
                             ),
                             SwitchListTile.adaptive(
                               contentPadding: EdgeInsets.zero,
-                              title: const Text('Daily digest'),
+                              title: Text(I18n.t(context, 'notif_daily_digest')),
                               value: _dailyDigest,
                               activeThumbColor: DailyhuntTheme.accentGreen,
                               onChanged: (v) => setState(() => _dailyDigest = v),
                             ),
                             SwitchListTile.adaptive(
                               contentPadding: EdgeInsets.zero,
-                              title: const Text('Recommended stories'),
+                              title: Text(I18n.t(context, 'notif_recommended')),
                               value: _recommendedAlerts,
                               activeThumbColor: DailyhuntTheme.accentGreen,
                               onChanged: (v) =>
@@ -253,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 10),
                       DailyhuntSettingsSection(
-                        title: 'Library',
+                        title: I18n.t(context, 'section_library'),
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
@@ -261,12 +271,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             color: DailyhuntTheme.accentGreen,
                             size: 26,
                           ),
-                          title: const Text(
-                            'Saved articles',
-                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                          title: Text(
+                            I18n.t(context, 'library_saved_articles'),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
                           ),
                           subtitle: Text(
-                            'Everything you bookmarked',
+                            I18n.t(context, 'library_saved_subtitle'),
                             style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.55),
                               fontSize: 13,
@@ -281,7 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 10),
                       DailyhuntSettingsSection(
-                        title: 'Storage',
+                        title: I18n.t(context, 'section_storage'),
                         child: ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
@@ -289,12 +302,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             color: DailyhuntTheme.accentGreen,
                             size: 24,
                           ),
-                          title: const Text(
-                            'Clear translated cache',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                          title: Text(
+                            I18n.t(context, 'storage_clear_translated'),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           subtitle: Text(
-                            'Removes locally saved translated story text.',
+                            I18n.t(context, 'storage_clear_translated_sub'),
                             style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.55),
                               fontSize: 13,
@@ -309,11 +322,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             await prefs.remove(_translatedCacheKey);
                             if (!context.mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Translated cache cleared'),
+                              SnackBar(
+                                content: Text(
+                                  I18n.t(context, 'snack_translated_cleared'),
+                                ),
                                 behavior: SnackBarBehavior.floating,
                                 width: 320,
-                                duration: Duration(milliseconds: 1200),
+                                duration: const Duration(milliseconds: 1200),
                               ),
                             );
                           },
@@ -322,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 18),
                       if (user == null)
                         DailyhuntPrimaryButton(
-                          label: 'Sign in',
+                          label: I18n.t(context, 'action_signin'),
                           icon: Icons.login_rounded,
                           onPressed: () => context.push('/login'),
                         )
@@ -336,7 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           },
                           icon: Icon(Icons.logout_rounded, color: cs.error),
                           label: Text(
-                            'Sign out',
+                            I18n.t(context, 'action_signout'),
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
                               color: cs.error,
@@ -457,7 +472,7 @@ class _GuestHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Guest',
+                    I18n.t(context, 'profile_guest_title'),
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                           color: colorScheme.onSurface,
@@ -465,7 +480,7 @@ class _GuestHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Sign in to sync preferences and manage your account.',
+                    I18n.t(context, 'profile_guest_subtitle'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSurface.withValues(alpha: 0.55),
                           height: 1.35,

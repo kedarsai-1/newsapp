@@ -114,7 +114,7 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      timeago.format(post.createdAt),
+                      timeago.format(post.displayTime),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.52),
                             fontWeight: FontWeight.w600,

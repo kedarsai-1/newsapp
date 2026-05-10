@@ -8,6 +8,7 @@ import '../../providers/news_provider.dart';
 import '../../providers/shorts_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../utils/i18n.dart';
 import '../../widgets/news_shimmer_loader.dart';
 import '../../widgets/premium_news_ui.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
@@ -26,6 +27,8 @@ class ShortsNewsScreen extends StatefulWidget {
 class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
   late final PageController _pageController;
   late final NewsProvider _news;
+  late final ShortsProvider _shorts;
+  bool _wasShortsRefreshing = false;
   int _index = 0;
   final Map<String, bool> _liked = {};
   final Map<String, bool> _saved = {};
@@ -36,7 +39,9 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
   void initState() {
     super.initState();
     _news = context.read<NewsProvider>();
+    _shorts = context.read<ShortsProvider>();
     _news.addListener(_onNewsLanguageChanged);
+    _shorts.addListener(_onShortsRefreshTick);
     _pageController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -50,10 +55,24 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
 
   void _onNewsLanguageChanged() {
     final lang = _apiLanguage(_news);
-    final shorts = context.read<ShortsProvider>();
-    if (!shorts.languageMatches(lang)) {
-      shorts.refresh(language: lang);
+    if (!_shorts.languageMatches(lang)) {
+      _shorts.refresh(language: lang);
     }
+  }
+
+  /// After each RSS reload, show the newest story first (page 0).
+  void _onShortsRefreshTick() {
+    final s = _shorts;
+    if (_wasShortsRefreshing && !s.refreshing && s.posts.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(0);
+        }
+        setState(() => _index = 0);
+      });
+    }
+    _wasShortsRefreshing = s.refreshing;
   }
 
   String? _apiLanguage(NewsProvider news) {
@@ -64,6 +83,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
   @override
   void dispose() {
     _news.removeListener(_onNewsLanguageChanged);
+    _shorts.removeListener(_onShortsRefreshTick);
     _pageController.dispose();
     super.dispose();
   }
@@ -183,7 +203,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () => shorts.refresh(language: lang),
-                  child: const Text('Try again'),
+                  child: Text(I18n.t(context, 'action_try_again')),
                 ),
               ],
             ),
@@ -213,13 +233,13 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'No RSS video shorts yet',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                Text(
+                  I18n.t(context, 'shorts_empty_title'),
+                  style: const TextStyle(color: Colors.white70, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Shorts shows RSS items that include a video file. Try again after ingestion.',
+                  I18n.t(context, 'shorts_empty_subtitle'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.55),
@@ -229,7 +249,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
                 const SizedBox(height: 12),
                 TextButton(
                   onPressed: () => shorts.refresh(language: lang),
-                  child: const Text('Refresh'),
+                  child: Text(I18n.t(context, 'action_refresh')),
                 ),
               ],
             ),

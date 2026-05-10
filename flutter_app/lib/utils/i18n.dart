@@ -136,6 +136,39 @@ class I18n {
       'cat_education': 'Education',
       'categories_subtitle':
           'Pick a topic to refresh your feed with those stories.',
+
+      // Profile / Settings
+      'profile_title': 'Profile',
+      'profile_privacy_tooltip': 'Privacy policy',
+      'profile_guest_title': 'Guest',
+      'profile_guest_subtitle':
+          'Sign in to sync preferences and manage your account.',
+      'section_language': 'Language',
+      'section_interests': 'Interests',
+      'section_notifications': 'Notifications',
+      'section_library': 'Library',
+      'section_storage': 'Storage',
+      'appearance_light': 'Light',
+      'appearance_dark': 'Dark',
+      'lang_telugu': 'Telugu',
+      'lang_hindi': 'Hindi',
+      'lang_english': 'English',
+      'lang_all': 'All languages',
+      'notif_breaking': 'Breaking news alerts',
+      'notif_daily_digest': 'Daily digest',
+      'notif_recommended': 'Recommended stories',
+      'library_saved_articles': 'Saved articles',
+      'library_saved_subtitle': 'Everything you bookmarked',
+      'storage_clear_translated': 'Clear translated cache',
+      'storage_clear_translated_sub':
+          'Removes locally saved translated story text.',
+      'snack_translated_cleared': 'Translated cache cleared',
+
+      // Shorts
+      'shorts_empty_title': 'No shorts yet',
+      'shorts_empty_subtitle':
+          'New stories appear here after every refresh. Try again in a moment.',
+      'action_refresh': 'Refresh',
     },
     'hi': {
       'tab_feed': 'फ़ीड',
@@ -258,6 +291,39 @@ class I18n {
       'cat_education': 'शिक्षा',
       'categories_subtitle':
           'अपनी फ़ीड को उन्हीं कहानियों के साथ ताज़ा करने के लिए विषय चुनें।',
+
+      // Profile / Settings
+      'profile_title': 'प्रोफ़ाइल',
+      'profile_privacy_tooltip': 'प्राइवेसी पॉलिसी',
+      'profile_guest_title': 'गेस्ट',
+      'profile_guest_subtitle':
+          'प्रेफरेंस सिंक करने और अकाउंट मैनेज करने के लिए साइन इन करें।',
+      'section_language': 'भाषा',
+      'section_interests': 'रुचियाँ',
+      'section_notifications': 'नोटिफिकेशन',
+      'section_library': 'लाइब्रेरी',
+      'section_storage': 'स्टोरेज',
+      'appearance_light': 'लाइट',
+      'appearance_dark': 'डार्क',
+      'lang_telugu': 'तेलुगु',
+      'lang_hindi': 'हिन्दी',
+      'lang_english': 'अंग्रेज़ी',
+      'lang_all': 'सभी भाषाएँ',
+      'notif_breaking': 'ब्रेकिंग न्यूज़ अलर्ट',
+      'notif_daily_digest': 'डेली डाइजेस्ट',
+      'notif_recommended': 'रेकमेंडेड स्टोरीज़',
+      'library_saved_articles': 'सेव की गई स्टोरीज़',
+      'library_saved_subtitle': 'आपने जो भी बुकमार्क किया है',
+      'storage_clear_translated': 'अनुवादित कैश साफ़ करें',
+      'storage_clear_translated_sub':
+          'लोकल रूप से सेव किए अनुवादित टेक्स्ट को हटाता है।',
+      'snack_translated_cleared': 'अनुवादित कैश साफ़ हो गया',
+
+      // Shorts
+      'shorts_empty_title': 'अभी कोई शॉर्ट्स नहीं',
+      'shorts_empty_subtitle':
+          'हर रिफ्रेश के बाद नई स्टोरीज़ यहाँ दिखेंगी। थोड़ी देर बाद फिर देखें।',
+      'action_refresh': 'रिफ्रेश',
     },
     'te': {
       'tab_feed': 'ఫీడ్',
@@ -380,6 +446,39 @@ class I18n {
       'cat_education': 'విద్య',
       'categories_subtitle':
           'మీ ఫీడ్‌ను ఆ విషయాల కథనాలతో రిఫ్రెష్ చేసుకోండి.',
+
+      // Profile / Settings
+      'profile_title': 'ప్రొఫైల్',
+      'profile_privacy_tooltip': 'గోప్యతా విధానం',
+      'profile_guest_title': 'అతిథి',
+      'profile_guest_subtitle':
+          'మీ ప్రాధాన్యతలను సింక్ చేయడానికి, ఖాతాను నిర్వహించడానికి సైన్ ఇన్ చేయండి.',
+      'section_language': 'భాష',
+      'section_interests': 'ఆసక్తులు',
+      'section_notifications': 'నోటిఫికేషన్లు',
+      'section_library': 'లైబ్రరీ',
+      'section_storage': 'స్టోరేజ్',
+      'appearance_light': 'లైట్',
+      'appearance_dark': 'డార్క్',
+      'lang_telugu': 'తెలుగు',
+      'lang_hindi': 'హిందీ',
+      'lang_english': 'ఇంగ్లీష్',
+      'lang_all': 'అన్ని భాషలు',
+      'notif_breaking': 'బ్రేకింగ్ న్యూస్ అలర్ట్‌లు',
+      'notif_daily_digest': 'రోజువారీ డైజెస్ట్',
+      'notif_recommended': 'సిఫార్సు చేసిన కథనాలు',
+      'library_saved_articles': 'సేవ్ చేసిన కథనాలు',
+      'library_saved_subtitle': 'మీరు బుక్‌మార్క్ చేసినవన్నీ',
+      'storage_clear_translated': 'అనువదించిన క్యాష్ క్లియర్ చేయండి',
+      'storage_clear_translated_sub':
+          'స్థానికంగా సేవ్ చేసిన అనువదించిన టెక్స్ట్‌ను తొలగిస్తుంది.',
+      'snack_translated_cleared': 'అనువదించిన క్యాష్ క్లియర్ అయింది',
+
+      // Shorts
+      'shorts_empty_title': 'ఇంకా షార్ట్స్ లేవు',
+      'shorts_empty_subtitle':
+          'ప్రతి రిఫ్రెష్ తర్వాత కొత్త కథనాలు ఇక్కడ కనిపిస్తాయి. కొంతసేపటికి మళ్లీ చూడండి.',
+      'action_refresh': 'రిఫ్రెష్',
     },
     // Treat "all" as English for UI labels
     'all': {},

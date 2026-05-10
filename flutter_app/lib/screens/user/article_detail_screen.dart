@@ -653,7 +653,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 ),
                               ]),
                             Text(
-                              timeago.format(post.createdAt),
+                              timeago.format(post.displayTime),
                               style:
                                   context.metaText.copyWith(color: p.textHint),
                             ),
@@ -921,6 +921,8 @@ extension NewPostMap on NewsPost {
         'sourceUrl': sourceUrl,
         'sourceName': sourceName,
         'language': language,
+        if (sourcePublishedAt != null)
+          'sourcePublishedAt': sourcePublishedAt!.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
       };
 }

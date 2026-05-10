@@ -61,6 +61,15 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
+  void _scrollFeedToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+    });
+  }
+
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
@@ -148,6 +157,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final slug = _kFeedTabs[index].$2;
     if (slug == null) {
       await news.selectCategory(null);
+      _scrollFeedToTop();
       return;
     }
     Category? match;
@@ -171,6 +181,7 @@ class _FeedScreenState extends State<FeedScreen> {
       return;
     }
     await news.selectCategory(match.id);
+    _scrollFeedToTop();
   }
 
   Future<void> _toggleLike(NewsPost post) async {
@@ -278,7 +289,10 @@ class _FeedScreenState extends State<FeedScreen> {
 
     return RefreshIndicator(
       color: DailyhuntTheme.accentGreen,
-      onRefresh: provider.refresh,
+      onRefresh: () async {
+        await provider.refresh();
+        _scrollFeedToTop();
+      },
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(

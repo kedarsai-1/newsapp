@@ -40,7 +40,7 @@ class DailyhuntFeedArticleCard extends StatelessWidget {
     final src = (post.sourceName?.trim().isNotEmpty == true)
         ? post.sourceName!.trim()
         : (post.category?.name ?? 'News');
-    return '$src · ${timeago.format(post.createdAt)}';
+    return '$src · ${timeago.format(post.displayTime)}';
   }
 
   @override

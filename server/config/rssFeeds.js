@@ -173,7 +173,10 @@ function getRssFeedsFromEnv() {
 }
 
 function getRssFeeds() {
-  return getRssFeedsFromEnv() || defaultRssFeeds;
+  const fromEnv = getRssFeedsFromEnv();
+  // Empty array from RSS_FEEDS_JSON='[]' would otherwise silence all RSS ingestion.
+  if (Array.isArray(fromEnv) && fromEnv.length > 0) return fromEnv;
+  return defaultRssFeeds;
 }
 
 module.exports = { getRssFeeds };

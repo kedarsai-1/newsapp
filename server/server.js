@@ -78,7 +78,11 @@ mongoose.connect(process.env.MONGO_URI)
     async function runScheduledIngestion(triggeredBy) {
       console.log(`[scraper] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
       const result = await runIngestion({ triggeredBy });
-      if (!result.success && !result.skipped) {
+      if (result.skipped) {
+        console.log(`[scraper] skipped (${triggeredBy}): ${result.message || 'ingestion already running'}`);
+        return;
+      }
+      if (!result.success) {
         console.error('[scraper] run failed:', result.error || result.message);
       } else {
         const s = result.stats || {};

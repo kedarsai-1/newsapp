@@ -321,109 +321,117 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
   try {
     const useGNews = Boolean(process.env.GNEWS_API_KEY?.trim());
     const useNewsApi = Boolean(process.env.NEWSAPI_KEY?.trim());
-    if (!useGNews && !useNewsApi) {
+    const rssEnabled = process.env.RSS_ENABLED !== 'false';
+
+    if (!useGNews && !useNewsApi && !rssEnabled) {
       const msg =
-        'Set GNEWS_API_KEY (recommended) or NEWSAPI_KEY in the server environment.';
+        'Set GNEWS_API_KEY or NEWSAPI_KEY, or leave RSS enabled (RSS_ENABLED not false).';
       ingestState.lastError = msg;
       stats.endedAt = new Date();
       return { success: false, error: msg, stats };
     }
 
-    const fetchItems = useGNews ? fetchGNewsItems : fetchNewsApiItems;
-    const providerLabel = useGNews ? 'GNews' : 'NewsAPI';
+    const reporter = await ensureSystemReporter();
 
-    // Same language list for both providers so Telugu/Hindi feeds fill when using NewsAPI too (where supported).
-    const ingestLanguages = getGNewsIngestLanguages();
-    if (!useGNews) {
-      console.log(
-        '[ingest] NewsAPI: fetching en, te, hi per plan (unsupported langs return 0 articles). '
-          + 'Prefer GNEWS_API_KEY for reliable regional headlines.',
+    if (useGNews || useNewsApi) {
+      const fetchItems = useGNews ? fetchGNewsItems : fetchNewsApiItems;
+      const providerLabel = useGNews ? 'GNews' : 'NewsAPI';
+
+      // Same language list for both providers so Telugu/Hindi feeds fill when using NewsAPI too (where supported).
+      const ingestLanguages = getGNewsIngestLanguages();
+      if (!useGNews) {
+        console.log(
+          '[ingest] NewsAPI: fetching en, te, hi per plan (unsupported langs return 0 articles). '
+            + 'Prefer GNEWS_API_KEY for reliable regional headlines.',
+        );
+      }
+
+      const plans = getIngestPlans();
+      const perRequest = Math.min(
+        100,
+        Math.max(
+          4,
+          Number(
+            process.env.GNEWS_ITEMS_PER_CATEGORY
+              || process.env.NEWSAPI_ITEMS_PER_CATEGORY
+              || Math.ceil(36 / Math.max(plans.length, 1)),
+          ),
+        ),
+      );
+
+      for (const ingestLang of ingestLanguages) {
+        for (const plan of plans) {
+          let category;
+          try {
+            category = await getCategoryBySlug(plan.categorySlug);
+          } catch {
+            stats.sourceRuns.push({
+              source: `${providerLabel}:${ingestLang}:${plan.categorySlug}`,
+              success: false,
+              error: `Category slug "${plan.categorySlug}" not found; seed categories.`,
+            });
+            continue;
+          }
+
+          const apiLabel = plan.newsApiCategory ?? 'mixed';
+          try {
+            const items = await fetchItems({
+              newsApiCategory: plan.newsApiCategory,
+              pageSize: perRequest,
+              language: ingestLang,
+            });
+            stats.fetched += items.length;
+
+            for (const item of items) {
+              if (!item.title) {
+                stats.failed += 1;
+                continue;
+              }
+              if (await isDuplicate(item)) {
+                stats.duplicates += 1;
+                continue;
+              }
+
+              // Re-host external thumbnails on Cloudinary for reliability (no hotlink blocking).
+              let postFields = item;
+              if (item.mediaUrl) {
+                const reh = await rehostExternalImageToCloudinary(item.mediaUrl, {
+                  referer: item.sourceUrl || null,
+                });
+                if (reh.ok && reh.url) {
+                  postFields = { ...item, mediaUrl: reh.url };
+                }
+              }
+
+              const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
+              const { apiSourceName, ...postDocFields } = postFields;
+              await NewsPost.create(toPostDoc(postDocFields, reporter._id, category._id, label));
+              stats.inserted += 1;
+            }
+
+            stats.sourceRuns.push({
+              source: `${providerLabel}:${ingestLang}:${plan.categorySlug}/${apiLabel}`,
+              mode: 'api',
+              count: items.length,
+              success: true,
+            });
+          } catch (error) {
+            stats.failed += 1;
+            stats.sourceRuns.push({
+              source: `${providerLabel}:${ingestLang}:${plan.categorySlug}/${apiLabel}`,
+              success: false,
+              error: error.message,
+            });
+          }
+        }
+      }
+    } else {
+      console.warn(
+        '[ingest] No GNEWS_API_KEY or NEWSAPI_KEY — running RSS-only ingestion.',
       );
     }
 
-    const reporter = await ensureSystemReporter();
-    const plans = getIngestPlans();
-    const perRequest = Math.min(
-      100,
-      Math.max(
-        4,
-        Number(
-          process.env.GNEWS_ITEMS_PER_CATEGORY
-            || process.env.NEWSAPI_ITEMS_PER_CATEGORY
-            || Math.ceil(36 / Math.max(plans.length, 1)),
-        ),
-      ),
-    );
-
-    for (const ingestLang of ingestLanguages) {
-      for (const plan of plans) {
-        let category;
-        try {
-          category = await getCategoryBySlug(plan.categorySlug);
-        } catch {
-          stats.sourceRuns.push({
-            source: `${providerLabel}:${ingestLang}:${plan.categorySlug}`,
-            success: false,
-            error: `Category slug "${plan.categorySlug}" not found; seed categories.`,
-          });
-          continue;
-        }
-
-        const apiLabel = plan.newsApiCategory ?? 'mixed';
-        try {
-          const items = await fetchItems({
-            newsApiCategory: plan.newsApiCategory,
-            pageSize: perRequest,
-            language: ingestLang,
-          });
-          stats.fetched += items.length;
-
-          for (const item of items) {
-            if (!item.title) {
-              stats.failed += 1;
-              continue;
-            }
-            if (await isDuplicate(item)) {
-              stats.duplicates += 1;
-              continue;
-            }
-
-          // Re-host external thumbnails on Cloudinary for reliability (no hotlink blocking).
-          let postFields = item;
-          if (item.mediaUrl) {
-            const reh = await rehostExternalImageToCloudinary(item.mediaUrl, {
-              referer: item.sourceUrl || null,
-            });
-            if (reh.ok && reh.url) {
-              postFields = { ...item, mediaUrl: reh.url };
-            }
-          }
-
-            const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
-          const { apiSourceName, ...postDocFields } = postFields;
-          await NewsPost.create(toPostDoc(postDocFields, reporter._id, category._id, label));
-            stats.inserted += 1;
-          }
-
-          stats.sourceRuns.push({
-            source: `${providerLabel}:${ingestLang}:${plan.categorySlug}/${apiLabel}`,
-            mode: 'api',
-            count: items.length,
-            success: true,
-          });
-        } catch (error) {
-          stats.failed += 1;
-          stats.sourceRuns.push({
-            source: `${providerLabel}:${ingestLang}:${plan.categorySlug}/${apiLabel}`,
-            success: false,
-            error: error.message,
-          });
-        }
-      }
-    }
-
     // RSS ingestion (second source): reliable thumbnails + extra coverage.
-    const rssEnabled = process.env.RSS_ENABLED !== 'false';
     if (rssEnabled) {
       const feeds = getRssFeeds();
       for (const feed of feeds) {
@@ -674,6 +682,14 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     }
 
     stats.endedAt = new Date();
+    if (stats.fetched === 0 && stats.inserted === 0) {
+      console.warn(
+        '[ingest] no articles fetched or inserted this run — typical causes: '
+          + 'RSS_ENABLED=false, RSS_FEEDS_JSON=[] (now falls back to defaults), '
+          + 'outbound RSS blocked on host, empty GNews/NewsAPI responses, '
+          + 'or all items duplicates vs DB.',
+      );
+    }
     ingestState.lastSuccessAt = stats.endedAt;
     ingestState.lastSummary = stats;
     return { success: true, stats };

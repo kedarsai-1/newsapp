@@ -710,7 +710,6 @@ class _NewsReelCardState extends State<_NewsReelCard>
                       ? Icons.bookmark_rounded
                       : Icons.bookmark_border_rounded,
                   label: 'Save',
-                  color: _saved ? p.primary : null,
                   labelColor: (isDark ? Colors.white : Colors.black)
                       .withValues(alpha: 0.9),
                   panelColor: isDark

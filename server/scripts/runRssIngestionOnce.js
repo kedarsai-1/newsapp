@@ -220,7 +220,7 @@ async function main() {
 
         if (
           !postFields.mediaUrl
-          && feed.ogImageFallback
+          && feed.ogImageFallback !== false
           && process.env.RSS_OG_FALLBACK !== 'false'
           && postFields.sourceUrl
         ) {

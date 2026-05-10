@@ -551,10 +551,13 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               } catch { /* ignore */ }
             }
 
-            // Some RSS (notably Google News RSS) has no enclosure/media tags. Try og:image from the article page.
+            // Some RSS (notably Google News RSS, but also several publisher feeds) ship without
+            // enclosure/media tags. Always try og:image from the article page as a safety net so
+            // every card has a real image — feeds can opt out by setting `ogImageFallback: false`,
+            // and the global `RSS_OG_FALLBACK=false` env still disables it everywhere.
             if (
               !postFields.mediaUrl
-              && feed.ogImageFallback
+              && feed.ogImageFallback !== false
               && process.env.RSS_OG_FALLBACK !== 'false'
               && postFields.sourceUrl
             ) {

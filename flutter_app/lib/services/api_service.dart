@@ -219,6 +219,7 @@ class ApiService {
     bool breaking = false,
     int? days,
     List<String>? sourceTypes,
+    bool hasVideo = false,
   }) async {
     final params = {
       'page': page.toString(),
@@ -242,6 +243,7 @@ class ApiService {
             .map((s) => s.trim().toLowerCase())
             .where((s) => s.isNotEmpty)
             .join(','),
+      if (hasVideo) 'hasVideo': 'true',
     };
     final uri = Uri.parse('${AppConstants.baseUrl}/news/feed')
         .replace(queryParameters: params);
@@ -493,6 +495,12 @@ class ApiService {
   /// Full JSON from GET /categories (for error messages).
   static Future<Map<String, dynamic>> getCategoriesJson() async =>
       _get('/categories');
+
+  /// GET /categories/by-slug/:slug — single category when list cache misses.
+  static Future<Map<String, dynamic>> getCategoryBySlug(String slug) async {
+    final encoded = Uri.encodeComponent(slug.trim());
+    return _get('/categories/by-slug/$encoded');
+  }
 
   static Future<List<Category>> getCategories() async {
     final data = await _get('/categories');

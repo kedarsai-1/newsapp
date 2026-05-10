@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'services/auth_provider.dart';
 import 'providers/news_provider.dart';
+import 'providers/shorts_provider.dart';
 import 'providers/reporter_provider.dart';
 import 'providers/admin_provider.dart';
 import 'constants.dart';
@@ -298,6 +299,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
         ChangeNotifierProvider(create: (_) => NewsProvider()..init()),
+        ChangeNotifierProvider(create: (_) => ShortsProvider()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],

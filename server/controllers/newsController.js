@@ -82,9 +82,20 @@ const getFeed = async (req, res) => {
       featured,
       days,
       sourceTypes,
+      hasVideo,
     } = req.query;
 
     const query = { status: 'approved' };
+
+    // Shorts / video feeds: only posts that include at least one video asset.
+    if (String(hasVideo || '').toLowerCase() === 'true') {
+      query.media = {
+        $elemMatch: {
+          type: 'video',
+          url: { $exists: true, $nin: [null, ''] },
+        },
+      };
+    }
     if (category) query.category = category;
     if (city) query['location.city'] = new RegExp(city, 'i');
     if (constituency && String(constituency).trim().toLowerCase() !== 'all') {

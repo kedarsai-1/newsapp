@@ -223,6 +223,13 @@ class NewsPost {
     }
     return null;
   }
+
+  MediaItem? get firstVideo {
+    for (final m in media) {
+      if (m.isVideo && m.url.trim().isNotEmpty) return m;
+    }
+    return null;
+  }
 }
 
 // models/comment.dart

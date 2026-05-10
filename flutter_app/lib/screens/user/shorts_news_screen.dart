@@ -5,14 +5,15 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
+import '../../providers/shorts_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
 import '../../widgets/news_shimmer_loader.dart';
 import '../../widgets/premium_news_ui.dart';
+import '../../widgets/shorts/dailyhunt_shorts_page.dart';
 import '../../widgets/shorts/shorts_chrome.dart';
-import '../../widgets/shorts/shorts_reel_page.dart';
 
-/// Vertical Shorts-style reel (Dailyhunt-inspired): full-screen cards + glass actions.
+/// RSS-backed vertical shorts: [PageView.builder], Dailyhunt-style layout, light motion.
 class ShortsNewsScreen extends StatefulWidget {
   const ShortsNewsScreen({super.key});
 
@@ -24,6 +25,7 @@ class ShortsNewsScreen extends StatefulWidget {
 
 class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
   late final PageController _pageController;
+  late final NewsProvider _news;
   int _index = 0;
   final Map<String, bool> _liked = {};
   final Map<String, bool> _saved = {};
@@ -33,57 +35,45 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
   @override
   void initState() {
     super.initState();
+    _news = context.read<NewsProvider>();
+    _news.addListener(_onNewsLanguageChanged);
     _pageController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final news = context.read<NewsProvider>();
-      if (news.posts.isEmpty && !news.refreshing) news.refresh();
+      if (!mounted) return;
+      final lang = _apiLanguage(_news);
+      final shorts = context.read<ShortsProvider>();
+      if (!shorts.hasContentFor(lang)) {
+        shorts.refresh(language: lang);
+      }
     });
+  }
+
+  void _onNewsLanguageChanged() {
+    final lang = _apiLanguage(_news);
+    final shorts = context.read<ShortsProvider>();
+    if (!shorts.languageMatches(lang)) {
+      shorts.refresh(language: lang);
+    }
+  }
+
+  String? _apiLanguage(NewsProvider news) {
+    final l = news.selectedLanguage;
+    return l == 'all' ? null : l;
   }
 
   @override
   void dispose() {
+    _news.removeListener(_onNewsLanguageChanged);
     _pageController.dispose();
     super.dispose();
   }
 
-  bool _isDemoPost(NewsPost p) => p.id.startsWith('demo-shorts-');
-
-  List<NewsPost> _effectivePosts(NewsProvider news) {
-    if (news.posts.isNotEmpty) return news.posts;
-    return _demoPosts();
-  }
-
-  List<NewsPost> _demoPosts() {
-    return List<NewsPost>.generate(8, (i) {
-      final seed = 'shorts_demo_$i';
-      return NewsPost(
-        id: 'demo-shorts-$i',
-        title: i.isEven
-            ? 'షార్ట్స్ డెమో: నిలువుగా స్వైప్ చేసి తదుపరి కథనానికి వెళ్లండి'
-            : 'Shorts demo: swipe up for the next story in your feed',
-        body: 'Body text for preview card ${i + 1}.',
-        summary:
-            'Two or three lines of summary copy so the layout matches production Shorts cards with readable contrast over imagery.',
-        status: 'published',
-        createdAt: DateTime.now().subtract(Duration(minutes: i * 7 + 2)),
-        sourceName: i % 2 == 0 ? 'Local Bureau' : 'Wire Desk',
-        media: [
-          MediaItem(
-            id: 'm-$i',
-            type: 'image',
-            url: 'https://picsum.photos/seed/$seed/1080/1920',
-          ),
-        ],
-      );
-    });
-  }
-
-  void _maybeLoadMore(int index, NewsProvider news) {
-    if (index >= news.posts.length - 2 &&
-        news.posts.isNotEmpty &&
-        news.hasMore &&
-        !news.loading) {
-      news.loadMore();
+  void _maybeLoadMore(int index, ShortsProvider shorts, String? lang) {
+    if (index >= shorts.posts.length - 2 &&
+        shorts.posts.isNotEmpty &&
+        shorts.hasMore &&
+        !shorts.loading) {
+      shorts.loadMore(language: lang);
     }
   }
 
@@ -91,8 +81,6 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
     final id = post.id;
     final prev = _liked[id] ?? false;
     setState(() => _liked[id] = !prev);
-
-    if (_isDemoPost(post)) return;
 
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
@@ -116,8 +104,6 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
     final id = post.id;
     final prev = _saved[id] ?? false;
     setState(() => _saved[id] = !prev);
-
-    if (_isDemoPost(post)) return;
 
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
@@ -168,25 +154,19 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
   }
 
   void _openArticle(NewsPost post) {
-    if (_isDemoPost(post)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sign in and load the feed for full articles'),
-          behavior: SnackBarBehavior.floating,
-          width: 320,
-        ),
-      );
-      return;
-    }
     context.push('/article/${post.id}');
   }
 
   @override
   Widget build(BuildContext context) {
-    final news = context.watch<NewsProvider>();
-    final posts = _effectivePosts(news);
+    final shorts = context.watch<ShortsProvider>();
+    final lang = _apiLanguage(context.watch<NewsProvider>());
+    final posts = shorts.posts;
 
-    if (news.error != null && news.posts.isEmpty) {
+    final bottomPad =
+        MediaQuery.paddingOf(context).bottom + ShortsNewsScreen._navBarHeight + 20;
+
+    if (shorts.error != null && posts.isEmpty && !shorts.refreshing) {
       return Scaffold(
         backgroundColor: Colors.black,
         body: Center(
@@ -196,14 +176,14 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  news.error!,
+                  shorts.error!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: () => news.refresh(),
-                  child: const Text('Retry'),
+                  onPressed: () => shorts.refresh(language: lang),
+                  child: const Text('Try again'),
                 ),
               ],
             ),
@@ -212,7 +192,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
       );
     }
 
-    if (news.posts.isEmpty && news.refreshing) {
+    if (posts.isEmpty && shorts.refreshing) {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
@@ -225,19 +205,38 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
     }
 
     if (posts.isEmpty) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text(
-            'No stories yet',
-            style: TextStyle(color: Colors.white70),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'No RSS video shorts yet',
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Shorts shows RSS items that include a video file. Try again after ingestion.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.55),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () => shorts.refresh(language: lang),
+                  child: const Text('Refresh'),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
-
-    final bottomPad =
-        MediaQuery.of(context).padding.bottom + ShortsNewsScreen._navBarHeight + 12;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -247,28 +246,28 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
           PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,
-            physics: const BouncingScrollPhysics(),
             allowImplicitScrolling: false,
             itemCount: posts.length,
             onPageChanged: (i) {
               setState(() => _index = i);
-              _maybeLoadMore(i, news);
+              _maybeLoadMore(i, shorts, lang);
             },
             itemBuilder: (context, i) {
               final post = posts[i];
               return RepaintBoundary(
-                child: ShortsReelPage(
+                child: DailyhuntShortsPage(
                   post: post,
-                  pageController: _pageController,
-                  pageIndex: i,
+                  isActive: i == _index,
                   liked: _liked[post.id] ?? false,
                   saved: _saved[post.id] ?? false,
+                  translating: _translating[post.id] ?? false,
                   translatedSummary: _translated[post.id],
                   onLike: () => _toggleLike(post),
                   onSave: () => _toggleSave(post),
                   onShare: () => _share(post),
                   onTranslate: () => _translate(post),
                   onOpenArticle: () => _openArticle(post),
+                  bottomContentPadding: bottomPad,
                 ),
               );
             },
@@ -277,17 +276,35 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: ShortsTopBar(),
+            child: DailyhuntShortsTopBar(),
           ),
           Positioned(
-            left: 16,
-            right: 16,
-            bottom: bottomPad,
-            child: StoryProgressDots(
+            left: 14,
+            right: 14,
+            bottom: MediaQuery.paddingOf(context).bottom + ShortsNewsScreen._navBarHeight + 6,
+            child: ShortsFeedProgress(
               total: posts.length,
               index: _index,
             ),
           ),
+          if (shorts.loading && posts.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.paddingOf(context).bottom + 72,
+              child: const SafeArea(
+                child: Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white54,
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

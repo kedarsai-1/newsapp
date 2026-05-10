@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
+import '../../services/api_service.dart';
 import '../../theme/dailyhunt_theme.dart';
 import '../../utils/i18n.dart';
 import '../../widgets/categories/dailyhunt_category_card.dart';
@@ -25,9 +26,9 @@ class CategoriesScreen extends StatelessWidget {
   ];
 
   static String? _matchCategoryId(String slug, List<Category> api) {
-    final s = slug.toLowerCase();
+    final s = slug.toLowerCase().trim();
     for (final c in api) {
-      if (c.slug.toLowerCase() == s) return c.id;
+      if (c.slug.toLowerCase().trim() == s) return c.id;
     }
     return null;
   }
@@ -45,12 +46,37 @@ class CategoriesScreen extends StatelessWidget {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     final news = context.read<NewsProvider>();
-    final id = _matchCategoryId(slug, news.categories);
+
+    String? id = _matchCategoryId(slug, news.categories);
+
     if (id == null || id.isEmpty) {
+      await news.loadCategories();
+      id = _matchCategoryId(slug, news.categories);
+    }
+
+    if (id == null || id.isEmpty) {
+      final data = await ApiService.getCategoryBySlug(slug);
+      if (data['success'] == true && data['category'] is Map) {
+        try {
+          final c = Category.fromJson(
+            Map<String, dynamic>.from(data['category'] as Map),
+          );
+          if (c.id.isNotEmpty) {
+            news.mergeCategory(c);
+            id = c.id;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (id == null || id.isEmpty) {
+      if (!context.mounted) return;
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            '“${_labelForSlug(context, slug)}” is not available on the server yet.',
+            news.categoriesError != null && news.categories.isEmpty
+                ? 'Categories could not load. Pull to refresh on Home or check the server.'
+                : '“${_labelForSlug(context, slug)}” was not found. Run npm run seed on the API or create this category.',
           ),
           behavior: SnackBarBehavior.floating,
           width: 360,
@@ -141,7 +167,7 @@ class CategoriesScreen extends StatelessWidget {
                         return DailyhuntCategoryCard(
                           title: I18n.t(context, t.i18nKey),
                           icon: t.icon,
-                          onTap: () => _openCategory(context, t.slug),
+                          onTap: () async => _openCategory(context, t.slug),
                         );
                       },
                     ),

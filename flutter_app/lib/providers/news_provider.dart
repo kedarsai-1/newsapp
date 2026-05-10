@@ -62,6 +62,23 @@ class NewsProvider extends ChangeNotifier {
 
     _prefsLoaded = true;
     notifyListeners();
+    // Prime category IDs for Browse / chips before the first full feed refresh.
+    loadCategories();
+  }
+
+  /// Insert or replace a category from slug lookups so Browse taps work offline-next.
+  void mergeCategory(Category c) {
+    if (c.id.isEmpty) return;
+    final idx = _categories.indexWhere((x) => x.id == c.id);
+    if (idx >= 0) {
+      _categories[idx] = c;
+    } else {
+      _categories.add(c);
+      _categories.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+    }
+    notifyListeners();
   }
 
   /// Call after user picks a language on the onboarding screen.

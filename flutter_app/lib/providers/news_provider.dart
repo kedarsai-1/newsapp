@@ -80,31 +80,42 @@ class NewsProvider extends ChangeNotifier {
       final data = await ApiService.getCategoriesJson();
       if (data['success'] == true && data['categories'] is List) {
         final list = data['categories'] as List;
-        final all = list
-            .map((c) => Category.fromJson(Map<String, dynamic>.from(c as Map)))
-            .toList();
-        // Keep only categories we can reliably populate/display right now.
-        const allowed = {
-          'general',
-          'politics',
-          'sports',
-          'technology',
-          'entertainment',
-          'business',
-          'health',
-          'local',
-        };
-        _categories = all.where((c) => allowed.contains(c.slug.toLowerCase())).toList()
-          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        final parsed = <Category>[];
+        for (final item in list) {
+          if (item is! Map) continue;
+          try {
+            final c = Category.fromJson(
+              Map<String, dynamic>.from(item),
+            );
+            if (c.id.isNotEmpty && c.slug.isNotEmpty) parsed.add(c);
+          } catch (_) {
+            // Skip malformed category rows from the API.
+          }
+        }
+        parsed.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+        _categories = parsed;
         if (_categories.isEmpty) {
           _categoriesError =
-              'No categories in database. On the server run: npm run seed (or redeploy API so defaults are created).';
+              'No categories returned. On the server run: npm run seed (or check MongoDB).';
         } else {
           _categoriesError = null;
         }
       } else {
         _categories = [];
-        _categoriesError = data['message']?.toString() ?? 'Could not load categories.';
+        final code = data['statusCode'];
+        final msg = data['message']?.toString().trim();
+        if (code != null &&
+            code is int &&
+            code >= 500 &&
+            (msg == null || msg.isEmpty)) {
+          _categoriesError =
+              'News server is unavailable ($code). Pull to refresh or try again shortly.';
+        } else {
+          _categoriesError =
+              (msg != null && msg.isNotEmpty) ? msg : 'Could not load categories.';
+        }
       }
     } catch (e) {
       _categories = [];

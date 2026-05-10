@@ -37,6 +37,18 @@ class User {
 }
 
 // models/category.dart
+
+String _mongoIdFromJson(dynamic value) {
+  if (value == null) return '';
+  if (value is String) return value;
+  if (value is Map) {
+    final m = Map<String, dynamic>.from(value);
+    final oid = m[r'$oid'] ?? m['oid'];
+    if (oid != null) return oid.toString();
+  }
+  return value.toString();
+}
+
 class Category {
   final String id;
   final String name;
@@ -53,11 +65,11 @@ class Category {
   });
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
-        id: json['_id'] ?? '',
-        name: json['name'] ?? '',
-        slug: json['slug'] ?? '',
-        icon: json['icon'] ?? '📰',
-        color: json['color'] ?? '#1D9E75',
+        id: _mongoIdFromJson(json['_id'] ?? json['id']),
+        name: json['name']?.toString() ?? '',
+        slug: json['slug']?.toString() ?? '',
+        icon: json['icon']?.toString() ?? '📰',
+        color: json['color']?.toString() ?? '#1D9E75',
       );
 }
 

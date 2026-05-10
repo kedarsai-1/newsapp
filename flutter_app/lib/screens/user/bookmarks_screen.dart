@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
-import '../../constants.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/news_shimmer_loader.dart';
-import '../../widgets/premium_news_ui.dart';
+import '../../widgets/saved/dailyhunt_saved_article_tile.dart';
+import '../../widgets/saved/dailyhunt_saved_list_shimmer.dart';
 
+/// Dailyhunt-style saved list: white cards, thumbnails, remove bookmark, empty states.
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
 
@@ -22,7 +21,6 @@ class BookmarksScreen extends StatefulWidget {
 class _BookmarksScreenState extends State<BookmarksScreen> {
   List<NewsPost> _bookmarks = [];
   bool _loading = true;
-  bool _gridView = false;
   String? _selectedCategoryId;
 
   @override
@@ -32,6 +30,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _loading = true);
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final guest = await ApiService.getGuestBookmarks();
@@ -56,15 +55,32 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   Future<void> _remove(NewsPost post) async {
+    final messenger = ScaffoldMessenger.of(context);
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (loggedIn) {
       final res = await ApiService.toggleBookmark(post.id);
-      if (res['success'] != true) return;
+      if (!mounted) return;
+      if (res['success'] != true) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Could not update saved'),
+            behavior: SnackBarBehavior.floating,
+            width: 360,
+          ),
+        );
+        return;
+      }
     } else {
       await ApiService.toggleGuestBookmark(post);
     }
     if (!mounted) return;
-    setState(() => _bookmarks.removeWhere((p) => p.id == post.id));
+    setState(() {
+      _bookmarks.removeWhere((p) => p.id == post.id);
+      if (_selectedCategoryId != null &&
+          _bookmarks.every((p) => p.category?.id != _selectedCategoryId)) {
+        _selectedCategoryId = null;
+      }
+    });
   }
 
   List<NewsPost> get _filtered {
@@ -76,256 +92,178 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    return PremiumScaffold(
-      safeArea: true,
-      child: RefreshIndicator(
-        color: p.primary,
-        onRefresh: _load,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Saved News',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
-                                    ?.copyWith(
-                                      color: p.textPrimary,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: -0.7,
+    final w = MediaQuery.sizeOf(context).width;
+    final horizontal = w >= 720 ? 20.0 : 14.0;
+    final bottomInset = MediaQuery.paddingOf(context).bottom + 88;
+
+    return Theme(
+      data: DailyhuntTheme.overlay(context),
+      child: Builder(
+        builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          return Scaffold(
+            backgroundColor: cs.surface,
+            body: RefreshIndicator(
+              color: DailyhuntTheme.accentGreen,
+              edgeOffset: 8,
+              onRefresh: _load,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
+                    slivers: [
+                      SliverAppBar(
+                        pinned: true,
+                        toolbarHeight: 52,
+                        backgroundColor: Colors.white,
+                        surfaceTintColor: Colors.transparent,
+                        elevation: 0,
+                        shadowColor: Colors.black.withValues(alpha: 0.06),
+                        title: Text(
+                          'Saved',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
+                          child: Text(
+                            'Articles you bookmarked appear here. Tap to read or remove.',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: cs.onSurface.withValues(alpha: 0.56),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
+                          ),
+                        ),
+                      ),
+                      if (_loading)
+                        SliverPadding(
+                          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
+                          sliver: const SliverToBoxAdapter(
+                            child: DailyhuntSavedListShimmer(itemCount: 7),
+                          ),
+                        )
+                      else if (_bookmarks.isEmpty)
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: EmptyState(
+                            icon: Icons.bookmark_border_rounded,
+                            title: 'No saved articles yet',
+                            subtitle:
+                                'Save stories from the feed or Shorts with the bookmark button.',
+                          ),
+                        )
+                      else ...[
+                        if (_distinctCategories.isNotEmpty) ...[
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const BouncingScrollPhysics(),
+                                child: Row(
+                                  children: [
+                                    _SavedFilterChip(
+                                      label: 'All',
+                                      selected: _selectedCategoryId == null,
+                                      onTap: () =>
+                                          setState(() => _selectedCategoryId = null),
                                     ),
-                              ),
-                              Text(
-                                'Read anytime, even when offline',
-                                style: context.subtitleText.copyWith(
-                                  color: p.textHint,
+                                    const SizedBox(width: 8),
+                                    ..._distinctCategories.map((cat) {
+                                      final selected =
+                                          _selectedCategoryId == cat.id;
+                                      return Padding(
+                                        padding: const EdgeInsets.only(right: 8),
+                                        child: _SavedFilterChip(
+                                          label: '${cat.icon} ${cat.name}',
+                                          selected: selected,
+                                          onTap: () => setState(
+                                            () => _selectedCategoryId = cat.id,
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                        PremiumIconButton(
-                          icon: AppIcons.search,
-                          onTap: () => context.push('/feed'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    FrostedPanel(
-                      radius: 18,
-                      padding: const EdgeInsets.all(10),
-                      boxShadow: const [],
-                      child: Row(
-                        children: [
-                          Icon(AppIcons.offline, color: p.primary, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Offline support enabled',
-                              style: context.metaText.copyWith(
-                                color: p.textSecondary,
-                                fontWeight: FontWeight.w800,
-                              ),
                             ),
-                          ),
-                          SegmentedButton<bool>(
-                            showSelectedIcon: false,
-                            style: SegmentedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              selectedBackgroundColor:
-                                  p.primary.withValues(alpha: 0.22),
-                              selectedForegroundColor: p.primary,
-                            ),
-                            segments: const [
-                              ButtonSegment<bool>(
-                                value: false,
-                                icon: Icon(AppIcons.list, size: 16),
-                              ),
-                              ButtonSegment<bool>(
-                                value: true,
-                                icon: Icon(AppIcons.categories, size: 16),
-                              ),
-                            ],
-                            selected: {_gridView},
-                            onSelectionChanged: (value) =>
-                                setState(() => _gridView = value.first),
                           ),
                         ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_loading)
-              const SliverFillRemaining(
-                child: NewsShimmerLoader(count: 5),
-              )
-            else if (_bookmarks.isEmpty)
-              const SliverFillRemaining(
-                child: EmptyState(
-                  icon: AppIcons.bookmarks,
-                  title: 'No saved stories yet',
-                  subtitle: 'Double tap bookmark on the news reels to save.',
-                ),
-              )
-            else
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                  18,
-                  0,
-                  18,
-                  110 + MediaQuery.of(context).padding.bottom,
-                ),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _FilterChip(
-                                label: 'All',
-                                selected: _selectedCategoryId == null,
-                                onTap: () =>
-                                    setState(() => _selectedCategoryId = null),
-                              ),
-                              const SizedBox(width: 8),
-                              ...{
-                                for (final b in _bookmarks)
-                                  if (b.category != null)
-                                    b.category!.id: b.category!
-                              }.values.map((cat) {
-                                final selected = _selectedCategoryId == cat.id;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: _FilterChip(
-                                    label: '${cat.icon} ${cat.name}',
-                                    selected: selected,
-                                    onTap: () => setState(
-                                        () => _selectedCategoryId = cat.id),
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: _filtered.isEmpty
-                            ? const SizedBox(
-                                key: ValueKey('empty-filter'),
-                                height: 220,
-                                child: EmptyState(
-                                  icon: AppIcons.empty,
-                                  title: 'No saved stories in this category',
-                                  subtitle: 'Try another filter.',
-                                ),
-                              )
-                            : _gridView
-                                ? GridView.builder(
-                                    key: ValueKey(
-                                        'grid-${_selectedCategoryId ?? 'all'}-${_filtered.length}'),
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: _filtered.length,
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      mainAxisSpacing: 12,
-                                      crossAxisSpacing: 12,
-                                      childAspectRatio: 0.73,
+                        if (_filtered.isEmpty)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: EmptyState(
+                              icon: Icons.filter_alt_off_rounded,
+                              title: 'Nothing in this topic',
+                              subtitle: 'Try “All” or pick another category.',
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontal,
+                              0,
+                              horizontal,
+                              bottomInset,
+                            ),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  final post = _filtered[index];
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: DailyhuntSavedArticleTile(
+                                      key: ValueKey('saved-${post.id}'),
+                                      post: post,
+                                      onTap: () =>
+                                          context.push('/article/${post.id}'),
+                                      onRemove: () => _remove(post),
                                     ),
-                                    itemBuilder: (context, index) {
-                                      final post = _filtered[index];
-                                      return _SavedGridCard(
-                                        post: post,
-                                        onTap: () =>
-                                            context.push('/article/${post.id}'),
-                                        onRemove: () => _remove(post),
-                                      );
-                                    },
-                                  )
-                                : ListView.builder(
-                                    key: ValueKey(
-                                        'list-${_selectedCategoryId ?? 'all'}-${_filtered.length}'),
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    itemCount: _filtered.length,
-                                    itemBuilder: (context, index) {
-                                      final post = _filtered[index];
-                                      return Dismissible(
-                                        key: ValueKey('saved-${post.id}'),
-                                        direction: DismissDirection.endToStart,
-                                        background: Container(
-                                          margin:
-                                              const EdgeInsets.only(bottom: 10),
-                                          alignment: Alignment.centerRight,
-                                          padding:
-                                              const EdgeInsets.only(right: 18),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                p.error.withValues(alpha: 0.16),
-                                            borderRadius:
-                                                BorderRadius.circular(18),
-                                            border: Border.all(
-                                              color: p.error
-                                                  .withValues(alpha: 0.5),
-                                            ),
-                                          ),
-                                          child: Icon(Icons.delete_rounded,
-                                              color: p.error),
-                                        ),
-                                        onDismissed: (_) => _remove(post),
-                                        child: _SavedListCard(
-                                          post: post,
-                                          onTap: () => context
-                                              .push('/article/${post.id}'),
-                                          onRemove: () => _remove(post),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                      ),
+                                  );
+                                },
+                                childCount: _filtered.length,
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
   }
+
+  List<Category> get _distinctCategories {
+    final map = <String, Category>{};
+    for (final b in _bookmarks) {
+      final c = b.category;
+      if (c != null) map[c.id] = c;
+    }
+    return map.values.toList();
+  }
 }
 
-class _FilterChip extends StatelessWidget {
+class _SavedFilterChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _FilterChip({
+  const _SavedFilterChip({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -333,206 +271,27 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    return ChoiceChip(
-      label: Text(label),
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+          color: selected ? Colors.white : const Color(0xFF374151),
+        ),
+      ),
       selected: selected,
-      showCheckmark: false,
-      selectedColor: p.primary.withValues(alpha: 0.2),
-      backgroundColor: p.surface.withValues(alpha: 0.52),
-      side: BorderSide(color: selected ? p.primary : p.cardBorder),
-      labelStyle: TextStyle(
-        color: selected ? p.primary : p.textSecondary,
-        fontWeight: FontWeight.w800,
-      ),
       onSelected: (_) => onTap(),
-    );
-  }
-}
-
-class _SavedListCard extends StatelessWidget {
-  final NewsPost post;
-  final VoidCallback onTap;
-  final VoidCallback onRemove;
-
-  const _SavedListCard({
-    required this.post,
-    required this.onTap,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final image = premiumImageUrl(post);
-    return FrostedPanel(
-      radius: 18,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                width: 88,
-                height: 88,
-                child: image.isEmpty
-                    ? ColoredBox(
-                        color: p.inputFill,
-                        child: Icon(AppIcons.image, color: p.textHint),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: image,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => ColoredBox(color: p.inputFill),
-                        errorWidget: (_, __, ___) => Icon(
-                          Icons.broken_image_rounded,
-                          color: p.textHint,
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    post.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.titleText.copyWith(
-                      color: p.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    post.sourceName ?? post.category?.name ?? 'News',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.metaText.copyWith(color: p.textHint),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(AppIcons.offline, size: 14, color: p.primary),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Offline',
-                        style: context.metaText.copyWith(
-                          color: p.primary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            TapScale(
-              onTap: onRemove,
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: Icon(Icons.bookmark_remove_rounded, color: p.error),
-              ),
-            ),
-          ],
-        ),
+      showCheckmark: false,
+      selectedColor: DailyhuntTheme.accentGreen,
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: selected
+            ? DailyhuntTheme.accentGreen
+            : const Color(0xFFE5E7EB),
       ),
-    );
-  }
-}
-
-class _SavedGridCard extends StatelessWidget {
-  final NewsPost post;
-  final VoidCallback onTap;
-  final VoidCallback onRemove;
-
-  const _SavedGridCard({
-    required this.post,
-    required this.onTap,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final image = premiumImageUrl(post);
-    return FrostedPanel(
-      radius: 18,
-      padding: const EdgeInsets.all(8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 1.24,
-                child: image.isEmpty
-                    ? ColoredBox(
-                        color: p.inputFill,
-                        child: Icon(AppIcons.image, color: p.textHint),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: image,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => ColoredBox(color: p.inputFill),
-                        errorWidget: (_, __, ___) => Icon(
-                          Icons.broken_image_rounded,
-                          color: p.textHint,
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              post.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.titleText.copyWith(
-                color: p.textPrimary,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-                height: 1.22,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              post.sourceName ?? post.category?.name ?? 'News',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.metaText.copyWith(color: p.textHint),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Icon(AppIcons.offline, size: 13, color: p.primary),
-                const SizedBox(width: 4),
-                Text(
-                  timeago.format(post.createdAt),
-                  style: context.metaText.copyWith(color: p.textHint),
-                ),
-                const Spacer(),
-                InkWell(
-                  onTap: onRemove,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Icons.close_rounded, size: 16, color: p.error),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
     );
   }
 }

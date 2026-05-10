@@ -17,6 +17,7 @@ class I18n {
   static const Map<String, Map<String, String>> _strings = {
     'en': {
       'tab_feed': 'Feed',
+      'tab_shorts': 'Shorts',
       'tab_saved': 'Saved',
       'tab_settings': 'Settings',
       'tab_home': 'Home',
@@ -132,9 +133,13 @@ class I18n {
       'cat_business': 'Business',
       'cat_health': 'Health',
       'cat_local': 'Local',
+      'cat_education': 'Education',
+      'categories_subtitle':
+          'Pick a topic to refresh your feed with those stories.',
     },
     'hi': {
       'tab_feed': 'फ़ीड',
+      'tab_shorts': 'शॉर्ट्स',
       'tab_saved': 'सेव',
       'tab_settings': 'सेटिंग्स',
       'tab_home': 'होम',
@@ -250,9 +255,13 @@ class I18n {
       'cat_business': 'बिज़नेस',
       'cat_health': 'स्वास्थ्य',
       'cat_local': 'लोकल',
+      'cat_education': 'शिक्षा',
+      'categories_subtitle':
+          'अपनी फ़ीड को उन्हीं कहानियों के साथ ताज़ा करने के लिए विषय चुनें।',
     },
     'te': {
       'tab_feed': 'ఫీడ్',
+      'tab_shorts': 'షార్ట్స్',
       'tab_saved': 'సేవ్',
       'tab_settings': 'సెట్టింగ్స్',
       'tab_home': 'హోమ్',
@@ -368,6 +377,9 @@ class I18n {
       'cat_business': 'వ్యాపారం',
       'cat_health': 'ఆరోగ్యం',
       'cat_local': 'లోకల్',
+      'cat_education': 'విద్య',
+      'categories_subtitle':
+          'మీ ఫీడ్‌ను ఆ విషయాల కథనాలతో రిఫ్రెష్ చేసుకోండి.',
     },
     // Treat "all" as English for UI labels
     'all': {},

@@ -107,6 +107,7 @@ class FrostedPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: margin,
       child: ClipRRect(
@@ -116,14 +117,23 @@ class FrostedPanel extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: AppCardStyles.glass(p).copyWith(
-              color: color ?? p.surface.withValues(alpha: 0.62),
+              color: color ??
+                  (isDark
+                      ? Colors.black.withValues(alpha: 0.46)
+                      : Colors.white.withValues(alpha: 0.72)),
               borderRadius: BorderRadius.circular(radius),
               border: border ??
-                  Border.all(color: p.cardBorder.withValues(alpha: 0.74)),
+                  Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.18)
+                        : Colors.black.withValues(alpha: 0.14),
+                  ),
               boxShadow: boxShadow ??
                   [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
+                      color: isDark
+                          ? Colors.black.withValues(alpha: 0.22)
+                          : Colors.black.withValues(alpha: 0.10),
                       blurRadius: 24,
                       offset: const Offset(0, 14),
                     ),
@@ -255,22 +265,37 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final iconOnly = FrostedPanel(
       radius: 999,
       padding: const EdgeInsets.all(12),
-      color: widget.panelColor ?? Colors.black.withValues(alpha: 0.44),
+      color: widget.panelColor ??
+          (isDark
+              ? Colors.black.withValues(alpha: 0.44)
+              : Colors.white.withValues(alpha: 0.74)),
       boxShadow: const [],
-      child: Icon(widget.icon, color: widget.color ?? p.textPrimary, size: 22),
+      child: Icon(
+        widget.icon,
+        color: widget.color ?? (isDark ? Colors.white : Colors.black),
+        size: 22,
+      ),
     );
     final content = FrostedPanel(
       radius: widget.circular ? 999 : 18,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      color: widget.panelColor ?? Colors.black.withValues(alpha: 0.22),
+      color: widget.panelColor ??
+          (isDark
+              ? Colors.black.withValues(alpha: 0.22)
+              : Colors.white.withValues(alpha: 0.68)),
       boxShadow: const [],
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(widget.icon, color: widget.color ?? p.textPrimary, size: 22),
+          Icon(
+            widget.icon,
+            color: widget.color ?? (isDark ? Colors.white : Colors.black),
+            size: 22,
+          ),
           if (widget.label != null) ...[
             const SizedBox(height: 3),
             Text(
@@ -290,19 +315,27 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
             mainAxisSize: MainAxisSize.min,
             children: [
               iconOnly,
-              const SizedBox(height: 6),
-              Text(
-                widget.label!,
-                style: TextStyle(
-                  color: widget.labelColor ?? p.textSecondary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  shadows: const [
-                    Shadow(
-                        color: Color(0x66000000),
-                        blurRadius: 4,
-                        offset: Offset(0, 1)),
-                  ],
+              const SizedBox(height: 7),
+              SizedBox(
+                height: 16,
+                child: Center(
+                  child: Text(
+                    widget.label!,
+                    textScaler: TextScaler.noScaling,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: widget.labelColor ?? p.textSecondary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      shadows: const [
+                        Shadow(
+                            color: Color(0x66000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

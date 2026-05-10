@@ -28,17 +28,20 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   static const _translatedCacheKey = 'feed_translated_summary_cache_v1';
+  static const _likedCacheKey = 'feed_liked_state_cache_v1';
   static const _translatedCacheMaxEntries = 120;
   late final PageController _pageController;
   int _currentIndex = 0;
   final Map<String, String?> _translatedByPostId = {};
   final Map<String, bool> _bookmarkedByPostId = {};
+  final Map<String, bool> _likedByPostId = {};
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _restoreTranslatedCache();
+    _restoreLikedCache();
     _primeBookmarkState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<NewsProvider>();
@@ -83,6 +86,34 @@ class _FeedScreenState extends State<FeedScreen> {
       capped[entries[i].key] = entries[i].value;
     }
     await prefs.setString(_translatedCacheKey, jsonEncode(capped));
+  }
+
+  Future<void> _restoreLikedCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_likedCacheKey);
+    if (raw == null || raw.trim().isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+      final restored = <String, bool>{};
+      decoded.forEach((key, value) {
+        if (key.trim().isEmpty) return;
+        restored[key] = value == true;
+      });
+      if (!mounted) return;
+      setState(() {
+        _likedByPostId
+          ..clear()
+          ..addAll(restored);
+      });
+    } catch (_) {
+      // Ignore malformed cache.
+    }
+  }
+
+  Future<void> _persistLikedCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_likedCacheKey, jsonEncode(_likedByPostId));
   }
 
   Future<void> _primeBookmarkState() async {
@@ -147,6 +178,12 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<NewsProvider>();
     final p = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final chromePanelColor = isDark
+        ? Colors.black.withValues(alpha: 0.44)
+        : Colors.white.withValues(alpha: 0.78);
+    final chromeIconColor = isDark ? Colors.white : Colors.black;
+    final chromeTextColor = isDark ? Colors.white : Colors.black;
 
     return PremiumScaffold(
       child: Stack(
@@ -195,6 +232,8 @@ class _FeedScreenState extends State<FeedScreen> {
                       initialSaved:
                           _bookmarkedByPostId[provider.posts[index].id] ??
                               false,
+                      initialLiked:
+                          _likedByPostId[provider.posts[index].id] ?? false,
                       onTranslatedSummaryChanged: (value) {
                         if (!mounted) return;
                         setState(() {
@@ -218,6 +257,18 @@ class _FeedScreenState extends State<FeedScreen> {
                           }
                         });
                       },
+                      onLikedChanged: (liked) {
+                        if (!mounted) return;
+                        final id = provider.posts[index].id;
+                        setState(() {
+                          if (liked) {
+                            _likedByPostId[id] = true;
+                          } else {
+                            _likedByPostId.remove(id);
+                          }
+                        });
+                        _persistLikedCache();
+                      },
                       onReadMore: () =>
                           _openArticleSheet(provider.posts[index]),
                     ),
@@ -235,7 +286,8 @@ class _FeedScreenState extends State<FeedScreen> {
                     children: [
                       PremiumIconButton(
                         icon: AppIcons.profile,
-                        panelColor: Colors.black.withValues(alpha: 0.44),
+                        panelColor: chromePanelColor,
+                        color: chromeIconColor,
                         onTap: () => context.push('/settings'),
                       ),
                       FrostedPanel(
@@ -244,7 +296,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           horizontal: 16,
                           vertical: 10,
                         ),
-                        color: Colors.black.withValues(alpha: 0.44),
+                        color: chromePanelColor,
                         boxShadow: const [],
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -252,13 +304,13 @@ class _FeedScreenState extends State<FeedScreen> {
                             Icon(
                               AppIcons.home,
                               size: 18,
-                              color: p.primary,
+                              color: chromeIconColor,
                             ),
                             const SizedBox(width: 8),
                             Text(
                               AppConstants.appName,
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.96),
+                                color: chromeTextColor.withValues(alpha: 0.96),
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -0.3,
                               ),
@@ -268,7 +320,8 @@ class _FeedScreenState extends State<FeedScreen> {
                       ),
                       PremiumIconButton(
                         icon: AppIcons.notification,
-                        panelColor: Colors.black.withValues(alpha: 0.44),
+                        panelColor: chromePanelColor,
+                        color: chromeIconColor,
                         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('No new notifications'),
@@ -305,8 +358,10 @@ class _NewsReelCard extends StatefulWidget {
   final PageController controller;
   final String? initialTranslatedSummary;
   final bool initialSaved;
+  final bool initialLiked;
   final ValueChanged<String?> onTranslatedSummaryChanged;
   final ValueChanged<bool> onSavedChanged;
+  final ValueChanged<bool> onLikedChanged;
   final VoidCallback onReadMore;
 
   const _NewsReelCard({
@@ -316,8 +371,10 @@ class _NewsReelCard extends StatefulWidget {
     required this.controller,
     required this.initialTranslatedSummary,
     required this.initialSaved,
+    required this.initialLiked,
     required this.onTranslatedSummaryChanged,
     required this.onSavedChanged,
+    required this.onLikedChanged,
     required this.onReadMore,
   });
 
@@ -363,6 +420,7 @@ class _NewsReelCardState extends State<_NewsReelCard>
     );
     _translatedSummary = widget.initialTranslatedSummary;
     _saved = widget.initialSaved;
+    _liked = widget.initialLiked;
     _configureTts();
     _hydrateInteractionState();
   }
@@ -373,8 +431,13 @@ class _NewsReelCardState extends State<_NewsReelCard>
     if (oldWidget.post.id != widget.post.id) {
       _translatedSummary = widget.initialTranslatedSummary;
       _saved = widget.initialSaved;
+      _liked = widget.initialLiked;
       _hydrateInteractionState();
       return;
+    }
+    if (oldWidget.initialLiked != widget.initialLiked &&
+        widget.initialLiked != _liked) {
+      _liked = widget.initialLiked;
     }
     if (oldWidget.initialSaved != widget.initialSaved &&
         widget.initialSaved != _saved) {
@@ -415,7 +478,12 @@ class _NewsReelCardState extends State<_NewsReelCard>
 
   Future<void> _toggleLike() async {
     if (_likeSyncing) return;
-    setState(() => _likeSyncing = true);
+    final previous = _liked;
+    setState(() {
+      _likeSyncing = true;
+      _liked = !previous;
+    });
+    _likePop.forward(from: 0);
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final liked = await ApiService.toggleGuestLike(post.id);
@@ -424,13 +492,17 @@ class _NewsReelCardState extends State<_NewsReelCard>
         _liked = liked;
         _likeSyncing = false;
       });
-      _likePop.forward(from: 0);
+      widget.onLikedChanged(liked);
       return;
     }
     final res = await ApiService.toggleLike(post.id);
     if (!mounted) return;
     if (res['success'] != true) {
-      setState(() => _likeSyncing = false);
+      setState(() {
+        _liked = previous;
+        _likeSyncing = false;
+      });
+      widget.onLikedChanged(previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message']?.toString() ?? 'Failed to like story'),
@@ -442,23 +514,28 @@ class _NewsReelCardState extends State<_NewsReelCard>
       _liked = res['liked'] == true;
       _likeSyncing = false;
     });
-    _likePop.forward(from: 0);
+    widget.onLikedChanged(_liked);
   }
 
   Future<void> _toggleSave() async {
+    final previous = _saved;
+    setState(() => _saved = !previous);
+    widget.onSavedChanged(_saved);
+    _savePop.forward(from: 0);
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final saved = await ApiService.toggleGuestBookmark(post);
       if (mounted) {
         setState(() => _saved = saved);
         widget.onSavedChanged(saved);
-        _savePop.forward(from: 0);
       }
       return;
     }
     final res = await ApiService.toggleBookmark(post.id);
     if (!mounted) return;
     if (res['success'] != true) {
+      setState(() => _saved = previous);
+      widget.onSavedChanged(previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message']?.toString() ?? 'Failed to save story'),
@@ -469,7 +546,6 @@ class _NewsReelCardState extends State<_NewsReelCard>
     final saved = res['bookmarked'] == true;
     setState(() => _saved = saved);
     widget.onSavedChanged(saved);
-    _savePop.forward(from: 0);
   }
 
   Future<void> _share() async {
@@ -510,6 +586,7 @@ class _NewsReelCardState extends State<_NewsReelCard>
   Widget build(BuildContext context) {
     final p = context.palette;
     final t = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final imageUrl = premiumImageUrl(post);
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final widthPx = MediaQuery.of(context).size.width * dpr;
@@ -572,66 +649,107 @@ class _NewsReelCardState extends State<_NewsReelCard>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.66),
-                  Colors.black.withValues(alpha: 0.18),
-                  Colors.black.withValues(alpha: 0.48),
-                  Colors.black.withValues(alpha: 0.96),
+                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.66),
+                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.18),
+                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.48),
+                  (isDark ? Colors.black : Colors.white).withValues(alpha: 0.96),
                 ],
                 stops: const [0, 0.30, 0.60, 1],
               ),
             ),
           ),
           Positioned(
-            right: 14,
-            bottom: 132,
+            right: 12,
+            bottom: 144,
             child: Column(
               children: [
                 PremiumIconButton(
                   icon: _liked
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  label: '${post.likes + (_liked ? 1 : 0)}',
-                  color: _liked ? Colors.redAccent : null,
-                  labelColor: Colors.white.withValues(alpha: 0.9),
-                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  label: null,
+                  labelColor: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.9),
+                  panelColor: isDark
+                      ? Colors.black.withValues(alpha: 0.50)
+                      : Colors.white.withValues(alpha: 0.78),
+                  color: _liked
+                      ? Colors.redAccent
+                      : (isDark ? Colors.white : Colors.black),
                   circular: true,
                   onTap: _toggleLike,
                   scale: Tween<double>(begin: 1, end: 1.2).animate(
                     CurvedAnimation(parent: _likePop, curve: Curves.elasticOut),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(
+                  height: 16,
+                  child: Center(
+                    child: Text(
+                      '${post.likes + (_liked ? 1 : 0)}',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.92),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        shadows: const [
+                          Shadow(
+                            color: Color(0x66000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
                 PremiumIconButton(
                   icon: _saved
                       ? Icons.bookmark_rounded
                       : Icons.bookmark_border_rounded,
                   label: 'Save',
                   color: _saved ? p.primary : null,
-                  labelColor: Colors.white.withValues(alpha: 0.9),
-                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  labelColor: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.9),
+                  panelColor: isDark
+                      ? Colors.black.withValues(alpha: 0.50)
+                      : Colors.white.withValues(alpha: 0.78),
+                  color: _saved
+                      ? p.primary
+                      : (isDark ? Colors.white : Colors.black),
                   circular: true,
                   onTap: _toggleSave,
                   scale: Tween<double>(begin: 1, end: 1.16).animate(
                     CurvedAnimation(parent: _savePop, curve: Curves.elasticOut),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 PremiumIconButton(
                   icon: AppIcons.share,
                   label: 'Share',
-                  labelColor: Colors.white.withValues(alpha: 0.9),
-                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  color: isDark ? Colors.white : Colors.black,
+                  labelColor: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.9),
+                  panelColor: isDark
+                      ? Colors.black.withValues(alpha: 0.50)
+                      : Colors.white.withValues(alpha: 0.78),
                   circular: true,
                   onTap: _share,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 PremiumIconButton(
                   icon: AppIcons.translate,
                   label: _translating
                       ? '...'
                       : (_translatedSummary == null ? 'Translate' : 'Original'),
-                  labelColor: Colors.white.withValues(alpha: 0.9),
-                  panelColor: Colors.black.withValues(alpha: 0.50),
+                  color: isDark ? Colors.white : Colors.black,
+                  labelColor: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.9),
+                  panelColor: isDark
+                      ? Colors.black.withValues(alpha: 0.50)
+                      : Colors.white.withValues(alpha: 0.78),
                   circular: true,
                   onTap: _translate,
                 ),
@@ -642,7 +760,7 @@ class _NewsReelCardState extends State<_NewsReelCard>
             left: 16,
             // Keep a strong safety gutter from the right action rail
             // so long Telugu/Hindi headlines never visually collide.
-            right: 102,
+            right: 122,
             bottom: 100,
             child: FadeTransition(
               opacity: _fade,
@@ -651,7 +769,9 @@ class _NewsReelCardState extends State<_NewsReelCard>
                 child: FrostedPanel(
                   radius: 22,
                   padding: const EdgeInsets.all(16),
-                  color: Colors.black.withValues(alpha: 0.28),
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.28)
+                      : Colors.white.withValues(alpha: 0.76),
                   boxShadow: const [],
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -661,7 +781,7 @@ class _NewsReelCardState extends State<_NewsReelCard>
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: t.headlineSmall?.copyWith(
-                          color: Colors.white,
+                          color: isDark ? Colors.white : Colors.black,
                           fontSize: 24,
                           fontWeight: FontWeight.w900,
                           height: 1.15,
@@ -681,7 +801,8 @@ class _NewsReelCardState extends State<_NewsReelCard>
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                         style: t.bodyMedium?.copyWith(
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: (isDark ? Colors.white : Colors.black)
+                              .withValues(alpha: 0.9),
                           height: 1.45,
                           fontWeight: FontWeight.w500,
                           shadows: const [
@@ -698,7 +819,8 @@ class _NewsReelCardState extends State<_NewsReelCard>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: context.metaText.copyWith(
-                          color: Colors.white.withValues(alpha: 0.76),
+                          color: (isDark ? Colors.white : Colors.black)
+                              .withValues(alpha: 0.76),
                           fontWeight: FontWeight.w600,
                           shadows: const [
                             Shadow(
@@ -731,22 +853,29 @@ class _MetaPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.36),
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.36)
+            : Colors.white.withValues(alpha: 0.78),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.14)
+              : Colors.black.withValues(alpha: 0.14),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: Colors.white),
+          Icon(icon, size: 13, color: isDark ? Colors.white : Colors.black),
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.black,
               fontWeight: FontWeight.w800,
               fontSize: 11,
             ),

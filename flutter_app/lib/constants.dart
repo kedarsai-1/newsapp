@@ -11,6 +11,7 @@ export 'theme/app_spacing.dart';
 export 'theme/app_typography.dart';
 export 'theme/app_gradients.dart';
 export 'theme/app_components.dart';
+export 'design_system/dailyhunt/dailyhunt.dart';
 
 class AppConstants {
   /// Base API URL including `/api` suffix, e.g. `https://host.com/api` or `http://127.0.0.1:5001/api`.

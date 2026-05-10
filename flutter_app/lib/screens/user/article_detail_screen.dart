@@ -137,6 +137,15 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   Future<void> _toggleLike() async {
+    final previous = _liked;
+    setState(() {
+      _liked = !previous;
+      if (_post != null) {
+        final likes =
+            _liked ? _post!.likes + 1 : (_post!.likes - 1).clamp(0, 1 << 30);
+        _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
+      }
+    });
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final liked = await ApiService.toggleGuestLike(widget.postId);
@@ -154,6 +163,14 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
     final res = await ApiService.toggleLike(widget.postId);
     if (res['success'] != true && mounted) {
+      setState(() {
+        _liked = previous;
+        if (_post != null) {
+          final likes =
+              _liked ? _post!.likes + 1 : (_post!.likes - 1).clamp(0, 1 << 30);
+          _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
+        }
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(res['message'] ?? 'Please sign in to continue.')),
@@ -172,6 +189,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   Future<void> _toggleBookmark() async {
+    final previous = _bookmarked;
+    setState(() => _bookmarked = !previous);
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn && _post != null) {
       final bookmarked = await ApiService.toggleGuestBookmark(_post!);
@@ -182,6 +201,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
     final res = await ApiService.toggleBookmark(widget.postId);
     if (res['success'] != true && mounted) {
+      setState(() => _bookmarked = previous);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(res['message'] ?? 'Please sign in to continue.')),
@@ -319,7 +339,11 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     ];
   }
 
-  Widget _glassActionShell({required Widget child}) {
+  Widget _glassActionShell({
+    required BuildContext context,
+    required Widget child,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ClipOval(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
@@ -328,9 +352,15 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           height: 34,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.50),
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.50)
+                : Colors.white.withValues(alpha: 0.78),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.22)
+                  : Colors.black.withValues(alpha: 0.20),
+            ),
           ),
           child: child,
         ),
@@ -339,6 +369,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   Widget _glassActionIcon({
+    required BuildContext context,
     required Widget icon,
     required VoidCallback? onPressed,
     String? tooltip,
@@ -346,13 +377,16 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     return IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
-      icon: _glassActionShell(child: icon),
+      icon: _glassActionShell(context: context, child: icon),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final overlayBase = isDark ? Colors.black : Colors.white;
+    final actionIconColor = isDark ? Colors.white : Colors.black;
     if (_loading) {
       return Scaffold(
         backgroundColor: p.glassSurface,
@@ -385,7 +419,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                       ? p.surface.withValues(alpha: 0.62)
                       : p.surface,
               foregroundColor: Colors.white,
-              iconTheme: const IconThemeData(color: Colors.white),
+              iconTheme: IconThemeData(color: actionIconColor),
               flexibleSpace: (post.hasImages &&
                       !_looksLikeLogoUrl(post.firstImage!.url))
                   ? FlexibleSpaceBar(
@@ -454,9 +488,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: [
-                                          Colors.black.withValues(alpha: 0.78),
-                                          Colors.black.withValues(alpha: 0.16),
-                                          Colors.black.withValues(alpha: 0.56),
+                                          overlayBase.withValues(alpha: 0.78),
+                                          overlayBase.withValues(alpha: 0.16),
+                                          overlayBase.withValues(alpha: 0.56),
                                         ],
                                         stops: const [0.0, 0.50, 1.0],
                                       ),
@@ -472,12 +506,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   : null,
               actions: [
                 _glassActionIcon(
+                  context: context,
                   tooltip: _fullText != null
                       ? 'Full article loaded'
                       : 'Load full article',
                   icon: Icon(
                     Icons.article_outlined,
-                    color: _fullText != null ? p.primary : Colors.white,
+                    color: _fullText != null ? p.primary : actionIconColor,
                   ),
                   onPressed: _fullLoading
                       ? null
@@ -489,8 +524,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                 PopupMenuButton<double>(
                   tooltip: 'Text size',
                   icon: _glassActionShell(
-                    child: const Icon(Icons.text_fields_rounded,
-                        color: Colors.white),
+                    context: context,
+                    child: Icon(Icons.text_fields_rounded, color: actionIconColor),
                   ),
                   onSelected: (v) => setState(() => _readScale = v),
                   itemBuilder: (context) => [
@@ -501,18 +536,21 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   ],
                 ),
                 _glassActionIcon(
+                  context: context,
                   icon: Icon(_liked ? Icons.favorite : Icons.favorite_border,
-                      color: _liked ? Colors.red : Colors.white),
+                      color: _liked ? Colors.red : actionIconColor),
                   onPressed: _toggleLike,
                 ),
                 _glassActionIcon(
+                  context: context,
                   icon: Icon(
                       _bookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: _bookmarked ? p.primary : Colors.white),
+                      color: _bookmarked ? p.primary : actionIconColor),
                   onPressed: _toggleBookmark,
                 ),
                 _glassActionIcon(
-                  icon: const Icon(Icons.share_outlined),
+                  context: context,
+                  icon: Icon(Icons.share_outlined, color: actionIconColor),
                   onPressed: _shareArticle,
                 ),
               ],

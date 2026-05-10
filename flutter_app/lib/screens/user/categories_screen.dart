@@ -1,394 +1,170 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
-import '../../constants.dart';
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
-import '../../widgets/empty_state.dart';
-import '../../widgets/premium_news_ui.dart';
+import '../../theme/dailyhunt_theme.dart';
+import '../../utils/i18n.dart';
+import '../../widgets/categories/dailyhunt_category_card.dart';
 
-class CategoriesScreen extends StatefulWidget {
+/// Dailyhunt-inspired topic grid: light theme, green accent, compact rounded cards.
+class CategoriesScreen extends StatelessWidget {
   const CategoriesScreen({super.key});
 
-  @override
-  State<CategoriesScreen> createState() => _CategoriesScreenState();
-}
+  static const List<_DiscoveryCategory> _topics = [
+    _DiscoveryCategory('politics', 'cat_politics', Icons.how_to_vote_rounded),
+    _DiscoveryCategory('sports', 'cat_sports', Icons.sports_soccer_rounded),
+    _DiscoveryCategory(
+        'entertainment', 'cat_entertainment', Icons.movie_creation_rounded),
+    _DiscoveryCategory('technology', 'cat_technology', Icons.memory_rounded),
+    _DiscoveryCategory('business', 'cat_business', Icons.business_center_rounded),
+    _DiscoveryCategory('local', 'cat_local', Icons.location_city_rounded),
+    _DiscoveryCategory('health', 'cat_health', Icons.favorite_rounded),
+    _DiscoveryCategory('education', 'cat_education', Icons.school_rounded),
+  ];
 
-class _CategoriesScreenState extends State<CategoriesScreen> {
-  String? _selectedCategoryId;
-  String _selectedCity = 'all';
-  String _selectedConstituency = 'all';
+  static String? _matchCategoryId(String slug, List<Category> api) {
+    final s = slug.toLowerCase();
+    for (final c in api) {
+      if (c.slug.toLowerCase() == s) return c.id;
+    }
+    return null;
+  }
 
-  void _handleBack() {
-    if (context.canPop()) {
-      context.pop();
+  String _labelForSlug(BuildContext context, String slug) {
+    for (final t in _topics) {
+      if (t.slug == slug) return I18n.t(context, t.i18nKey);
+    }
+    return slug;
+  }
+
+  Future<void> _openCategory(
+    BuildContext context,
+    String slug,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final news = context.read<NewsProvider>();
+    final id = _matchCategoryId(slug, news.categories);
+    if (id == null || id.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '“${_labelForSlug(context, slug)}” is not available on the server yet.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          width: 360,
+        ),
+      );
       return;
     }
-    context.go('/feed');
+    await news.selectCategory(id);
+    if (context.mounted) context.go('/feed');
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _selectedCategoryId ??= context.read<NewsProvider>().selectedCategoryId;
+  int _crossAxisCount(double width) {
+    if (width >= 1100) return 4;
+    if (width >= 720) return 3;
+    return 2;
   }
 
-  List<NewsPost> _filterPosts(List<NewsPost> posts, List<Category> categories) {
-    String? selectedSlug;
-    if (_selectedCategoryId != null) {
-      for (final c in categories) {
-        if (c.id == _selectedCategoryId) {
-          selectedSlug = c.slug.toLowerCase();
-          break;
-        }
-      }
-    }
-
-    return posts.where((post) {
-      if (_selectedCategoryId != null &&
-          post.category?.id != _selectedCategoryId &&
-          post.category?.slug.toLowerCase() != selectedSlug) {
-        return false;
-      }
-      final city = post.location?.city?.trim().toLowerCase() ?? '';
-      final constituency = post.constituency?.trim().toLowerCase() ?? '';
-      if (_selectedCity != 'all' && city != _selectedCity.toLowerCase()) {
-        return false;
-      }
-      if (_selectedConstituency != 'all' &&
-          constituency != _selectedConstituency.toLowerCase()) {
-        return false;
-      }
-      return true;
-    }).toList();
+  double _childAspectRatio(double width) {
+    // Slightly taller cards on narrow phones for touch targets.
+    if (width < 360) return 0.78;
+    if (width < 480) return 0.85;
+    return 0.92;
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<NewsProvider>();
-    final p = context.palette;
-    final categories = provider.categories;
-    final posts = _filterPosts(provider.posts, categories);
-    final cities = <String>{
-      for (final post in provider.posts)
-        if ((post.location?.city ?? '').trim().isNotEmpty)
-          post.location!.city!.trim(),
-    }.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final constituencies = <String>{
-      for (final post in provider.posts)
-        if ((post.constituency ?? '').trim().isNotEmpty &&
-            (post.constituency ?? '').trim().toLowerCase() != 'unknown')
-          post.constituency!.trim(),
-    }.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    context.watch<NewsProvider>(); // rebuild when categories load
 
-    return PremiumScaffold(
-      safeArea: true,
-      child: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  PremiumIconButton(
-                    icon: AppIcons.back,
-                    onTap: _handleBack,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Categories',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                color: p.textPrimary,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.7,
-                              ),
-                        ),
-                        Text(
-                          'Choose topic and location for local briefings',
-                          style: context.subtitleText.copyWith(
-                            color: p.textHint,
-                          ),
-                        ),
-                      ],
+    return Theme(
+      data: DailyhuntTheme.overlay(context),
+      child: Builder(
+        builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          final w = MediaQuery.sizeOf(context).width;
+          final pad = w >= 720 ? 20.0 : 14.0;
+          final n = _crossAxisCount(w);
+          final aspect = _childAspectRatio(w);
+
+          return Scaffold(
+            backgroundColor: cs.surface,
+            body: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  pinned: true,
+                  toolbarHeight: 52,
+                  backgroundColor: Colors.white,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 0,
+                  shadowColor: Colors.black.withValues(alpha: 0.06),
+                  title: Text(
+                    I18n.t(context, 'feed_categories'),
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  PremiumIconButton(
-                    icon: AppIcons.home,
-                    onTap: () => context.go('/feed'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
-            sliver: SliverToBoxAdapter(
-              child: FrostedPanel(
-                radius: 20,
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Categories',
-                      style: context.metaText.copyWith(
-                        color: p.textHint,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _CategoryChip(
-                          label: '✨ All',
-                          selected: _selectedCategoryId == null,
-                          onTap: () {
-                            setState(() => _selectedCategoryId = null);
-                            provider.selectCategory(null);
-                          },
-                        ),
-                        ...categories.map((cat) => _CategoryChip(
-                              label: '${cat.icon} ${cat.name}',
-                              selected: _selectedCategoryId == cat.id,
-                              onTap: () {
-                                setState(() => _selectedCategoryId = cat.id);
-                                provider.selectCategory(cat.id);
-                              },
-                            )),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _LocationDropdown(
-                            label: 'City',
-                            value: _selectedCity,
-                            values: cities,
-                            onChanged: (value) =>
-                                setState(() => _selectedCity = value),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _LocationDropdown(
-                            label: 'District/Constituency',
-                            value: _selectedConstituency,
-                            values: constituencies,
-                            onChanged: (value) =>
-                                setState(() => _selectedConstituency = value),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
-              ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(pad, 4, pad, 10),
+                    child: Text(
+                      I18n.t(context, 'categories_subtitle'),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.58),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(pad, 0, pad, 24),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: n,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: aspect,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      childCount: _topics.length,
+                      (context, index) {
+                        final t = _topics[index];
+                        return DailyhuntCategoryCard(
+                          title: I18n.t(context, t.i18nKey),
+                          icon: t.icon,
+                          onTap: () => _openCategory(context, t.slug),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: MediaQuery.paddingOf(context).bottom + 88,
+                  ),
+                ),
+              ],
             ),
-          ),
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(
-              18,
-              0,
-              18,
-              110 + MediaQuery.of(context).padding.bottom,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 280),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: posts.isEmpty
-                    ? const SizedBox(
-                        key: ValueKey('empty'),
-                        height: 240,
-                        child: EmptyState(
-                          icon: AppIcons.empty,
-                          title: 'No local stories found',
-                          subtitle: 'Try another category or location filter.',
-                        ),
-                      )
-                    : GridView.builder(
-                        key: ValueKey(
-                            'grid-${_selectedCategoryId ?? 'all'}-$_selectedCity-$_selectedConstituency'),
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: posts.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 14,
-                          crossAxisSpacing: 14,
-                          childAspectRatio: 0.74,
-                        ),
-                        itemBuilder: (context, index) => _LocalNewsCard(
-                          post: posts[index],
-                          onTap: () =>
-                              context.push('/article/${posts[index].id}'),
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+class _DiscoveryCategory {
+  final String slug;
+  final String i18nKey;
+  final IconData icon;
 
-  const _CategoryChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      selectedColor: p.primary.withValues(alpha: 0.22),
-      backgroundColor: p.surface.withValues(alpha: 0.46),
-      side: BorderSide(color: selected ? p.primary : p.cardBorder),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-      labelStyle: TextStyle(
-        color: selected ? p.primary : p.textSecondary,
-        fontWeight: FontWeight.w800,
-      ),
-      onSelected: (_) => onTap(),
-    );
-  }
-}
-
-class _LocationDropdown extends StatelessWidget {
-  final String label;
-  final String value;
-  final List<String> values;
-  final ValueChanged<String> onChanged;
-
-  const _LocationDropdown({
-    required this.label,
-    required this.value,
-    required this.values,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      icon: Icon(AppIcons.chevronDown, color: p.textSecondary),
-      dropdownColor: p.surface,
-      borderRadius: BorderRadius.circular(14),
-      decoration: InputDecoration(
-        isDense: true,
-        labelText: label,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        filled: true,
-        fillColor: p.surface.withValues(alpha: 0.54),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: p.cardBorder),
-        ),
-      ),
-      items: [
-        const DropdownMenuItem(value: 'all', child: Text('All')),
-        ...values
-            .map((city) => DropdownMenuItem(value: city, child: Text(city))),
-      ],
-      onChanged: (v) => onChanged(v ?? 'all'),
-    );
-  }
-}
-
-class _LocalNewsCard extends StatelessWidget {
-  final NewsPost post;
-  final VoidCallback onTap;
-
-  const _LocalNewsCard({required this.post, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final imageUrl = premiumImageUrl(post);
-    return FrostedPanel(
-      radius: 20,
-      padding: const EdgeInsets.all(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: AspectRatio(
-                aspectRatio: 1.26,
-                child: imageUrl.isEmpty
-                    ? ColoredBox(
-                        color: p.inputFill,
-                        child: Icon(AppIcons.image, color: p.textHint),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => ColoredBox(color: p.inputFill),
-                        errorWidget: (_, __, ___) => ColoredBox(
-                          color: p.inputFill,
-                          child: Icon(AppIcons.image, color: p.textHint),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              post.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.titleText.copyWith(
-                color: p.textPrimary,
-                fontWeight: FontWeight.w900,
-                fontSize: 15.5,
-                height: 1.25,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${post.location?.city ?? post.constituency ?? post.category?.name ?? 'Local'} • ${timeago.format(post.createdAt)}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.metaText.copyWith(
-                color: p.textHint,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  const _DiscoveryCategory(this.slug, this.i18nKey, this.icon);
 }

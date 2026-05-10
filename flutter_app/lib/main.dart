@@ -15,6 +15,8 @@ import 'screens/onboarding/select_language_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/user/feed_screen.dart' show FeedScreen;
+import 'screens/user/dailyhunt_home_screen.dart';
+import 'screens/user/shorts_news_screen.dart';
 import 'screens/user/quick_news_screen.dart';
 import 'screens/user/categories_screen.dart';
 import 'screens/user/article_detail_screen.dart';
@@ -95,6 +97,8 @@ GoRouter createAppRouter(BuildContext context) {
       final goingToAdmin = loc.startsWith('/admin');
       final goingToReporter = loc.startsWith('/reporter');
       final goingToUserRoute = loc == '/feed' ||
+          loc == '/shorts' ||
+          loc == '/home' ||
           loc == '/quick-news' ||
           loc == '/categories' ||
           loc == '/bookmarks' ||
@@ -155,6 +159,20 @@ GoRouter createAppRouter(BuildContext context) {
             path: '/feed',
             pageBuilder: (context, state) =>
                 _smoothAppPage(state: state, child: const FeedScreen()),
+          ),
+          GoRoute(
+            path: '/shorts',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const ShortsNewsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/home',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const DailyhuntHomeScreen(),
+            ),
           ),
           GoRoute(
             path: '/quick-news',
@@ -395,19 +413,34 @@ class UserShell extends StatelessWidget {
     final p = context.palette;
     final isLight = Theme.of(context).brightness == Brightness.light;
     int idx = 0;
-    if (loc == '/categories') idx = 1;
-    if (loc == '/bookmarks') idx = 2;
-    if (loc == '/settings') idx = 3;
+    if (loc == '/shorts') idx = 1;
+    if (loc == '/categories') idx = 2;
+    if (loc == '/bookmarks') idx = 3;
+    if (loc == '/settings') idx = 4;
     final isTabRoute = loc == '/feed' ||
+        loc == '/shorts' ||
         loc == '/categories' ||
         loc == '/bookmarks' ||
         loc == '/settings';
+
+    if (loc == '/home') {
+      return Scaffold(
+        extendBody: true,
+        body: child,
+      );
+    }
 
     return Scaffold(
       extendBody: true,
       body: GlassBackground(
         child: _HorizontalShellSwipe(
-          tabRoutes: const ['/feed', '/categories', '/bookmarks', '/settings'],
+          tabRoutes: const [
+            '/feed',
+            '/shorts',
+            '/categories',
+            '/bookmarks',
+            '/settings',
+          ],
           // Only animate between bottom tabs. For pushed pages (e.g. /article/:id),
           // animating the shell causes visible "flash" when popping back.
           child: isTabRoute
@@ -489,12 +522,15 @@ class UserShell extends StatelessWidget {
                 _goIfNeeded(context, loc, '/feed');
                 return;
               case 1:
-                _goIfNeeded(context, loc, '/categories');
+                _goIfNeeded(context, loc, '/shorts');
                 return;
               case 2:
-                _goIfNeeded(context, loc, '/bookmarks');
+                _goIfNeeded(context, loc, '/categories');
                 return;
               case 3:
+                _goIfNeeded(context, loc, '/bookmarks');
+                return;
+              case 4:
                 _goIfNeeded(context, loc, '/settings');
                 return;
             }
@@ -504,6 +540,11 @@ class UserShell extends StatelessWidget {
               icon: const Icon(Icons.home_outlined),
               selectedIcon: const Icon(Icons.home_rounded),
               label: I18n.t(context, 'tab_feed'),
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.view_stream_outlined),
+              selectedIcon: const Icon(Icons.view_stream_rounded),
+              label: I18n.t(context, 'tab_shorts'),
             ),
             const NavigationDestination(
               icon: Icon(Icons.grid_view_outlined),

@@ -51,8 +51,8 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
   String? get _shortSummary {
     final s = widget.summary.trim();
     if (s.isEmpty) return null;
-    if (s.length <= 72) return s;
-    return '${s.substring(0, 72).trim()}…';
+    if (s.length <= 58) return s;
+    return '${s.substring(0, 58).trim()}…';
   }
 
   @override
@@ -63,28 +63,26 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
       imageUrl: widget.imageUrl,
       metaLine: '${widget.sourceName} · ${timeago.format(widget.publishedAt)}',
       onTap: widget.onTap,
-      actionBar: CompactFeedActionBar(
-        actions: [
-          CompactFeedAction(
-            icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: _liked ? Colors.redAccent : const Color(0xFF757575),
-            onTap: () => setState(() => _liked = !_liked),
-          ),
-          CompactFeedAction(
-            icon: Icons.share_outlined,
-            color: const Color(0xFF757575),
-            onTap: widget.onShare,
-          ),
-          CompactFeedAction(
-            icon: _bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-            color: _bookmarked ? DailyhuntTheme.accentGreen : const Color(0xFF757575),
-            onTap: () {
-              setState(() => _bookmarked = !_bookmarked);
-              widget.onBookmark?.call();
-            },
-          ),
-        ],
-      ),
+      footerActions: [
+        CompactFeedAction(
+          icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          color: _liked ? const Color(0xFFE57373) : CompactFeedAction.muted,
+          onTap: () => setState(() => _liked = !_liked),
+        ),
+        CompactFeedAction(
+          icon: Icons.share_outlined,
+          color: CompactFeedAction.muted,
+          onTap: widget.onShare,
+        ),
+        CompactFeedAction(
+          icon: _bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          color: _bookmarked ? CompactFeedAction.saved : CompactFeedAction.muted,
+          onTap: () {
+            setState(() => _bookmarked = !_bookmarked);
+            widget.onBookmark?.call();
+          },
+        ),
+      ],
     );
   }
 }

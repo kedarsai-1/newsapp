@@ -42,7 +42,7 @@ class NewsShimmerLoader extends StatelessWidget {
   static Widget greyBox({
     required double width,
     required double height,
-    double radius = 4,
+    double radius = 3,
   }) {
     return Shimmer.fromColors(
       baseColor: kBase,
@@ -67,7 +67,7 @@ class _FeedRowSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+      padding: const EdgeInsets.fromLTRB(8, 3, 8, 0),
       child: Shimmer.fromColors(
         baseColor: _base,
         highlightColor: NewsShimmerLoader.kHighlight,
@@ -78,39 +78,39 @@ class _FeedRowSkeleton extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: kFeedThumbSize,
-                  height: kFeedThumbSize,
+                  width: kFeedThumbWidth,
+                  height: kFeedThumbHeight,
                   decoration: BoxDecoration(
                     color: _base,
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 7),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        height: 12,
+                        height: 11,
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: _base,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 3),
                       Container(
-                        height: 12,
+                        height: 11,
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: _base,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 3),
                       Container(
-                        height: 10,
-                        width: 100,
+                        height: 9,
+                        width: 96,
                         decoration: BoxDecoration(
                           color: _base,
                           borderRadius: BorderRadius.circular(2),
@@ -121,8 +121,7 @@ class _FeedRowSkeleton extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            const Divider(height: 1, thickness: 1, color: Color(0xFFEDEDED)),
+            const Divider(height: 1, thickness: 0.5, color: Color(0xFFE6E6E6)),
           ],
         ),
       ),

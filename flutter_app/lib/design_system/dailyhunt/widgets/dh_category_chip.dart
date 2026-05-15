@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../dailyhunt_tokens.dart';
+import '../../../widgets/dailyhunt/dailyhunt_category_chip.dart';
 
-/// Compact topic filter chip with green selection (Dailyhunt-style).
+/// Topic filter chip — same compact style as feed category tabs.
 class DhCategoryChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -21,41 +21,50 @@ class DhCategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return FilterChip(
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showLeadingIcon && leadingIcon != null) ...[
-            Icon(
-              leadingIcon,
-              size: 16,
-              color: selected ? Colors.white : cs.onSurface.withValues(alpha: 0.65),
+    if (showLeadingIcon && leadingIcon != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onSelected(!selected),
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(6, 4, 6, 5),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: selected ? DailyhuntCategoryChip.activeColor : Colors.transparent,
+                  width: 2,
+                ),
+              ),
             ),
-            const SizedBox(width: 6),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-              color: selected ? Colors.white : cs.onSurface.withValues(alpha: 0.85),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  leadingIcon,
+                  size: 13,
+                  color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColor,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColor,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      );
+    }
+
+    return DailyhuntCategoryChip(
+      label: label,
       selected: selected,
-      onSelected: onSelected,
-      showCheckmark: false,
-      selectedColor: DhTokens.accent,
-      backgroundColor: cs.surface,
-      side: BorderSide(
-        color: selected ? DhTokens.accent : cs.outline.withValues(alpha: 0.45),
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DhTokens.radiusChip),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      onTap: () => onSelected(!selected),
     );
   }
 }

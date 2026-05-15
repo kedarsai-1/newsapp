@@ -6,8 +6,43 @@ abstract final class FeedListTuning {
     parent: ClampingScrollPhysics(),
   );
 
-  /// Pixels of off-screen layout cache (balance memory vs jank).
-  static const double cacheExtent = 240;
+  static const double cacheExtent = 200;
 
   static const EdgeInsets listPadding = EdgeInsets.zero;
+
+  /// Applies [ClampingScrollPhysics] to descendant scrollables.
+  static Widget clampingScroll({required Widget child}) {
+    return ScrollConfiguration(
+      behavior: const _FeedScrollBehavior(),
+      child: child,
+    );
+  }
+}
+
+class _FeedScrollBehavior extends MaterialScrollBehavior {
+  const _FeedScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+}
+
+/// Const footer spinner for paginated feed lists.
+class FeedListLoadingFooter extends StatelessWidget {
+  const FeedListLoadingFooter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.all(16),
+      child: Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+    );
+  }
 }

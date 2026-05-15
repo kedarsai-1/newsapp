@@ -112,7 +112,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
+                      parent: ClampingScrollPhysics(),
                     ),
                     slivers: [
                       SliverAppBar(
@@ -170,7 +170,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                               padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
-                                physics: const BouncingScrollPhysics(),
+                                physics: const ClampingScrollPhysics(),
                                 child: Row(
                                   children: [
                                     _SavedFilterChip(

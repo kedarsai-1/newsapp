@@ -33,10 +33,10 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
       trailing: IconButton(
         visualDensity: VisualDensity.compact,
         padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
         tooltip: 'Remove from saved',
         onPressed: onRemove,
-        icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9E9E9E)),
+        icon: const Icon(Icons.close_rounded, size: 17, color: Color(0xFF9E9E9E)),
       ),
     );
   }

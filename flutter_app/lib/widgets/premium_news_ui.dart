@@ -465,9 +465,9 @@ class PremiumNewsTile extends StatelessWidget {
             : IconButton(
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9E9E9E)),
+                icon: const Icon(Icons.close_rounded, size: 17, color: Color(0xFF9E9E9E)),
               ),
       ),
     );
@@ -483,7 +483,7 @@ class PremiumSkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Shimmer.fromColors(
         baseColor: _base,
         highlightColor: _highlight,
@@ -491,11 +491,11 @@ class PremiumSkeletonCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: kFeedThumbSize,
-              height: kFeedThumbSize,
+              width: kFeedThumbWidth,
+              height: kFeedThumbHeight,
               decoration: BoxDecoration(
                 color: _base,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(3),
               ),
             ),
             const SizedBox(width: 10),

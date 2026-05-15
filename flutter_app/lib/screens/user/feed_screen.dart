@@ -14,10 +14,10 @@ import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/feed/dailyhunt_feed_article_card.dart';
 import '../../widgets/feed/dailyhunt_feed_skeleton.dart';
 import '../../widgets/feed/feed_image_cache.dart';
-import '../../widgets/feed/feed_list_tuning.dart';
+import '../../widgets/feed/feed_list_view.dart';
+import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/premium_news_ui.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -25,85 +25,6 @@ class FeedScreen extends StatefulWidget {
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
-}
-
-class _FeedListBody extends StatefulWidget {
-  final NewsProvider provider;
-  final double bottomInset;
-  final Map<String, bool> likedByPostId;
-  final Map<String, bool> bookmarkedByPostId;
-  final Future<void> Function() onRefresh;
-  final ScrollController scrollController;
-  final Future<bool> Function(NewsPost) onLike;
-  final Future<bool> Function(NewsPost) onBookmark;
-  final void Function(NewsPost) onShare;
-
-  const _FeedListBody({
-    required this.provider,
-    required this.bottomInset,
-    required this.likedByPostId,
-    required this.bookmarkedByPostId,
-    required this.onRefresh,
-    required this.scrollController,
-    required this.onLike,
-    required this.onBookmark,
-    required this.onShare,
-  });
-
-  @override
-  State<_FeedListBody> createState() => _FeedListBodyState();
-}
-
-class _FeedListBodyState extends State<_FeedListBody>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final provider = widget.provider;
-    final extra = provider.loading && provider.hasMore ? 1 : 0;
-
-    return RefreshIndicator(
-      color: DailyhuntTheme.accentGreen,
-      onRefresh: widget.onRefresh,
-      child: ListView.builder(
-        controller: widget.scrollController,
-        physics: FeedListTuning.scrollPhysics,
-        cacheExtent: FeedListTuning.cacheExtent,
-        addAutomaticKeepAlives: false,
-        addRepaintBoundaries: true,
-        padding: FeedListTuning.listPadding.copyWith(bottom: widget.bottomInset),
-        itemCount: provider.posts.length + extra,
-        itemBuilder: (context, index) {
-          if (index >= provider.posts.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            );
-          }
-          final post = provider.posts[index];
-          return DailyhuntFeedArticleCard(
-            key: ValueKey(post.id),
-            post: post,
-            liked: widget.likedByPostId[post.id] ?? false,
-            saved: widget.bookmarkedByPostId[post.id] ?? false,
-            onTap: () => context.push('/article/${post.id}'),
-            onLike: () => widget.onLike(post),
-            onShare: () => widget.onShare(post),
-            onBookmark: () => widget.onBookmark(post),
-          );
-        },
-      ),
-    );
-  }
 }
 
 /// Feed tab labels → API category slugs (`null` = Top News / all).
@@ -115,6 +36,16 @@ const List<(String, String?)> _kFeedTabs = [
   ('Technology', 'technology'),
   ('Local', 'local'),
   ('Business', 'business'),
+];
+
+const List<String> _kFeedTabLabels = [
+  'Top News',
+  'Politics',
+  'Sports',
+  'Entertainment',
+  'Technology',
+  'Local',
+  'Business',
 ];
 
 class _FeedScreenState extends State<FeedScreen> {
@@ -329,89 +260,95 @@ class _FeedScreenState extends State<FeedScreen> {
     await Share.share(text, subject: post.title);
   }
 
+  void _openArticle(NewsPost post) {
+    context.push('/article/${post.id}');
+  }
+
+  Future<void> _refreshFeed() async {
+    await context.read<NewsProvider>().refresh();
+    _scrollFeedToTop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<NewsProvider>();
     final bottomInset = MediaQuery.paddingOf(context).bottom + 72;
-    final chipIndex = _chipIndexForProvider(provider);
 
     return Theme(
       data: DailyhuntTheme.overlay(context),
-      child: Builder(
-        builder: (context) {
-          final cs = Theme.of(context).colorScheme;
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                RepaintBoundary(
-                  child: _DailyhuntFeedAppBar(colorScheme: cs),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const RepaintBoundary(child: _DailyhuntFeedAppBar()),
+            RepaintBoundary(
+              child: Selector<NewsProvider, int>(
+                selector: (_, news) => _chipIndexForProvider(news),
+                builder: (_, chipIndex, __) => DailyhuntCategoryTabBar(
+                  categories: _kFeedTabLabels,
+                  selectedIndex: chipIndex,
+                  onSelected: _selectCategoryChip,
                 ),
-                RepaintBoundary(
-                  child: _CategoryChipStrip(
-                    selectedIndex: chipIndex,
-                    onSelect: _selectCategoryChip,
-                  ),
-                ),
-                Expanded(
-                  child: _buildBody(provider, bottomInset, cs),
-                ),
-              ],
+              ),
             ),
-          );
-        },
+            Expanded(
+              child: Selector<NewsProvider, FeedListSnapshot>(
+                selector: (_, news) => readFeedListSnapshot(news),
+                builder: (context, snap, _) {
+                  if (snap.error != null) {
+                    return ErrorState(
+                      message: snap.error!,
+                      onRetry: context.read<NewsProvider>().refresh,
+                    );
+                  }
+                  if (snap.posts.isEmpty && snap.refreshing) {
+                    FeedImagePrecache.reset();
+                    return const DailyhuntFeedSkeleton(rowCount: 10);
+                  }
+                  if (snap.posts.isEmpty) {
+                    return const EmptyState(
+                      icon: Icons.article_outlined,
+                      title: 'No stories yet',
+                      subtitle: 'Pull down to refresh or pick another category.',
+                    );
+                  }
+                  scheduleFeedImagePrecache(
+                    context,
+                    snap.posts,
+                    _scrollController,
+                  );
+                  return FeedListView(
+                    posts: snap.posts,
+                    loadingMore: snap.loading && snap.hasMore,
+                    bottomInset: bottomInset,
+                    scrollController: _scrollController,
+                    likedByPostId: _likedByPostId,
+                    bookmarkedByPostId: _bookmarkedByPostId,
+                    onRefresh: _refreshFeed,
+                    onLike: _toggleLike,
+                    onBookmark: _toggleBookmark,
+                    onShare: _share,
+                    onOpen: _openArticle,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildBody(NewsProvider provider, double bottomInset, ColorScheme cs) {
-    if (provider.error != null) {
-      return ErrorState(message: provider.error!, onRetry: provider.refresh);
-    }
-    if (provider.posts.isEmpty && provider.refreshing) {
-      FeedImagePrecache.reset();
-      return const DailyhuntFeedSkeleton(rowCount: 10);
-    }
-    if (provider.posts.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) return;
-        FeedImagePrecache.onScroll(
-          context,
-          provider.posts,
-          _scrollController.position,
-        );
-      });
-    }
-    if (provider.posts.isEmpty) {
-      return const EmptyState(
-        icon: Icons.article_outlined,
-        title: 'No stories yet',
-        subtitle: 'Pull down to refresh or pick another category.',
-      );
-    }
-
-    return _FeedListBody(
-      provider: provider,
-      bottomInset: bottomInset,
-      likedByPostId: _likedByPostId,
-      bookmarkedByPostId: _bookmarkedByPostId,
-      scrollController: _scrollController,
-      onRefresh: () async {
-        await provider.refresh();
-        _scrollFeedToTop();
-      },
-      onLike: _toggleLike,
-      onBookmark: _toggleBookmark,
-      onShare: _share,
     );
   }
 }
 
 class _DailyhuntFeedAppBar extends StatelessWidget {
-  final ColorScheme colorScheme;
+  const _DailyhuntFeedAppBar();
 
-  const _DailyhuntFeedAppBar({required this.colorScheme});
+  static const _titleStyle = TextStyle(
+    fontWeight: FontWeight.w900,
+    fontSize: 17,
+    letterSpacing: -0.4,
+    color: Color(0xFF111111),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -429,13 +366,13 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                 IconButton(
                   tooltip: 'Profile',
                   onPressed: () => context.go('/settings'),
-                  icon: CircleAvatar(
+                  icon: const CircleAvatar(
                     radius: 18,
-                    backgroundColor: const Color(0xFFE8EAED),
+                    backgroundColor: Color(0xFFE8EAED),
                     child: Icon(
                       Icons.person_rounded,
                       size: 20,
-                      color: colorScheme.onSurface.withValues(alpha: 0.75),
+                      color: Color(0xFF5F6368),
                     ),
                   ),
                 ),
@@ -464,12 +401,7 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                           AppConstants.appName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 17,
-                            letterSpacing: -0.4,
-                            color: colorScheme.onSurface,
-                          ),
+                          style: _titleStyle,
                         ),
                       ),
                     ],
@@ -487,70 +419,14 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                       ),
                     );
                   },
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.notifications_none_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.75),
+                    color: Color(0xFF5F6368),
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CategoryChipStrip extends StatelessWidget {
-  final int selectedIndex;
-  final ValueChanged<int> onSelect;
-
-  const _CategoryChipStrip({
-    required this.selectedIndex,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      child: SizedBox(
-        height: 40,
-        child: ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          itemCount: _kFeedTabs.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (context, i) {
-            final selected = i == selectedIndex;
-            final label = _kFeedTabs[i].$1;
-            return Center(
-              child: Material(
-                color: selected
-                    ? DailyhuntTheme.accentGreen.withValues(alpha: 0.12)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                child: InkWell(
-                  onTap: () => onSelect(i),
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                        color: selected
-                            ? DailyhuntTheme.accentGreen
-                            : const Color(0xFF5F6368),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
         ),
       ),
     );
@@ -624,6 +500,9 @@ class _SearchResultsState extends State<_SearchResults> {
       return const EmptyState(icon: Icons.search_off, title: 'No results');
     }
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: ClampingScrollPhysics(),
+      ),
       padding: const EdgeInsets.all(12),
       itemCount: widget.provider.posts.length,
       itemBuilder: (context, index) {

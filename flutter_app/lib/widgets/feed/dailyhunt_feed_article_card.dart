@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/models.dart';
-import '../../theme/dailyhunt_theme.dart';
 import '../premium_news_ui.dart';
 import 'compact_news_row.dart';
 
-/// API feed row — local like/save state avoids rebuilding the whole list.
+/// API feed row — [RepaintBoundary] + local like/save state.
 class DailyhuntFeedArticleCard extends StatefulWidget {
   final NewsPost post;
   final bool liked;
   final bool saved;
-  final VoidCallback onTap;
+  final VoidCallback onOpen;
   final Future<bool> Function() onLike;
   final VoidCallback onShare;
   final Future<bool> Function() onBookmark;
@@ -21,7 +20,7 @@ class DailyhuntFeedArticleCard extends StatefulWidget {
     required this.post,
     required this.liked,
     required this.saved,
-    required this.onTap,
+    required this.onOpen,
     required this.onLike,
     required this.onShare,
     required this.onBookmark,
@@ -66,8 +65,8 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
         ? s
         : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (base.isEmpty) return null;
-    if (base.length <= 72) return base;
-    return '${base.substring(0, 72).trim()}…';
+    if (base.length <= 58) return base;
+    return '${base.substring(0, 58).trim()}…';
   }
 
   static String _buildMeta(NewsPost post) {
@@ -93,27 +92,27 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
 
   @override
   Widget build(BuildContext context) {
-    return CompactNewsRow(
-      title: widget.post.title,
-      summary: _summary,
-      imageUrl: _imageUrl,
-      metaLine: _metaLine,
-      onTap: widget.onTap,
-      actionBar: CompactFeedActionBar(
-        actions: [
+    return RepaintBoundary(
+      child: CompactNewsRow(
+        title: widget.post.title,
+        summary: _summary,
+        imageUrl: _imageUrl,
+        metaLine: _metaLine,
+        onTap: widget.onOpen,
+        footerActions: [
           CompactFeedAction(
             icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: _liked ? Colors.redAccent : const Color(0xFF757575),
+            color: _liked ? CompactFeedAction.liked : CompactFeedAction.muted,
             onTap: _handleLike,
           ),
           CompactFeedAction(
             icon: Icons.share_outlined,
-            color: const Color(0xFF757575),
+            color: CompactFeedAction.muted,
             onTap: widget.onShare,
           ),
           CompactFeedAction(
             icon: _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-            color: _saved ? DailyhuntTheme.accentGreen : const Color(0xFF757575),
+            color: _saved ? CompactFeedAction.saved : CompactFeedAction.muted,
             onTap: _handleBookmark,
           ),
         ],

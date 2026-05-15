@@ -179,11 +179,12 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                             physics: FeedListTuning.scrollPhysics,
                             child: DailyhuntFeedShimmer(itemCount: 6),
                           )
-                        : ListView.builder(
+                        : FeedListTuning.clampingScroll(
+                            child: ListView.builder(
                             physics: FeedListTuning.scrollPhysics,
                             cacheExtent: FeedListTuning.cacheExtent,
                             addAutomaticKeepAlives: false,
-                            addRepaintBoundaries: true,
+                            addRepaintBoundaries: false,
                             padding: FeedListTuning.listPadding.copyWith(
                               bottom: 16,
                             ),
@@ -210,6 +211,7 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                                 },
                               );
                             },
+                          ),
                           ),
                   ),
                 ),

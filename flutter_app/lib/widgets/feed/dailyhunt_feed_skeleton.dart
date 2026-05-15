@@ -61,16 +61,18 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
     return ColoredBox(
       color: Colors.white,
       child: SizedBox(
-        height: 42,
+        height: 32,
         child: ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           itemCount: 7,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          separatorBuilder: (_, __) => const SizedBox(width: 4),
           itemBuilder: (_, i) {
-            final w = 52.0 + (i % 3) * 18.0;
-            return NewsShimmerLoader.greyBox(width: w, height: 26, radius: 13);
+            final w = 44.0 + (i % 3) * 14.0;
+            return Center(
+              child: NewsShimmerLoader.greyBox(width: w, height: 14, radius: 3),
+            );
           },
         ),
       ),

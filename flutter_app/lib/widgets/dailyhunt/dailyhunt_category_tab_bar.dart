@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/dailyhunt_theme.dart';
+import 'dailyhunt_category_chip.dart';
 
-/// Horizontal scrollable category chips with active highlight (Dailyhunt-style).
+/// Horizontal category strip — compact chips, tight spacing (Dailyhunt-style).
 class DailyhuntCategoryTabBar extends StatelessWidget {
   final List<String> categories;
   final int selectedIndex;
@@ -15,52 +15,26 @@ class DailyhuntCategoryTabBar extends StatelessWidget {
     required this.onSelected,
   });
 
+  static const double stripHeight = 32;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
+    return ColoredBox(
       color: Colors.white,
       child: SizedBox(
-        height: 44,
+        height: stripHeight,
         child: ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           itemCount: categories.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          separatorBuilder: (_, __) => const SizedBox(width: 4),
           itemBuilder: (context, i) {
-            final selected = i == selectedIndex;
             return Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                child: Material(
-                  color: selected
-                      ? DailyhuntTheme.accentGreen.withValues(alpha: 0.12)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(20),
-                  child: InkWell(
-                    onTap: () => onSelected(i),
-                    borderRadius: BorderRadius.circular(20),
-                    child: AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                        color: selected
-                            ? DailyhuntTheme.accentGreen
-                            : cs.onSurface.withValues(alpha: 0.62),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
-                        ),
-                        child: Text(categories[i]),
-                      ),
-                    ),
-                  ),
-                ),
+              child: DailyhuntCategoryChip(
+                label: categories[i],
+                selected: i == selectedIndex,
+                onTap: () => onSelected(i),
               ),
             );
           },

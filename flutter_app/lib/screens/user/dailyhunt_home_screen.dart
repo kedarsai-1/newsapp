@@ -6,6 +6,7 @@ import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/dailyhunt/dailyhunt_feed_card.dart';
 import '../../widgets/dailyhunt/dailyhunt_feed_shimmer.dart';
 import '../../widgets/dailyhunt/dailyhunt_home_app_bar.dart';
+import '../../widgets/feed/feed_list_tuning.dart';
 
 /// Demo feed item for UI-only home (replace with API models later).
 class DailyhuntFeedItem {
@@ -49,8 +50,6 @@ class DailyhuntHomeScreen extends StatefulWidget {
 class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
   int _categoryIndex = 0;
   bool _loading = true;
-  final Map<String, bool> _liked = {};
-  final Map<String, bool> _bookmarked = {};
 
   @override
   void initState() {
@@ -139,7 +138,7 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
               .onSurface
               .withValues(alpha: 0.07);
           return Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
+            backgroundColor: Colors.white,
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -177,33 +176,29 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                     onRefresh: _onRefresh,
                     child: _loading
                         ? const SingleChildScrollView(
-                            physics: AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics(),
-                            ),
+                            physics: FeedListTuning.scrollPhysics,
                             child: DailyhuntFeedShimmer(itemCount: 6),
                           )
                         : ListView.builder(
-                            physics: const AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics(),
+                            physics: FeedListTuning.scrollPhysics,
+                            cacheExtent: FeedListTuning.cacheExtent,
+                            addAutomaticKeepAlives: false,
+                            addRepaintBoundaries: true,
+                            padding: FeedListTuning.listPadding.copyWith(
+                              bottom: 16,
                             ),
-                            padding: const EdgeInsets.only(top: 8, bottom: 20),
                             itemCount: items.length,
                             itemBuilder: (context, index) {
                               final s = items[index];
-                              final liked = _liked[s.id] ?? false;
-                              final bookmarked = _bookmarked[s.id] ?? false;
                               return DailyhuntFeedCard(
+                                key: ValueKey(s.id),
                                 imageUrl: s.imageUrl,
                                 headline: s.headline,
                                 summary: s.summary,
                                 sourceName: s.sourceName,
                                 publishedAt: s.publishedAt,
                                 likeCount: s.likeCount,
-                                liked: liked,
-                                bookmarked: bookmarked,
                                 onTap: () {},
-                                onLike: () =>
-                                    setState(() => _liked[s.id] = !liked),
                                 onShare: () {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -213,9 +208,6 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                                     ),
                                   );
                                 },
-                                onBookmark: () => setState(
-                                  () => _bookmarked[s.id] = !bookmarked,
-                                ),
                               );
                             },
                           ),

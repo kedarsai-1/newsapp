@@ -24,7 +24,11 @@ class ShortsNewsScreen extends StatefulWidget {
   State<ShortsNewsScreen> createState() => _ShortsNewsScreenState();
 }
 
-class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
+class _ShortsNewsScreenState extends State<ShortsNewsScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   late final PageController _pageController;
   late final NewsProvider _news;
   late final ShortsProvider _shorts;
@@ -97,50 +101,54 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
     }
   }
 
-  Future<void> _toggleLike(NewsPost post) async {
+  Future<bool> _toggleLike(NewsPost post) async {
     final id = post.id;
     final prev = _liked[id] ?? false;
-    setState(() => _liked[id] = !prev);
+    _liked[id] = !prev;
 
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final liked = await ApiService.toggleGuestLike(id);
-      if (mounted) setState(() => _liked[id] = liked);
-      return;
+      if (!mounted) return false;
+      _liked[id] = liked;
+      return true;
     }
     final res = await ApiService.toggleLike(id);
-    if (!mounted) return;
+    if (!mounted) return false;
     if (res['success'] != true) {
-      setState(() => _liked[id] = prev);
+      _liked[id] = prev;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(res['message']?.toString() ?? 'Could not update')),
       );
-      return;
+      return false;
     }
-    setState(() => _liked[id] = res['liked'] == true);
+    _liked[id] = res['liked'] == true;
+    return true;
   }
 
-  Future<void> _toggleSave(NewsPost post) async {
+  Future<bool> _toggleSave(NewsPost post) async {
     final id = post.id;
     final prev = _saved[id] ?? false;
-    setState(() => _saved[id] = !prev);
+    _saved[id] = !prev;
 
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final saved = await ApiService.toggleGuestBookmark(post);
-      if (mounted) setState(() => _saved[id] = saved);
-      return;
+      if (!mounted) return false;
+      _saved[id] = saved;
+      return true;
     }
     final res = await ApiService.toggleBookmark(id);
-    if (!mounted) return;
+    if (!mounted) return false;
     if (res['success'] != true) {
-      setState(() => _saved[id] = prev);
+      _saved[id] = prev;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(res['message']?.toString() ?? 'Could not save')),
       );
-      return;
+      return false;
     }
-    setState(() => _saved[id] = res['bookmarked'] == true);
+    _saved[id] = res['bookmarked'] == true;
+    return true;
   }
 
   Future<void> _share(NewsPost post) async {
@@ -179,6 +187,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final shorts = context.watch<ShortsProvider>();
     final lang = _apiLanguage(context.watch<NewsProvider>());
     final posts = shorts.posts;
@@ -266,6 +275,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
           PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,
+            physics: const ClampingScrollPhysics(),
             allowImplicitScrolling: false,
             itemCount: posts.length,
             onPageChanged: (i) {
@@ -276,6 +286,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen> {
               final post = posts[i];
               return RepaintBoundary(
                 child: DailyhuntShortsPage(
+                  key: ValueKey(post.id),
                   post: post,
                   isActive: i == _index,
                   liked: _liked[post.id] ?? false,

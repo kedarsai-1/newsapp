@@ -452,89 +452,81 @@ class PremiumNewsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     final imageUrl = premiumImageUrl(post);
+    final source = post.category?.name ?? post.sourceName ?? 'News';
     return RepaintBoundary(
-      child: FrostedPanel(
-        radius: 20,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        child: TapScale(
-          onTap: onTap,
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: SizedBox(
-                  width: 92,
-                  height: 92,
-                  child: imageUrl.isEmpty
-                      ? ColoredBox(
-                          color: p.inputFill,
-                          child: Icon(AppIcons.home, color: p.primary),
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.cover,
-                          fadeInDuration: const Duration(milliseconds: 220),
-                          placeholder: (_, __) =>
-                              ColoredBox(color: p.inputFill),
-                          errorWidget: (_, __, ___) => ColoredBox(
-                            color: p.inputFill,
-                            child: Icon(Icons.image_not_supported_outlined,
-                                color: p.textHint),
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      post.category?.name ?? post.sourceName ?? 'Top story',
-                      style: context.metaText.copyWith(
-                        color: p.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Material(
+          color: Colors.white,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: imageUrl.isEmpty
+                          ? const ColoredBox(
+                              color: Color(0xFFF0F0F0),
+                              child: Icon(Icons.article_outlined, size: 28),
+                            )
+                          : CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              fit: BoxFit.cover,
+                              fadeInDuration: Duration.zero,
+                              fadeOutDuration: Duration.zero,
+                              placeholder: (_, __) =>
+                                  const ColoredBox(color: Color(0xFFE8E8E8)),
+                              errorWidget: (_, __, ___) => const ColoredBox(
+                                color: Color(0xFFF0F0F0),
+                                child: Icon(Icons.broken_image_outlined),
+                              ),
+                            ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      post.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.titleText.copyWith(
-                        color: p.textPrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.schedule_rounded,
-                            size: 14, color: p.textHint),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            timeago.format(post.displayTime),
-                            overflow: TextOverflow.ellipsis,
-                            style: context.metaText.copyWith(color: p.textHint),
+                        Text(
+                          post.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14.5,
+                            height: 1.2,
                           ),
                         ),
-                        if (onRemove != null)
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            onPressed: onRemove,
-                            icon: Icon(Icons.bookmark_remove_rounded,
-                                color: p.error),
+                        const SizedBox(height: 5),
+                        Text(
+                          '$source · ${timeago.format(post.displayTime)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF909090),
                           ),
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (onRemove != null)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onRemove,
+                      icon: const Icon(Icons.close, size: 20),
+                    ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -545,55 +537,56 @@ class PremiumNewsTile extends StatelessWidget {
 class PremiumSkeletonCard extends StatelessWidget {
   const PremiumSkeletonCard({super.key});
 
+  static const Color _base = Color(0xFFE0E0E0);
+  static const Color _highlight = Color(0xFFF5F5F5);
+
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    return FrostedPanel(
-      radius: 20,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Shimmer.fromColors(
-        baseColor: p.inputFill,
-        highlightColor: Color.lerp(p.surface, p.primary, 0.12)!,
+        baseColor: _base,
+        highlightColor: _highlight,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 92,
-              height: 92,
+              width: 84,
+              height: 84,
               decoration: BoxDecoration(
-                color: p.inputFill,
-                borderRadius: BorderRadius.circular(16),
+                color: _base,
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    height: 10,
-                    width: 90,
-                    decoration: BoxDecoration(
-                      color: p.inputFill,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    height: 14,
+                    height: 12,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: p.inputFill,
-                      borderRadius: BorderRadius.circular(8),
+                      color: _base,
+                      borderRadius: BorderRadius.circular(3),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Container(
-                    height: 14,
-                    width: 180,
+                    height: 12,
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: p.inputFill,
-                      borderRadius: BorderRadius.circular(8),
+                      color: _base,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    height: 10,
+                    width: 120,
+                    decoration: BoxDecoration(
+                      color: _base,
+                      borderRadius: BorderRadius.circular(3),
                     ),
                   ),
                 ],

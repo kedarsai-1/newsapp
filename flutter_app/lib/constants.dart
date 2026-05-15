@@ -172,11 +172,9 @@ class GlassBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppGradients.background(p),
-      ),
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    return ColoredBox(
+      color: isLight ? Colors.white : Theme.of(context).scaffoldBackgroundColor,
       child: child,
     );
   }

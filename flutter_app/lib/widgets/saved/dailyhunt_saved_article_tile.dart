@@ -32,25 +32,20 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final thumbPx = (96 * dpr).round().clamp(120, 320);
 
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.10),
-      surfaceTintColor: Colors.transparent,
+    return Material(
       color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 6, 10),
+          padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 96,
-                  height: 96,
+                  width: 84,
+                  height: 84,
                   child: imageUrl.isEmpty
                       ? ColoredBox(
                           color: cs.surfaceContainerHighest.withValues(
@@ -66,7 +61,8 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
                           imageUrl: imageUrl,
                           fit: BoxFit.cover,
                           memCacheWidth: kIsWeb ? null : thumbPx,
-                          fadeInDuration: const Duration(milliseconds: 200),
+                          fadeInDuration: Duration.zero,
+                          fadeOutDuration: Duration.zero,
                           placeholder: (_, __) => ColoredBox(
                             color: cs.surfaceContainerHighest.withValues(
                               alpha: 0.5,

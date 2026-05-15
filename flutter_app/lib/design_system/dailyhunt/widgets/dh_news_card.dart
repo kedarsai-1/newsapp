@@ -30,22 +30,22 @@ class DhNewsCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final dpr = MediaQuery.of(context).devicePixelRatio;
-    final thumbPx = (88 * dpr).round().clamp(120, 280);
+    final thumbPx = (84 * dpr).round().clamp(120, 280);
 
-    return Card(
+    return Material(
+      color: Colors.white,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(DhTokens.radiusCard),
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: SizedBox(
-                  width: 88,
-                  height: 88,
+                  width: 84,
+                  height: 84,
                   child: imageUrl.isEmpty
                       ? ColoredBox(
                           color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
@@ -59,7 +59,8 @@ class DhNewsCard extends StatelessWidget {
                           imageUrl: imageUrl,
                           fit: BoxFit.cover,
                           memCacheWidth: kIsWeb ? null : thumbPx,
-                          fadeInDuration: const Duration(milliseconds: 200),
+                          fadeInDuration: Duration.zero,
+                          fadeOutDuration: Duration.zero,
                           placeholder: (_, __) => ColoredBox(
                             color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                           ),

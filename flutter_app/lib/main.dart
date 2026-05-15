@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -54,25 +53,12 @@ CustomTransitionPage<void> _smoothAppPage({
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
-    transitionDuration: const Duration(milliseconds: 320),
-    reverseTransitionDuration: const Duration(milliseconds: 260),
+    transitionDuration: const Duration(milliseconds: 120),
+    reverseTransitionDuration: const Duration(milliseconds: 100),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final fade =
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      final slide = Tween<Offset>(
-        begin: const Offset(0, 0.024),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-      final scale = Tween<double>(begin: 0.985, end: 1.0).animate(
-        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-      );
-
       return FadeTransition(
-        opacity: fade,
-        child: SlideTransition(
-          position: slide,
-          child: ScaleTransition(scale: scale, child: child),
-        ),
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: child,
       );
     },
   );
@@ -541,56 +527,30 @@ class UserShell extends StatelessWidget {
 
     if (loc == '/home') {
       return Scaffold(
-        extendBody: true,
+        backgroundColor: Colors.white,
         body: child,
       );
     }
 
-    final isTabRoute = loc == '/feed' ||
-        loc == '/shorts' ||
-        loc == '/categories' ||
-        loc == '/bookmarks' ||
-        loc == '/settings';
-
     return Scaffold(
-      extendBody: true,
-      body: GlassBackground(
-        child: _HorizontalShellSwipe(
-          tabRoutes: const [
-            '/feed',
-            '/shorts',
-            '/categories',
-            '/bookmarks',
-            '/settings',
-          ],
-          // Only animate between bottom tabs. For pushed pages (e.g. /article/:id),
-          // animating the shell causes visible "flash" when popping back.
-          child: isTabRoute
-              ? AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: KeyedSubtree(
-                    key: ValueKey(loc),
-                    child: child,
-                  ),
-                )
-              : child,
-        ),
+      backgroundColor: Colors.white,
+      body: _HorizontalShellSwipe(
+        tabRoutes: const [
+          '/feed',
+          '/shorts',
+          '/categories',
+          '/bookmarks',
+          '/settings',
+        ],
+        child: child,
       ),
-      // Search is available in the Feed top bar; avoid duplicate floating button.
-      floatingActionButton: null,
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18),
-          topRight: Radius.circular(18),
-        ),
-        child: Container(
+      bottomNavigationBar: Material(
+        color: isLight ? Colors.white : p.surface,
+        elevation: 0,
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            color: isLight ? Colors.white : p.surface,
             border: Border(
-              top: BorderSide(
-                  color: p.cardBorder.withValues(alpha: isLight ? 1.0 : 0.55)),
+              top: BorderSide(color: p.cardBorder.withValues(alpha: 0.35)),
             ),
           ),
           child: _buildNavBar(context, loc, idx),
@@ -629,7 +589,7 @@ class UserShell extends StatelessWidget {
           }),
         ),
         child: NavigationBar(
-          animationDuration: const Duration(milliseconds: 220),
+          animationDuration: const Duration(milliseconds: 80),
           selectedIndex: idx,
           backgroundColor: Colors.transparent,
           elevation: 0,
@@ -778,24 +738,14 @@ class ReporterShell extends StatelessWidget {
     }
 
     return Scaffold(
-      extendBody: true,
-      body: GlassBackground(
-        child: _HorizontalShellSwipe(
-          tabRoutes: const [
-            '/reporter',
-            '/reporter/posts',
-            '/reporter/settings'
-          ],
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: KeyedSubtree(
-              key: ValueKey(loc),
-              child: child,
-            ),
-          ),
-        ),
+      backgroundColor: Colors.white,
+      body: _HorizontalShellSwipe(
+        tabRoutes: const [
+          '/reporter',
+          '/reporter/posts',
+          '/reporter/settings',
+        ],
+        child: child,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _goIfNeeded(context, loc, '/reporter/new'),
@@ -867,35 +817,20 @@ class AdminShell extends StatelessWidget {
     if (loc == '/admin/settings') idx = 3;
 
     return Scaffold(
-      body: GlassBackground(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: KeyedSubtree(
-            key: ValueKey(loc),
-            child: child,
-          ),
-        ),
-      ),
-      extendBody: true,
-      bottomNavigationBar: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(18),
-          topRight: Radius.circular(18),
-        ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            decoration: BoxDecoration(
-              color: p.surface.withValues(alpha: 0.70),
-              border: Border(
-                top: BorderSide(color: p.cardBorder.withValues(alpha: 0.55)),
-              ),
+      backgroundColor: Colors.white,
+      body: child,
+      bottomNavigationBar: Material(
+        color: p.surface,
+        elevation: 0,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: p.cardBorder.withValues(alpha: 0.35)),
             ),
-            child: SafeArea(
-              top: false,
-              child: NavigationBarTheme(
+          ),
+          child: SafeArea(
+            top: false,
+            child: NavigationBarTheme(
                 data: NavigationBarThemeData(
                   height: 66,
                   labelBehavior:
@@ -921,7 +856,7 @@ class AdminShell extends StatelessWidget {
                   }),
                 ),
                 child: NavigationBar(
-                  animationDuration: const Duration(milliseconds: 220),
+                  animationDuration: const Duration(milliseconds: 80),
                   selectedIndex: idx,
                   backgroundColor: Colors.transparent,
                   elevation: 0,
@@ -968,7 +903,6 @@ class AdminShell extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timeago/timeago.dart' as timeago;
 
 import '../../constants.dart';
 import '../../models/models.dart';
@@ -15,6 +16,8 @@ import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/feed/dailyhunt_feed_article_card.dart';
 import '../../widgets/feed/dailyhunt_feed_skeleton.dart';
+import '../../widgets/feed/feed_image_cache.dart';
+import '../../widgets/feed/feed_list_tuning.dart';
 import '../../widgets/premium_news_ui.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -22,6 +25,85 @@ class FeedScreen extends StatefulWidget {
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedListBody extends StatefulWidget {
+  final NewsProvider provider;
+  final double bottomInset;
+  final Map<String, bool> likedByPostId;
+  final Map<String, bool> bookmarkedByPostId;
+  final Future<void> Function() onRefresh;
+  final ScrollController scrollController;
+  final Future<bool> Function(NewsPost) onLike;
+  final Future<bool> Function(NewsPost) onBookmark;
+  final void Function(NewsPost) onShare;
+
+  const _FeedListBody({
+    required this.provider,
+    required this.bottomInset,
+    required this.likedByPostId,
+    required this.bookmarkedByPostId,
+    required this.onRefresh,
+    required this.scrollController,
+    required this.onLike,
+    required this.onBookmark,
+    required this.onShare,
+  });
+
+  @override
+  State<_FeedListBody> createState() => _FeedListBodyState();
+}
+
+class _FeedListBodyState extends State<_FeedListBody>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final provider = widget.provider;
+    final extra = provider.loading && provider.hasMore ? 1 : 0;
+
+    return RefreshIndicator(
+      color: DailyhuntTheme.accentGreen,
+      onRefresh: widget.onRefresh,
+      child: ListView.builder(
+        controller: widget.scrollController,
+        physics: FeedListTuning.scrollPhysics,
+        cacheExtent: FeedListTuning.cacheExtent,
+        addAutomaticKeepAlives: false,
+        addRepaintBoundaries: true,
+        padding: FeedListTuning.listPadding.copyWith(bottom: widget.bottomInset),
+        itemCount: provider.posts.length + extra,
+        itemBuilder: (context, index) {
+          if (index >= provider.posts.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          }
+          final post = provider.posts[index];
+          return DailyhuntFeedArticleCard(
+            key: ValueKey(post.id),
+            post: post,
+            liked: widget.likedByPostId[post.id] ?? false,
+            saved: widget.bookmarkedByPostId[post.id] ?? false,
+            onTap: () => context.push('/article/${post.id}'),
+            onLike: () => widget.onLike(post),
+            onShare: () => widget.onShare(post),
+            onBookmark: () => widget.onBookmark(post),
+          );
+        },
+      ),
+    );
+  }
 }
 
 /// Feed tab labels → API category slugs (`null` = Top News / all).
@@ -73,9 +155,12 @@ class _FeedScreenState extends State<FeedScreen> {
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
+    final news = context.read<NewsProvider>();
+    if (news.posts.isNotEmpty) {
+      FeedImagePrecache.onScroll(context, news.posts, pos);
+    }
     if (pos.maxScrollExtent <= 0) return;
     if (pos.pixels >= pos.maxScrollExtent - 480) {
-      final news = context.read<NewsProvider>();
       if (news.hasMore && !news.loading) news.loadMore();
     }
   }
@@ -156,7 +241,8 @@ class _FeedScreenState extends State<FeedScreen> {
     final news = context.read<NewsProvider>();
     final slug = _kFeedTabs[index].$2;
     if (slug == null) {
-      await news.selectCategory(null);
+      FeedImagePrecache.reset();
+    await news.selectCategory(null);
       _scrollFeedToTop();
       return;
     }
@@ -180,58 +266,61 @@ class _FeedScreenState extends State<FeedScreen> {
       );
       return;
     }
+    FeedImagePrecache.reset();
     await news.selectCategory(match.id);
     _scrollFeedToTop();
   }
 
-  Future<void> _toggleLike(NewsPost post) async {
+  Future<bool> _toggleLike(NewsPost post) async {
     final id = post.id;
     final prev = _likedByPostId[id] ?? false;
-    setState(() => _likedByPostId[id] = !prev);
+    _likedByPostId[id] = !prev;
 
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final liked = await ApiService.toggleGuestLike(id);
-      if (!mounted) return;
-      setState(() => _likedByPostId[id] = liked);
+      if (!mounted) return false;
+      _likedByPostId[id] = liked;
       _persistLikedCache();
-      return;
+      return true;
     }
     final res = await ApiService.toggleLike(id);
-    if (!mounted) return;
+    if (!mounted) return false;
     if (res['success'] != true) {
-      setState(() => _likedByPostId[id] = prev);
+      _likedByPostId[id] = prev;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(res['message']?.toString() ?? 'Could not update')),
       );
-      return;
+      return false;
     }
-    setState(() => _likedByPostId[id] = res['liked'] == true);
+    _likedByPostId[id] = res['liked'] == true;
     _persistLikedCache();
+    return true;
   }
 
-  Future<void> _toggleBookmark(NewsPost post) async {
+  Future<bool> _toggleBookmark(NewsPost post) async {
     final id = post.id;
     final prev = _bookmarkedByPostId[id] ?? false;
-    setState(() => _bookmarkedByPostId[id] = !prev);
+    _bookmarkedByPostId[id] = !prev;
 
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
     if (!loggedIn) {
       final saved = await ApiService.toggleGuestBookmark(post);
-      if (!mounted) return;
-      setState(() => _bookmarkedByPostId[id] = saved);
-      return;
+      if (!mounted) return false;
+      _bookmarkedByPostId[id] = saved;
+      return true;
     }
     final res = await ApiService.toggleBookmark(id);
-    if (!mounted) return;
+    if (!mounted) return false;
     if (res['success'] != true) {
-      setState(() => _bookmarkedByPostId[id] = prev);
+      _bookmarkedByPostId[id] = prev;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(res['message']?.toString() ?? 'Could not save')),
       );
-      return;
+      return false;
     }
-    setState(() => _bookmarkedByPostId[id] = res['bookmarked'] == true);
+    _bookmarkedByPostId[id] = res['bookmarked'] == true;
+    return true;
   }
 
   Future<void> _share(NewsPost post) async {
@@ -252,14 +341,18 @@ class _FeedScreenState extends State<FeedScreen> {
         builder: (context) {
           final cs = Theme.of(context).colorScheme;
           return Scaffold(
-            backgroundColor: const Color(0xFFF5F6F8),
+            backgroundColor: Colors.white,
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _DailyhuntFeedAppBar(colorScheme: cs),
-                _CategoryChipStrip(
-                  selectedIndex: chipIndex,
-                  onSelect: _selectCategoryChip,
+                RepaintBoundary(
+                  child: _DailyhuntFeedAppBar(colorScheme: cs),
+                ),
+                RepaintBoundary(
+                  child: _CategoryChipStrip(
+                    selectedIndex: chipIndex,
+                    onSelect: _selectCategoryChip,
+                  ),
                 ),
                 Expanded(
                   child: _buildBody(provider, bottomInset, cs),
@@ -277,7 +370,18 @@ class _FeedScreenState extends State<FeedScreen> {
       return ErrorState(message: provider.error!, onRetry: provider.refresh);
     }
     if (provider.posts.isEmpty && provider.refreshing) {
+      FeedImagePrecache.reset();
       return const DailyhuntFeedSkeleton(rowCount: 10);
+    }
+    if (provider.posts.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        FeedImagePrecache.onScroll(
+          context,
+          provider.posts,
+          _scrollController.position,
+        );
+      });
     }
     if (provider.posts.isEmpty) {
       return const EmptyState(
@@ -287,46 +391,19 @@ class _FeedScreenState extends State<FeedScreen> {
       );
     }
 
-    return RefreshIndicator(
-      color: DailyhuntTheme.accentGreen,
+    return _FeedListBody(
+      provider: provider,
+      bottomInset: bottomInset,
+      likedByPostId: _likedByPostId,
+      bookmarkedByPostId: _bookmarkedByPostId,
+      scrollController: _scrollController,
       onRefresh: () async {
         await provider.refresh();
         _scrollFeedToTop();
       },
-      child: ListView.builder(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: EdgeInsets.only(top: 6, bottom: bottomInset),
-        itemCount: provider.posts.length + (provider.loading && provider.hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index >= provider.posts.length) {
-            return const Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(strokeWidth: 2.5),
-                ),
-              ),
-            );
-          }
-          final post = provider.posts[index];
-          final liked = _likedByPostId[post.id] ?? false;
-          final saved = _bookmarkedByPostId[post.id] ?? false;
-          return DailyhuntFeedArticleCard(
-            post: post,
-            liked: liked,
-            saved: saved,
-            onTap: () => context.push('/article/${post.id}'),
-            onLike: () => _toggleLike(post),
-            onShare: () => _share(post),
-            onBookmark: () => _toggleBookmark(post),
-          );
-        },
-      ),
+      onLike: _toggleLike,
+      onBookmark: _toggleBookmark,
+      onShare: _share,
     );
   }
 }
@@ -340,8 +417,7 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      elevation: 0.5,
-      shadowColor: Colors.black26,
+      elevation: 0,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
@@ -550,11 +626,17 @@ class _SearchResultsState extends State<_SearchResults> {
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: widget.provider.posts.length,
-      itemBuilder: (context, index) => PremiumNewsTile(
-        post: widget.provider.posts[index],
-        onTap: () =>
-            context.push('/article/${widget.provider.posts[index].id}'),
-      ),
+      itemBuilder: (context, index) {
+        final post = widget.provider.posts[index];
+        return DhNewsCard(
+          title: post.title,
+          summary: premiumSnippet(post, maxLength: 120),
+          imageUrl: premiumImageUrl(post),
+          sourceLabel: post.sourceName ?? post.category?.name ?? 'News',
+          timeLabel: timeago.format(post.displayTime),
+          onTap: () => context.push('/article/${post.id}'),
+        );
+      },
     );
   }
 }

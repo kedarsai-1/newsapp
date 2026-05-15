@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
+import 'compact_news_row.dart';
 import '../premium_news_ui.dart';
 
 /// Throttled precache — runs at most once per scroll index window.
@@ -32,7 +33,7 @@ class FeedImagePrecache {
     final extent = position.viewportDimension;
     if (extent <= 0) return;
 
-    const rowExtent = 132.0;
+    const rowExtent = kFeedRowExtent;
     final first = (position.pixels / rowExtent).floor().clamp(0, posts.length - 1);
     if (_lastStartIndex == first) return;
     _lastStartIndex = first;

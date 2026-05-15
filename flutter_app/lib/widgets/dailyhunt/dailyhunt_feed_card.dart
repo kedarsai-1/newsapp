@@ -4,7 +4,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../theme/dailyhunt_theme.dart';
 import '../feed/compact_news_row.dart';
 
-/// Demo feed row — local interaction state, no parent [setState] on tap.
+/// Demo feed row — local interaction state.
 class DailyhuntFeedCard extends StatefulWidget {
   final String imageUrl;
   final String headline;
@@ -48,20 +48,18 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
     _bookmarked = widget.bookmarked;
   }
 
-  static String _formatCount(int n) {
-    if (n < 1000) return '$n';
-    if (n < 1000000) {
-      return '${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}k';
-    }
-    return '${(n / 1000000).toStringAsFixed(1)}M';
+  String? get _shortSummary {
+    final s = widget.summary.trim();
+    if (s.isEmpty) return null;
+    if (s.length <= 72) return s;
+    return '${s.substring(0, 72).trim()}…';
   }
 
   @override
   Widget build(BuildContext context) {
-    final count = widget.likeCount + (_liked ? 1 : 0);
     return CompactNewsRow(
       title: widget.headline,
-      summary: widget.summary,
+      summary: _shortSummary,
       imageUrl: widget.imageUrl,
       metaLine: '${widget.sourceName} · ${timeago.format(widget.publishedAt)}',
       onTap: widget.onTap,
@@ -69,20 +67,17 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
         actions: [
           CompactFeedAction(
             icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            label: _formatCount(count),
-            color: _liked ? Colors.redAccent : const Color(0xFF666666),
+            color: _liked ? Colors.redAccent : const Color(0xFF757575),
             onTap: () => setState(() => _liked = !_liked),
           ),
           CompactFeedAction(
             icon: Icons.share_outlined,
-            label: 'Share',
-            color: const Color(0xFF666666),
+            color: const Color(0xFF757575),
             onTap: widget.onShare,
           ),
           CompactFeedAction(
             icon: _bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-            label: 'Save',
-            color: _bookmarked ? DailyhuntTheme.accentGreen : const Color(0xFF666666),
+            color: _bookmarked ? DailyhuntTheme.accentGreen : const Color(0xFF757575),
             onTap: () {
               setState(() => _bookmarked = !_bookmarked);
               widget.onBookmark?.call();

@@ -7,6 +7,7 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../constants.dart';
 import '../models/models.dart';
+import 'feed/compact_news_row.dart';
 
 class PremiumScaffold extends StatelessWidget {
   final Widget child;
@@ -452,83 +453,22 @@ class PremiumNewsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = premiumImageUrl(post);
     final source = post.category?.name ?? post.sourceName ?? 'News';
     return RepaintBoundary(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Material(
-          color: Colors.white,
-          child: InkWell(
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: SizedBox(
-                      width: 84,
-                      height: 84,
-                      child: imageUrl.isEmpty
-                          ? const ColoredBox(
-                              color: Color(0xFFF0F0F0),
-                              child: Icon(Icons.article_outlined, size: 28),
-                            )
-                          : CachedNetworkImage(
-                              imageUrl: imageUrl,
-                              fit: BoxFit.cover,
-                              fadeInDuration: Duration.zero,
-                              fadeOutDuration: Duration.zero,
-                              placeholder: (_, __) =>
-                                  const ColoredBox(color: Color(0xFFE8E8E8)),
-                              errorWidget: (_, __, ___) => const ColoredBox(
-                                color: Color(0xFFF0F0F0),
-                                child: Icon(Icons.broken_image_outlined),
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14.5,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          '$source · ${timeago.format(post.displayTime)}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF909090),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (onRemove != null)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: onRemove,
-                      icon: const Icon(Icons.close, size: 20),
-                    ),
-                ],
+      child: CompactNewsRow(
+        title: post.title,
+        imageUrl: premiumImageUrl(post),
+        metaLine: '$source · ${timeago.format(post.displayTime)}',
+        onTap: onTap,
+        trailing: onRemove == null
+            ? null
+            : IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: onRemove,
+                icon: const Icon(Icons.close_rounded, size: 20, color: Color(0xFF9E9E9E)),
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -551,11 +491,11 @@ class PremiumSkeletonCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 84,
-              height: 84,
+              width: kFeedThumbSize,
+              height: kFeedThumbSize,
               decoration: BoxDecoration(
                 color: _base,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
               ),
             ),
             const SizedBox(width: 10),

@@ -34,7 +34,7 @@ class DailyhuntFeedArticleCard extends StatefulWidget {
 class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   late bool _liked;
   late bool _saved;
-  late final String _summary;
+  late final String? _summary;
   late final String _metaLine;
   late final String _imageUrl;
 
@@ -60,12 +60,14 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
     }
   }
 
-  static String _buildSummary(NewsPost post) {
+  static String? _buildSummary(NewsPost post) {
     final s = post.summary?.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (s != null && s.isNotEmpty) return s;
-    final b = post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (b.length <= 140) return b;
-    return '${b.substring(0, 140).trim()}…';
+    final base = (s != null && s.isNotEmpty)
+        ? s
+        : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (base.isEmpty) return null;
+    if (base.length <= 72) return base;
+    return '${base.substring(0, 72).trim()}…';
   }
 
   static String _buildMeta(NewsPost post) {
@@ -101,20 +103,17 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
         actions: [
           CompactFeedAction(
             icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            label: 'Like',
-            color: _liked ? Colors.redAccent : const Color(0xFF666666),
+            color: _liked ? Colors.redAccent : const Color(0xFF757575),
             onTap: _handleLike,
           ),
           CompactFeedAction(
             icon: Icons.share_outlined,
-            label: 'Share',
-            color: const Color(0xFF666666),
+            color: const Color(0xFF757575),
             onTap: widget.onShare,
           ),
           CompactFeedAction(
             icon: _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-            label: 'Save',
-            color: _saved ? DailyhuntTheme.accentGreen : const Color(0xFF666666),
+            color: _saved ? DailyhuntTheme.accentGreen : const Color(0xFF757575),
             onTap: _handleBookmark,
           ),
         ],

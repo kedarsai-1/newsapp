@@ -515,9 +515,9 @@ class _CategoryChipStrip extends StatelessWidget {
     return Material(
       color: Colors.white,
       child: SizedBox(
-        height: 46,
+        height: 40,
         child: ListView.separated(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           itemCount: _kFeedTabs.length,
@@ -535,7 +535,7 @@ class _CategoryChipStrip extends StatelessWidget {
                   onTap: () => onSelect(i),
                   borderRadius: BorderRadius.circular(20),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     child: Text(
                       label,
                       style: TextStyle(

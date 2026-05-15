@@ -7,7 +7,7 @@ abstract final class FeedListTuning {
   );
 
   /// Pixels of off-screen layout cache (balance memory vs jank).
-  static const double cacheExtent = 280;
+  static const double cacheExtent = 240;
 
-  static const EdgeInsets listPadding = EdgeInsets.only(top: 4);
+  static const EdgeInsets listPadding = EdgeInsets.zero;
 }

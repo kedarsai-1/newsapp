@@ -4,7 +4,7 @@ const User = require('../models/User');
 const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
-const { canonicalizeUrl, hashUrl, normalizeTitle } = require('../utils/storyDedupe');
+const { canonicalizeUrl, hashUrl, normalizeTitle, titleFingerprint } = require('../utils/storyDedupe');
 const { filterPostsForCategory } = require('../utils/categoryRelevance');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
@@ -31,7 +31,8 @@ function dedupeFeedPosts(rows) {
     const urlKey = p.sourceUrlHash
       || (p.sourceUrl ? hashUrl(canonicalizeUrl(p.sourceUrl) || String(p.sourceUrl)) : '');
     const titleKey = p.titleNormalized || normalizeTitle(p.title);
-    const keys = [urlKey, titleKey].filter((k) => k && k.length > 8);
+    const fpKey = p.titleFingerprint || titleFingerprint(p.title);
+    const keys = [urlKey, fpKey, titleKey].filter((k) => k && k.length > 8);
     if (keys.length && keys.some((k) => seen.has(k))) continue;
     for (const k of keys) seen.add(k);
     out.push(p);
@@ -192,6 +193,8 @@ const getFeed = async (req, res) => {
           $or: [
             { language: 'te' },
             { originalLanguage: 'tel' },
+            // Legacy rows: Telugu publishers tagged before language field was set.
+            { sourceName: /eenadu|sakshi|tv9\s*telugu|tv9telugu|123telugu|mana\s*telangana|andhra\s*jyothy/i },
           ],
         };
       }
@@ -200,6 +203,7 @@ const getFeed = async (req, res) => {
           $or: [
             { language: 'hi' },
             { originalLanguage: 'hin' },
+            { sourceName: /news18\s*hindi|hindi\.news18|amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar\.com|jagran|abp\s*news|abplive/i },
           ],
         };
       }

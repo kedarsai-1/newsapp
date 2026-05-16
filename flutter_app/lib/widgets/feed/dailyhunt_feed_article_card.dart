@@ -98,6 +98,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
     return RepaintBoundary(
       child: CompactNewsRow(
         title: widget.post.title,
+        titleMaxLines: 2,
         showSummary: false,
         imageUrl: _imageUrl,
         metaLine: _metaLine,

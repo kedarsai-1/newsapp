@@ -203,6 +203,8 @@ class NewsPost {
   final bool isFeatured;
   final List<String> tags;
   final String language;
+  /// ISO 639-3 from ingest (e.g. tel, hin, eng).
+  final String? originalLanguage;
   final String? politicsScope;
   final String? constituency;
   final String? sourceUrl;
@@ -230,6 +232,7 @@ class NewsPost {
     this.isFeatured = false,
     this.tags = const [],
     this.language = 'en',
+    this.originalLanguage,
     this.politicsScope,
     this.constituency,
     this.sourceUrl,
@@ -290,6 +293,7 @@ class NewsPost {
         isFeatured: json['isFeatured'] ?? false,
         tags: List<String>.from(json['tags'] ?? []),
         language: (json['language'] ?? 'en').toString().toLowerCase(),
+        originalLanguage: json['originalLanguage']?.toString().toLowerCase(),
         politicsScope: json['politicsScope']?.toString(),
         constituency: json['constituency']?.toString(),
         sourceUrl: json['sourceUrl'],

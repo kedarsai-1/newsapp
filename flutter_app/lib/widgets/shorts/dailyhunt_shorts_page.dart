@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
@@ -8,6 +9,7 @@ import '../../providers/shorts_playback_controller.dart';
 import '../../theme/app_palette.dart';
 import 'shorts_feed_theme.dart';
 import 'shorts_media_layer.dart';
+import 'youtube_shorts_player_shared.dart';
 
 /// Dailyhunt-style Shorts card — video on top, metadata + actions below.
 class DailyhuntShortsPage extends StatefulWidget {
@@ -23,7 +25,6 @@ class DailyhuntShortsPage extends StatefulWidget {
   final VoidCallback onTranslate;
   final VoidCallback onOpenArticle;
   final double bottomContentPadding;
-  final double topChromeHeight;
 
   const DailyhuntShortsPage({
     super.key,
@@ -39,7 +40,6 @@ class DailyhuntShortsPage extends StatefulWidget {
     required this.onTranslate,
     required this.onOpenArticle,
     required this.bottomContentPadding,
-    this.topChromeHeight = 108,
   });
 
   @override
@@ -77,11 +77,18 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
         : (post.category?.name ?? 'News');
   }
 
-  String get _viewsLabel {
-    final v = ShortsFeedTheme.formatViews(widget.post.views);
-    final ago = timeago.format(widget.post.displayTime);
-    if (v.isEmpty) return ago;
-    return '$v · $ago';
+  String get _timeLabel {
+    final diff = DateTime.now().difference(widget.post.displayTime);
+    if (diff.inMinutes < 2) return 'Just now';
+    return timeago.format(widget.post.displayTime);
+  }
+
+  String? get _durationLabel {
+    final sec = widget.post.youtube?.durationSeconds;
+    if (sec == null || sec <= 0) return null;
+    final m = sec ~/ 60;
+    final s = sec % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   Future<void> _openUrl(String? url) async {
@@ -110,14 +117,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
       _openUrl(widget.post.youtubeWatchUrl);
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Comments coming soon'),
-        behavior: SnackBarBehavior.floating,
-        width: 280,
-        duration: Duration(milliseconds: 1400),
-      ),
-    );
+    widget.onOpenArticle();
   }
 
   @override
@@ -125,180 +125,286 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
     final p = context.palette;
     final isYt = widget.post.isYoutube;
     final playback = context.watch<ShortsPlaybackController>();
+    final topSafe = MediaQuery.paddingOf(context).top;
 
     return ColoredBox(
       color: ShortsFeedTheme.background,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          ShortsFeedTheme.pageHPad,
-          widget.topChromeHeight,
-          ShortsFeedTheme.pageHPad,
-          widget.bottomContentPadding,
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: ShortsFeedTheme.card,
-            borderRadius: BorderRadius.circular(ShortsFeedTheme.cardRadius),
-            border: Border.all(color: ShortsFeedTheme.cardBorder),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: ShortsFeedTheme.maxCardWidth + ShortsFeedTheme.pageHPad * 2,
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(ShortsFeedTheme.cardRadius),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AspectRatio(
-                  aspectRatio: 9 / 16,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ShortsMediaLayer(
-                        post: widget.post,
-                        isActive: widget.isActive,
-                        immersive: false,
-                      ),
-                      if (isYt)
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: _SourcePill(
-                            label: 'YouTube',
-                            icon: Icons.play_circle_filled,
-                            iconColor: const Color(0xFFFF0000),
-                          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              ShortsFeedTheme.pageHPad,
+              topSafe + 88,
+              ShortsFeedTheme.pageHPad,
+              widget.bottomContentPadding,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const metaHeight = 200.0;
+                final cardW = constraints.maxWidth.clamp(0.0, ShortsFeedTheme.maxCardWidth);
+                final videoHeight = (constraints.maxHeight - metaHeight)
+                    .clamp(200.0, cardW * 16 / 9);
+
+                return SizedBox(
+                  width: cardW,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: ShortsFeedTheme.card,
+                      borderRadius:
+                          BorderRadius.circular(ShortsFeedTheme.cardRadius),
+                      border: Border.all(color: ShortsFeedTheme.cardBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          blurRadius: 28,
+                          offset: const Offset(0, 10),
                         ),
-                      if (isYt && widget.isActive)
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: _MuteButton(
-                            muted: playback.muted,
-                            onTap: () {
-                              if (playback.muted) {
-                                playback.setMuted(false);
-                              } else {
-                                playback.setMuted(true);
-                              }
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        onTap: isYt
-                            ? () => _openUrl(widget.post.youtubeWatchUrl)
-                            : widget.onOpenArticle,
-                        child: Text(
-                          widget.post.title,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: ShortsFeedTheme.titleStyle,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: isYt
-                            ? () => _openUrl(widget.post.youtubeChannelUrl)
-                            : null,
-                        child: Row(
-                          children: [
-                            _ChannelAvatar(label: _channelName),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius:
+                          BorderRadius.circular(ShortsFeedTheme.cardRadius),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            height: videoHeight,
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(ShortsFeedTheme.videoRadius),
+                              ),
+                              child: Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  Text(
-                                    _channelName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: ShortsFeedTheme.title,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
+                                  ShortsMediaLayer(
+                                    post: widget.post,
+                                    isActive: widget.isActive,
+                                    immersive: false,
+                                  ),
+                                  const DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        stops: [0.0, 0.35, 1.0],
+                                        colors: [
+                                          Color(0x66000000),
+                                          Colors.transparent,
+                                          Color(0x99000000),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    _viewsLabel,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: ShortsFeedTheme.metaStyle,
+                                  if (isYt)
+                                    const Positioned(
+                                      top: 10,
+                                      left: 10,
+                                      child: _SourcePill(
+                                        label: 'YouTube',
+                                        icon: Icons.play_circle_filled,
+                                        iconColor: Color(0xFFFF0000),
+                                      ),
+                                    ),
+                                  Positioned(
+                                    left: 10,
+                                    bottom: 10,
+                                    child: _DurationViewsPill(
+                                      duration: _durationLabel,
+                                      views: ShortsFeedTheme.formatViews(
+                                        widget.post.views,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isYt && widget.isActive)
+                                    Positioned(
+                                      right: 10,
+                                      bottom: 10,
+                                      child: _MuteButton(
+                                        muted: playback.muted,
+                                        onTap: () {
+                                          playback.setMuted(!playback.muted);
+                                        },
+                                      ),
+                                    ),
+                                  if (isYt &&
+                                      widget.isActive &&
+                                      playback.muted)
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 48,
+                                      child: Center(
+                                        child: YoutubeUnmuteChip(
+                                          muted: true,
+                                          onTap: () =>
+                                              playback.setMuted(false),
+                                        ),
+                                      ),
+                                    ),
+                                  if (!widget.isActive && isYt)
+                                    const Center(
+                                      child: _InactivePlayBadge(),
+                                    ),
+                                  Positioned(
+                                    right: 6,
+                                    bottom: 72,
+                                    child: _VideoActionRail(
+                                      liked: _liked,
+                                      likeCount: widget.post.likes,
+                                      onLike: _handleLike,
+                                      onComment: _onComment,
+                                      onShare: widget.onShare,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                            if (isYt)
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 36,
-                                  minHeight: 36,
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 13, 12, 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                GestureDetector(
+                                  onTap: isYt
+                                      ? () => _openUrl(
+                                            widget.post.youtubeWatchUrl,
+                                          )
+                                      : widget.onOpenArticle,
+                                  child: Text(
+                                    widget.post.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: ShortsFeedTheme.titleStyle,
+                                  ),
                                 ),
-                                onPressed: () =>
-                                    _openUrl(widget.post.youtubeWatchUrl),
-                                icon: const Icon(
-                                  Icons.open_in_new_rounded,
-                                  color: ShortsFeedTheme.meta,
-                                  size: 20,
+                                const SizedBox(height: 12),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    _ChannelAvatar(label: _channelName),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: GestureDetector(
+                                        onTap: isYt
+                                            ? () => _openUrl(
+                                                  widget.post
+                                                      .youtubeChannelUrl,
+                                                )
+                                            : null,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    _channelName,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.notoSans(
+                                                      color: ShortsFeedTheme
+                                                          .title,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (isYt) ...[
+                                                  const SizedBox(width: 4),
+                                                  const Icon(
+                                                    Icons.verified,
+                                                    size: 14,
+                                                    color: Color(0xFFAAAAAA),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              ShortsFeedTheme.channelMeta(
+                                                views: widget.post.views,
+                                                timeLabel: _timeLabel,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: ShortsFeedTheme.metaStyle,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    _MoreMenu(
+                                      saved: _saved,
+                                      liked: _liked,
+                                      onSave: _handleSave,
+                                      onLike: _handleLike,
+                                      onTranslate: widget.onTranslate,
+                                      onOpen: isYt
+                                          ? () => _openUrl(
+                                                widget.post.youtubeWatchUrl,
+                                              )
+                                          : widget.onOpenArticle,
+                                    ),
+                                  ],
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      const Divider(height: 1, color: ShortsFeedTheme.cardBorder),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _ActionChip(
-                            icon: _liked
-                                ? Icons.thumb_up_alt_rounded
-                                : Icons.thumb_up_alt_outlined,
-                            label: _formatCount(widget.post.likes, 'Like'),
-                            active: _liked,
-                            activeColor: p.primary,
-                            onTap: _handleLike,
-                          ),
-                          _ActionChip(
-                            icon: Icons.chat_bubble_outline_rounded,
-                            label: 'Comment',
-                            onTap: _onComment,
-                          ),
-                          _ActionChip(
-                            icon: Icons.share_outlined,
-                            label: 'Share',
-                            onTap: widget.onShare,
-                          ),
-                          _ActionChip(
-                            icon: _saved
-                                ? Icons.bookmark_rounded
-                                : Icons.bookmark_outline_rounded,
-                            label: 'Save',
-                            active: _saved,
-                            activeColor: p.primary,
-                            onTap: _handleSave,
+                                const SizedBox(height: 12),
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Row(
+                                    children: [
+                                      _ActionChip(
+                                        icon: _liked
+                                            ? Icons.thumb_up_alt_rounded
+                                            : Icons.thumb_up_alt_outlined,
+                                        label: _likeLabel,
+                                        active: _liked,
+                                        activeColor: p.primary,
+                                        onTap: _handleLike,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _ActionChip(
+                                        icon: Icons.chat_bubble_outline_rounded,
+                                        label: 'Comment',
+                                        onTap: _onComment,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _ActionChip(
+                                        icon: Icons.share_outlined,
+                                        label: 'Share',
+                                        iconColor: const Color(0xFF25D366),
+                                        onTap: widget.onShare,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      _ActionChip(
+                                        icon: _saved
+                                            ? Icons.bookmark_rounded
+                                            : Icons.bookmark_outline_rounded,
+                                        label: 'Save',
+                                        active: _saved,
+                                        activeColor: p.primary,
+                                        onTap: _handleSave,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ),
@@ -306,11 +412,219 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
     );
   }
 
-  String _formatCount(int n, String fallback) {
-    if (n <= 0) return fallback;
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
+  String get _likeLabel {
+    final n = widget.post.likes;
+    if (n <= 0) return 'Like';
+    return ShortsFeedTheme.formatCountShort(n);
+  }
+}
+
+class _InactivePlayBadge extends StatelessWidget {
+  const _InactivePlayBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.5),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white30, width: 1.5),
+      ),
+      child: const Icon(
+        Icons.play_arrow_rounded,
+        color: Colors.white,
+        size: 36,
+      ),
+    );
+  }
+}
+
+/// Moj/Josh-style vertical actions on the video edge.
+class _VideoActionRail extends StatelessWidget {
+  final bool liked;
+  final int likeCount;
+  final VoidCallback onLike;
+  final VoidCallback onComment;
+  final VoidCallback onShare;
+
+  const _VideoActionRail({
+    required this.liked,
+    required this.likeCount,
+    required this.onLike,
+    required this.onComment,
+    required this.onShare,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final likeLabel = likeCount > 0
+        ? ShortsFeedTheme.formatCountShort(likeCount)
+        : 'Like';
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _RailButton(
+          icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          label: likeLabel,
+          iconColor: liked ? ShortsFeedTheme.accent : Colors.white,
+          onTap: onLike,
+        ),
+        const SizedBox(height: 14),
+        _RailButton(
+          icon: Icons.chat_bubble_outline_rounded,
+          label: 'Comment',
+          onTap: onComment,
+        ),
+        const SizedBox(height: 14),
+        _RailButton(
+          icon: Icons.share_outlined,
+          label: 'Share',
+          onTap: onShare,
+        ),
+      ],
+    );
+  }
+}
+
+class _RailButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? iconColor;
+
+  const _RailButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.45),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            child: Icon(icon, color: iconColor ?? Colors.white, size: 22),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: ShortsFeedTheme.verticalActionCountStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DurationViewsPill extends StatelessWidget {
+  final String? duration;
+  final String views;
+
+  const _DurationViewsPill({this.duration, required this.views});
+
+  @override
+  Widget build(BuildContext context) {
+    final parts = <String>[
+      if (duration != null && duration!.isNotEmpty) duration!,
+      if (views.isNotEmpty) views,
+    ];
+    if (parts.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            parts.join(' · '),
+            style: ShortsFeedTheme.metaStyle.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (views.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Icon(
+              Icons.remove_red_eye_outlined,
+              size: 14,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MoreMenu extends StatelessWidget {
+  final bool saved;
+  final bool liked;
+  final VoidCallback onSave;
+  final VoidCallback onLike;
+  final VoidCallback onTranslate;
+  final VoidCallback onOpen;
+
+  const _MoreMenu({
+    required this.saved,
+    required this.liked,
+    required this.onSave,
+    required this.onLike,
+    required this.onTranslate,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      icon: const Icon(Icons.more_vert, color: ShortsFeedTheme.meta, size: 22),
+      color: const Color(0xFF1E1E1E),
+      onSelected: (v) {
+        switch (v) {
+          case 'open':
+            onOpen();
+          case 'save':
+            onSave();
+          case 'like':
+            onLike();
+          case 'translate':
+            onTranslate();
+        }
+      },
+      itemBuilder: (_) => [
+        const PopupMenuItem(value: 'open', child: Text('Open')),
+        PopupMenuItem(
+          value: 'save',
+          child: Text(saved ? 'Unsave' : 'Save'),
+        ),
+        PopupMenuItem(
+          value: 'like',
+          child: Text(liked ? 'Unlike' : 'Like'),
+        ),
+        const PopupMenuItem(value: 'translate', child: Text('Translate')),
+      ],
+    );
   }
 }
 
@@ -327,10 +641,9 @@ class _ChannelAvatar extends StatelessWidget {
       backgroundColor: ShortsFeedTheme.surfaceMuted,
       child: Text(
         initial,
-        style: const TextStyle(
-          color: ShortsFeedTheme.title,
-          fontWeight: FontWeight.w700,
+        style: ShortsFeedTheme.titleStyle.copyWith(
           fontSize: 14,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -363,10 +676,9 @@ class _SourcePill extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(
+            style: ShortsFeedTheme.actionLabelStyle.copyWith(
               color: Colors.white,
               fontSize: 11,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -408,6 +720,7 @@ class _ActionChip extends StatelessWidget {
   final VoidCallback onTap;
   final bool active;
   final Color? activeColor;
+  final Color? iconColor;
 
   const _ActionChip({
     required this.icon,
@@ -415,25 +728,36 @@ class _ActionChip extends StatelessWidget {
     required this.onTap,
     this.active = false,
     this.activeColor,
+    this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = active
         ? (activeColor ?? ShortsFeedTheme.accent)
-        : ShortsFeedTheme.body;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 4),
-            Text(label, style: ShortsFeedTheme.actionLabelStyle.copyWith(color: color)),
-          ],
+        : (iconColor ?? ShortsFeedTheme.body);
+    return Material(
+      color: ShortsFeedTheme.surfaceMuted,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: ShortsFeedTheme.actionLabelStyle.copyWith(
+                  color: color,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

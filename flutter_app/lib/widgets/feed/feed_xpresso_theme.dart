@@ -380,4 +380,4 @@ abstract final class FeedXpressoTheme {
 
 /// Approx. row height at ~390pt width (16:9 hero + divider; copy lives on overlay).
 /// Approx. row height at ~390pt width (16:9 image + copy + card margin).
-const double kFeedRowExtent = 340;
+const double kFeedRowExtent = 360;

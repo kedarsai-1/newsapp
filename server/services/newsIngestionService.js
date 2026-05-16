@@ -304,12 +304,15 @@ async function getCategoryBySlug(slug) {
 }
 
 async function isDuplicate(item) {
-  const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const canonical = canonicalizeUrl(item.sourceUrl);
   if (canonical) {
     const sourceUrlHash = hashUrl(canonical);
     if (await NewsPost.exists({ sourceUrlHash })) return true;
   }
+
+  const fp = titleFingerprint(item.title);
+  if (fp && await NewsPost.exists({ titleFingerprint: fp })) return true;
 
   const titleNorm = normalizeTitle(item.title);
   if (titleNorm.length >= 12) {
@@ -348,6 +351,7 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
       return c ? hashUrl(c) : null;
     })(),
     titleNormalized: normalizeTitle(item.title) || null,
+    titleFingerprint: titleFingerprint(item.title) || null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
     politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(item.politicsScope || '').toLowerCase())

@@ -3,6 +3,7 @@ import '../models/models.dart';
 String _normalizeTitle(String title) {
   return title
       .toLowerCase()
+      .replaceAll(RegExp(r'[\u0300-\u036f]'), '')
       .replaceAll(RegExp(r"[''`]"), "'")
       .replaceAll(RegExp(r'[^\w\s]'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')

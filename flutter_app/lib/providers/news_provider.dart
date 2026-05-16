@@ -6,6 +6,7 @@ import '../services/socket_service.dart';
 import '../constants.dart';
 import '../utils/feed_dedupe.dart';
 import '../utils/feed_image_url.dart';
+import '../utils/feed_language.dart';
 
 class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
@@ -430,6 +431,11 @@ class NewsProvider extends ChangeNotifier {
         if (wantSlug != null) {
           fetched = fetched
               .where((p) => (p.category?.slug.toLowerCase() ?? '') == wantSlug)
+              .toList();
+        }
+        if (selectedLanguage != 'all') {
+          fetched = fetched
+              .where((p) => postMatchesFeedLanguage(p, selectedLanguage))
               .toList();
         }
         // Hide broken / missing hero images (legacy rows ingested before RSS_REQUIRE_IMAGE).

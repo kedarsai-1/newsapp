@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../constants.dart';
 import '../dailyhunt/xpresso_side_menu.dart';
@@ -66,7 +67,7 @@ class DailyhuntShortsTopBar extends StatelessWidget {
                   children: [
                     Text(
                       'Shorts',
-                      style: TextStyle(
+                      style: GoogleFonts.notoSans(
                         color: Colors.white.withValues(alpha: 0.95),
                         fontWeight: FontWeight.w800,
                         fontSize: 17,
@@ -77,7 +78,7 @@ class DailyhuntShortsTopBar extends StatelessWidget {
                       AppConstants.appName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: GoogleFonts.notoSans(
                         color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 11,
                         fontWeight: FontWeight.w500,

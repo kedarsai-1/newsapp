@@ -218,9 +218,8 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
       }
     }
 
-    final bottomPad = FeedXpressoTheme.feedBottomInset(context) + 12;
+    final bottomPad = FeedXpressoTheme.feedBottomInset(context) + 28;
     final pageHeight = MediaQuery.sizeOf(context).height;
-    final topChrome = MediaQuery.paddingOf(context).top + 100;
 
     if (shorts.error != null && posts.isEmpty && !shorts.refreshing) {
       return Scaffold(
@@ -331,7 +330,8 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
             controller: _pageController,
             scrollDirection: Axis.vertical,
             physics: const _ShortsSnapScrollPhysics(),
-            allowImplicitScrolling: false,
+            pageSnapping: true,
+            allowImplicitScrolling: true,
             itemCount: posts.length,
             onPageChanged: (i) {
               setState(() => _index = i);
@@ -357,7 +357,6 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                     onTranslate: () => _translate(post),
                     onOpenArticle: () => _openArticle(post),
                     bottomContentPadding: bottomPad,
-                    topChromeHeight: topChrome,
                   ),
                 ),
               );
@@ -419,10 +418,16 @@ class _ShortsSnapScrollPhysics extends ScrollPhysics {
 
   @override
   SpringDescription get spring => const SpringDescription(
-        mass: 0.6,
-        stiffness: 280,
-        damping: 32,
+        mass: 0.5,
+        stiffness: 320,
+        damping: 34,
       );
+
+  @override
+  double get minFlingVelocity => 280;
+
+  @override
+  double get maxFlingVelocity => 4200;
 
   @override
   Simulation? createBallisticSimulation(

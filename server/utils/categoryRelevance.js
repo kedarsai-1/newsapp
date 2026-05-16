@@ -52,14 +52,31 @@ const SECTION_URL_HINTS = {
   local: /\/(cities|local|hyderabad|delhi|andhra-pradesh|telangana)\//i,
 };
 
+/** Telugu / Hindi publisher paths (article URLs) — section feeds already set category at ingest. */
+const INDIC_SECTION_URL_HINTS = {
+  business: /\/(business|economy|markets|finance|money|వ్యాపార|ఆర్థిక|बिजनेस|अर्थव्यवस्था)\//i,
+  sports: /\/(sport|sports|cricket|క్రీడ|క్రీడల|खेल|क्रिकेट)\//i,
+  politics: /\/(politics|national|world|andhra-pradesh|telangana|రాజకీయ|राजनीति)\//i,
+  technology: /\/(technology|tech|sci-tech|టెక్నాలజీ|टेक्नोलॉजी|टेक)\//i,
+  entertainment: /\/(entertainment|movies|cinema|సినిమా|मनोरंजन|फिल्म)\//i,
+  health: /\/(health|wellness|lifestyle|ఆరోగ్య|स्वास्थ्य)\//i,
+  education: /\/(education|career|విద్య|शिक्षा)\//i,
+  local: /\/(hyderabad|delhi|cities|local|amaravati|warangal|హైదరాబాద్)\//i,
+};
+
 function storyText(item) {
   return `${item?.title || ''} ${item?.summary || ''} ${item?.body || ''}`;
 }
 
 function isSectionSpecificSource(categorySlug, feedUrl, articleUrl) {
-  const hint = SECTION_URL_HINTS[categorySlug];
-  if (!hint) return false;
-  return hint.test(String(feedUrl || '')) || hint.test(String(articleUrl || ''));
+  const slug = String(categorySlug || '').toLowerCase();
+  const feed = String(feedUrl || '');
+  const article = String(articleUrl || '');
+  const enHint = SECTION_URL_HINTS[slug];
+  const indicHint = INDIC_SECTION_URL_HINTS[slug];
+  if (enHint && (enHint.test(feed) || enHint.test(article))) return true;
+  if (indicHint && (indicHint.test(feed) || indicHint.test(article))) return true;
+  return false;
 }
 
 function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
@@ -78,14 +95,22 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
 
   // Broad/top-story feeds mapped to a category: require a positive keyword signal.
   const INCLUDE_BY_CATEGORY = {
-    business: /\b(business|market|stocks?|sensex|nifty|rupee|economy|economic|gdp|inflation|rbi|sebi|ipo|earnings|revenue|profit|corporate|finance|trade|budget|investment|bank|startup)\b/i,
-    sports: /\b(sport|cricket|football|tennis|hockey|match|tournament|league|ipl|goal|wicket|olympic|athlete|coach|stadium)\b/i,
-    politics: /\b(politics|election|government|minister|parliament|assembly|party|vote|poll|cabinet|policy|bjp|congress|modi|mla|mp)\b/i,
-    technology: /\b(tech|technology|smartphone|android|ios|ai\b|artificial intelligence|software|hardware|gadget|cyber|semiconductor|chip)\b/i,
-    entertainment: /\b(movie|film|cinema|actor|actress|bollywood|tollywood|music|celebrity|ott|netflix|trailer|box office|tv show|series)\b/i,
-    health: /\b(health|medical|doctor|hospital|disease|vaccine|wellness|fitness|nutrition|mental health|covid|cancer|diabetes)\b/i,
-    education: /\b(education|school|college|university|exam|student|teacher|admission|scholarship|degree|campus|neet|jee|upsc)\b/i,
-    local: /\b(city|local|traffic|metro|municipal|hyderabad|delhi|mumbai|chennai|bangalore|amaravati|vijayawada|warangal)\b/i,
+    business:
+      /\b(business|market|stocks?|sensex|nifty|rupee|economy|economic|gdp|inflation|rbi|sebi|ipo|earnings|revenue|profit|corporate|finance|trade|budget|investment|bank|startup)\b|(వ్యాపార|ఆర్థిక|షేర్|సెన్సెక్స్|निफ्टी|सेंसेक्स|बिजनेस|अर्थव्यवस्था|शेयर)/i,
+    sports:
+      /\b(sport|cricket|football|tennis|hockey|match|tournament|league|ipl|goal|wicket|olympic|athlete|coach|stadium)\b|(క్రికెట్|ఐపీఎల్|క్రీడ|మ్యాచ్|फुटबॉल|क्रिकेट|खेल|मैच)/i,
+    politics:
+      /\b(politics|election|government|minister|parliament|assembly|party|vote|poll|cabinet|policy|bjp|congress|modi|mla|mp)\b|(రాజకీయ|ఎన్నిక|మంత్రి|పార్టీ|శాసనసభ|राजनीति|चुनाव|मंत्री|सरकार)/i,
+    technology:
+      /\b(tech|technology|smartphone|android|ios|ai\b|artificial intelligence|software|hardware|gadget|cyber|semiconductor|chip)\b|(టెక్నాలజీ|స్మార్ట్|टेक्नोलॉजी|स्मार्टफोन)/i,
+    entertainment:
+      /\b(movie|film|cinema|actor|actress|bollywood|tollywood|music|celebrity|ott|netflix|trailer|box office|tv show|series)\b|(సినిమా|ట్రైలర్|సినిమాల|फिल्म|बॉलीवुड|मनोरंजन)/i,
+    health:
+      /\b(health|medical|doctor|hospital|disease|vaccine|wellness|fitness|nutrition|mental health|covid|cancer|diabetes)\b|(ఆరోగ్య|వైద్య|स्वास्थ्य|डॉक्टर)/i,
+    education:
+      /\b(education|school|college|university|exam|student|teacher|admission|scholarship|degree|campus|neet|jee|upsc)\b|(విద్య|పరీక్ష|शिक्षा|परीक्षा|विद्यार्थी)/i,
+    local:
+      /\b(city|local|traffic|metro|municipal|hyderabad|delhi|mumbai|chennai|bangalore|amaravati|vijayawada|warangal)\b|(హైదరాబాద్|అమరావతి|విజయవాడ|हैदराबाद|दिल्ली|मुंबई)/i,
   };
 
   const inc = INCLUDE_BY_CATEGORY[slug];
@@ -118,6 +143,13 @@ function filterPostsForCategory(posts, categorySlug) {
   if (!slug || slug === 'general') return posts;
   return (posts || []).filter((p) => {
     if (String(p?.sourceType || '').toLowerCase() === 'youtube') return true;
+
+    const postSlug = String(p?.category?.slug || '').toLowerCase();
+    // Ingestion already assigns category from section RSS / API plan — trust it on read.
+    if (postSlug === slug) {
+      return !isLegacyMiscategorized(p, slug);
+    }
+
     if (isLegacyMiscategorized(p, slug)) return false;
     return matchesFeedCategory(
       {
@@ -125,6 +157,7 @@ function filterPostsForCategory(posts, categorySlug) {
         summary: p.summary,
         body: p.body,
         sourceUrl: p.sourceUrl,
+        sourceName: p.sourceName,
       },
       slug,
       {},

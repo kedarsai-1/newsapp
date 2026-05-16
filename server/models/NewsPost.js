@@ -84,6 +84,8 @@ const newsPostSchema = new mongoose.Schema({
   sourceUrlHash: { type: String, default: null, index: true, sparse: true },
   /** Normalized headline for cross-feed duplicate detection. */
   titleNormalized: { type: String, default: null, index: true, sparse: true },
+  /** SHA-256 of normalized title — permanent cross-publisher dedupe key. */
+  titleFingerprint: { type: String, default: null, index: true, sparse: true },
   sourcePublishedAt: { type: Date, default: null },
   sourceType: {
     type: String,
@@ -120,6 +122,7 @@ newsPostSchema.index({ status: 1, createdAt: -1 });
 newsPostSchema.index({ category: 1, status: 1, createdAt: -1 });
 newsPostSchema.index({ category: 1, status: 1, sourcePublishedAt: -1 });
 newsPostSchema.index({ titleNormalized: 1, status: 1, createdAt: -1 }, { sparse: true });
+newsPostSchema.index({ titleFingerprint: 1 }, { unique: true, sparse: true });
 newsPostSchema.index({ reporter: 1, createdAt: -1 });
 newsPostSchema.index({ 'location.city': 1, status: 1 });
 newsPostSchema.index({ language: 1, status: 1, createdAt: -1 });

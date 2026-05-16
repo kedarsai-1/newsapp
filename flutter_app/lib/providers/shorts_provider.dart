@@ -4,6 +4,7 @@ import '../constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../utils/feed_language.dart';
 
 /// YouTube-only vertical video feed (official iframe embeds).
 class ShortsProvider extends ChangeNotifier {
@@ -32,17 +33,7 @@ class ShortsProvider extends ChangeNotifier {
   /// Client-side guard when DB rows lack language tags (legacy English-only ingest).
   static bool postMatchesLanguage(NewsPost post, String? language) {
     if (language == null || language == 'all') return true;
-    final lang = post.language.trim().toLowerCase();
-    switch (language) {
-      case 'te':
-        return lang == 'te';
-      case 'hi':
-        return lang == 'hi';
-      case 'en':
-        return lang == 'en' || lang.isEmpty;
-      default:
-        return lang == language;
-    }
+    return postMatchesFeedLanguage(post, language);
   }
 
   bool languageMatches(String? language) =>

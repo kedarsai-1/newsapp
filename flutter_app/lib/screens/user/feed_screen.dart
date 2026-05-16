@@ -340,7 +340,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   }
                   if (snap.posts.isEmpty && snap.refreshing) {
                     FeedImagePrecache.reset();
-                    return const DailyhuntFeedSkeleton(rowCount: 10);
+                    return const DailyhuntFeedSkeleton(
+                      rowCount: 8,
+                      showChrome: false,
+                    );
                   }
                   if (snap.posts.isEmpty) {
                     return const EmptyState(

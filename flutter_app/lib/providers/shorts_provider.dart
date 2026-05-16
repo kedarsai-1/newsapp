@@ -29,11 +29,36 @@ class ShortsProvider extends ChangeNotifier {
 
   static String _tag(String? language) => language ?? '__all__';
 
+  /// Client-side guard when DB rows lack language tags (legacy English-only ingest).
+  static bool postMatchesLanguage(NewsPost post, String? language) {
+    if (language == null || language == 'all') return true;
+    final lang = post.language.trim().toLowerCase();
+    switch (language) {
+      case 'te':
+        return lang == 'te';
+      case 'hi':
+        return lang == 'hi';
+      case 'en':
+        return lang == 'en' || lang.isEmpty;
+      default:
+        return lang == language;
+    }
+  }
+
   bool languageMatches(String? language) =>
       _loadedLanguageTag == _tag(language);
 
   bool hasContentFor(String? language) =>
       _posts.isNotEmpty && languageMatches(language);
+
+  /// Load Shorts for [language] when empty or language changed (e.g. feed preference).
+  Future<void> ensureForLanguage(String? language, {bool force = false}) async {
+    if (_busy) return;
+    if (!force && languageMatches(language) && _posts.isNotEmpty) {
+      return;
+    }
+    await refresh(language: language);
+  }
 
   void _wireRealtimeRefresh() {
     if (kIsWeb || _socketWired) return;
@@ -100,6 +125,7 @@ class ShortsProvider extends ChangeNotifier {
             if (!post.isYoutube) continue;
             final vid = post.youtube?.videoId ?? '';
             if (vid.isEmpty) continue;
+            if (!postMatchesLanguage(post, language)) continue;
             fetched.add(post);
           } catch (_) {
             // Skip malformed API rows.

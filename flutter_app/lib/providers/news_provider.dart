@@ -1,5 +1,4 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
@@ -37,6 +36,21 @@ class NewsProvider extends ChangeNotifier {
   }
   String get selectedLanguage =>
       (_selectedLanguage as dynamic) == null ? 'all' : _selectedLanguage;
+
+  /// API `language` for Shorts — feed chip, or onboarding default before any feed language was saved.
+  String? get shortsFeedLanguage {
+    if (!_prefsLoaded) return null;
+    final sel = selectedLanguage;
+    if (sel != 'all') return sel;
+    if (_hasStoredFeedLanguagePreference) return null;
+    final ui = _onboardingUiLanguage?.trim().toLowerCase();
+    if (ui == null || ui.isEmpty) return null;
+    final mapped = feedLanguageFromUiChoice(ui);
+    return mapped == 'all' ? null : mapped;
+  }
+
+  /// Shorts language chips: explicit feed filter, else onboarding default, else All.
+  String get shortsLanguageBarCode => shortsFeedLanguage ?? 'all';
   String get selectedConstituency => (_selectedConstituency as dynamic) == null
       ? 'all'
       : _selectedConstituency;
@@ -61,6 +75,10 @@ class NewsProvider extends ChangeNotifier {
 
   bool _prefsLoaded = false;
   bool _languageOnboardingCompleted = false;
+  bool _hasStoredFeedLanguagePreference = false;
+
+  /// Raw onboarding pick (en/te/hi/ta/…) — used when feed filter is "all".
+  String? _onboardingUiLanguage;
 
   /// Optional city label from onboarding; applied as feed `city` filter on **Local** category.
   String? _preferredCity;
@@ -92,7 +110,9 @@ class NewsProvider extends ChangeNotifier {
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    _hasStoredFeedLanguagePreference = prefs.containsKey(_languagePrefKey);
     _selectedLanguage = prefs.getString(_languagePrefKey) ?? 'all';
+    _onboardingUiLanguage = prefs.getString(_onboardingUiLangKey);
     _preferredCity = prefs.getString(_onboardingCityKey);
 
     final done = prefs.getBool(_languageOnboardingKey);
@@ -142,6 +162,8 @@ class NewsProvider extends ChangeNotifier {
   Future<void> completeLanguageOnboarding(String languageCode) async {
     final feedLang = feedLanguageFromUiChoice(languageCode);
     _selectedLanguage = feedLang;
+    _onboardingUiLanguage = languageCode;
+    _hasStoredFeedLanguagePreference = true;
     _languageOnboardingCompleted = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_languagePrefKey, feedLang);
@@ -160,6 +182,8 @@ class NewsProvider extends ChangeNotifier {
   }) async {
     final feedLang = feedLanguageFromUiChoice(uiLanguageCode);
     _selectedLanguage = feedLang;
+    _onboardingUiLanguage = uiLanguageCode;
+    _hasStoredFeedLanguagePreference = true;
     _languageOnboardingCompleted = true;
     final trimmedCity = cityLabel.trim();
     _preferredCity = trimmedCity.isEmpty ? null : trimmedCity;
@@ -302,10 +326,18 @@ class NewsProvider extends ChangeNotifier {
 
   Future<void> selectLanguage(String languageCode) async {
     _selectedLanguage = languageCode;
+    _hasStoredFeedLanguagePreference = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_languagePrefKey, languageCode);
+    if (languageCode == 'en' ||
+        languageCode == 'te' ||
+        languageCode == 'hi') {
+      _onboardingUiLanguage = languageCode;
+      await prefs.setString(_onboardingUiLangKey, languageCode);
+    }
     if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
     if (!isPoliticsMode) _selectedConstituency = 'all';
+    notifyListeners();
     await refresh();
   }
 

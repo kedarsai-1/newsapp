@@ -3,15 +3,37 @@ import 'package:flutter/material.dart';
 import '../news_shimmer_loader.dart';
 import 'feed_xpresso_theme.dart';
 
-/// Xpresso feed loading — dark chrome + full-bleed image shimmer rows.
+/// Xpresso feed loading — article card shimmers; optional chrome placeholders.
 class DailyhuntFeedSkeleton extends StatelessWidget {
   final int rowCount;
 
-  const DailyhuntFeedSkeleton({super.key, this.rowCount = 6});
+  /// When false, only article rows shimmer (use when app bar + categories are already visible).
+  final bool showChrome;
+
+  const DailyhuntFeedSkeleton({
+    super.key,
+    this.rowCount = 6,
+    this.showChrome = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final bottom = FeedXpressoTheme.feedBottomInset(context);
+    final listPadding = EdgeInsets.only(
+      top: 6,
+      bottom: bottom,
+    );
+
+    if (!showChrome) {
+      return ColoredBox(
+        color: FeedXpressoTheme.background,
+        child: NewsShimmerLoader(
+          count: rowCount,
+          padding: listPadding,
+        ),
+      );
+    }
+
     return ColoredBox(
       color: FeedXpressoTheme.background,
       child: Column(
@@ -22,7 +44,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
           Expanded(
             child: NewsShimmerLoader(
               count: rowCount,
-              padding: EdgeInsets.only(bottom: bottom),
+              padding: listPadding,
             ),
           ),
         ],

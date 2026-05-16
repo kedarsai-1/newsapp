@@ -7,14 +7,17 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
 import '../../providers/shorts_provider.dart';
+import '../../providers/shorts_playback_controller.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
 import '../../utils/i18n.dart';
-import '../../widgets/news_shimmer_loader.dart';
+import '../../widgets/shorts/shorts_card_shimmer.dart';
+import '../../widgets/shorts/shorts_feed_theme.dart';
 import '../../widgets/premium_news_ui.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
 import '../../widgets/shorts/shorts_chrome.dart';
+import '../../widgets/shorts/shorts_language_bar.dart';
 
 /// YouTube-backed vertical shorts: [PageView.builder], official iframe embeds.
 class ShortsNewsScreen extends StatefulWidget {
@@ -32,7 +35,9 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   late final PageController _pageController;
   late final NewsProvider _news;
   late final ShortsProvider _shorts;
+  late final ShortsPlaybackController _playback;
   bool _wasShortsRefreshing = false;
+  bool _shortsBoundToNews = false;
   int _index = 0;
   final Map<String, bool> _liked = {};
   final Map<String, bool> _saved = {};
@@ -44,24 +49,23 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     super.initState();
     _news = context.read<NewsProvider>();
     _shorts = context.read<ShortsProvider>();
-    _news.addListener(_onNewsLanguageChanged);
+    _playback = context.read<ShortsPlaybackController>();
     _shorts.addListener(_onShortsRefreshTick);
     _pageController = PageController();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final lang = _apiLanguage(_news);
-      final shorts = context.read<ShortsProvider>();
-      if (!shorts.hasContentFor(lang)) {
-        shorts.refresh(language: lang);
-      }
-    });
+    _bindShortsToFeedLanguage();
   }
 
-  void _onNewsLanguageChanged() {
-    final lang = _apiLanguage(_news);
-    if (!_shorts.languageMatches(lang)) {
-      _shorts.refresh(language: lang);
-    }
+  void _bindShortsToFeedLanguage() {
+    if (_shortsBoundToNews) return;
+    _shortsBoundToNews = true;
+    _news.addListener(_syncShortsToFeedLanguage);
+    _syncShortsToFeedLanguage();
+  }
+
+  void _syncShortsToFeedLanguage() {
+    if (!mounted || !_news.prefsLoaded) return;
+    final lang = _news.shortsFeedLanguage;
+    _shorts.ensureForLanguage(lang);
   }
 
   /// After each reload, show the newest video first (page 0).
@@ -74,19 +78,17 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
           _pageController.jumpToPage(0);
         }
         setState(() => _index = 0);
+        if (s.posts.isNotEmpty) {
+          _playback.setActivePost(s.posts.first.id);
+        }
       });
     }
     _wasShortsRefreshing = s.refreshing;
   }
 
-  String? _apiLanguage(NewsProvider news) {
-    final l = news.selectedLanguage;
-    return l == 'all' ? null : l;
-  }
-
   @override
   void dispose() {
-    _news.removeListener(_onNewsLanguageChanged);
+    _news.removeListener(_syncShortsToFeedLanguage);
     _shorts.removeListener(_onShortsRefreshTick);
     _pageController.dispose();
     super.dispose();
@@ -200,11 +202,25 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final shorts = context.watch<ShortsProvider>();
-    final lang = _apiLanguage(context.watch<NewsProvider>());
+    final news = context.watch<NewsProvider>();
+    final lang = news.shortsFeedLanguage;
     final posts = shorts.posts;
+    if (posts.isNotEmpty) {
+      final wantId = posts[_index.clamp(0, posts.length - 1)].id;
+      if (!_playback.isActivePost(wantId)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final current = shorts.posts;
+          if (current.isEmpty) return;
+          final id = current[_index.clamp(0, current.length - 1)].id;
+          _playback.setActivePost(id);
+        });
+      }
+    }
 
-    final bottomPad =
-        FeedXpressoTheme.feedBottomInset(context) + 20;
+    final bottomPad = FeedXpressoTheme.feedBottomInset(context) + 12;
+    final pageHeight = MediaQuery.sizeOf(context).height;
+    final topChrome = MediaQuery.paddingOf(context).top + 100;
 
     if (shorts.error != null && posts.isEmpty && !shorts.refreshing) {
       return Scaffold(
@@ -233,13 +249,22 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     }
 
     if (posts.isEmpty && shorts.refreshing) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: SafeArea(
-          child: NewsShimmerLoader(
-            count: 6,
-            backgroundColor: Colors.black,
-          ),
+      return Scaffold(
+        backgroundColor: ShortsFeedTheme.background,
+        body: Column(
+          children: [
+            const SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DailyhuntShortsTopBar(),
+                  ShortsLanguageBar(),
+                ],
+              ),
+            ),
+            Expanded(child: ShortsCardShimmer(topInset: 8)),
+          ],
         ),
       );
     }
@@ -247,69 +272,93 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     if (posts.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  I18n.t(context, 'shorts_empty_title'),
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  I18n.t(context, 'shorts_empty_subtitle'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 13,
+        body: Column(
+          children: [
+            const SafeArea(
+              bottom: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DailyhuntShortsTopBar(),
+                  ShortsLanguageBar(),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        I18n.t(context, 'shorts_empty_title'),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        I18n.t(context, 'shorts_empty_subtitle'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => shorts.refresh(language: lang),
+                        child: Text(I18n.t(context, 'action_refresh')),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () => shorts.refresh(language: lang),
-                  child: Text(I18n.t(context, 'action_refresh')),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: ShortsFeedTheme.background,
       body: Stack(
         fit: StackFit.expand,
         children: [
           PageView.builder(
             controller: _pageController,
             scrollDirection: Axis.vertical,
-            physics: const ClampingScrollPhysics(),
+            physics: const _ShortsSnapScrollPhysics(),
             allowImplicitScrolling: false,
             itemCount: posts.length,
             onPageChanged: (i) {
               setState(() => _index = i);
+              _playback.setActivePost(posts[i].id);
               _maybeLoadMore(i, shorts, lang);
             },
             itemBuilder: (context, i) {
               final post = posts[i];
-              return RepaintBoundary(
-                child: DailyhuntShortsPage(
-                  key: ValueKey(post.id),
-                  post: post,
-                  isActive: i == _index,
-                  liked: _liked[post.id] ?? false,
-                  saved: _saved[post.id] ?? false,
-                  translating: _translating[post.id] ?? false,
-                  translatedSummary: _translated[post.id],
-                  onLike: () => _toggleLike(post),
-                  onSave: () => _toggleSave(post),
-                  onShare: () => _share(post),
-                  onTranslate: () => _translate(post),
-                  onOpenArticle: () => _openArticle(post),
-                  bottomContentPadding: bottomPad,
+              return SizedBox(
+                height: pageHeight,
+                child: RepaintBoundary(
+                  child: DailyhuntShortsPage(
+                    key: ValueKey(post.id),
+                    post: post,
+                    isActive: i == _index,
+                    liked: _liked[post.id] ?? false,
+                    saved: _saved[post.id] ?? false,
+                    translating: _translating[post.id] ?? false,
+                    translatedSummary: _translated[post.id],
+                    onLike: () => _toggleLike(post),
+                    onSave: () => _toggleSave(post),
+                    onShare: () => _share(post),
+                    onTranslate: () => _translate(post),
+                    onOpenArticle: () => _openArticle(post),
+                    bottomContentPadding: bottomPad,
+                    topChromeHeight: topChrome,
+                  ),
                 ),
               );
             },
@@ -318,7 +367,13 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
             top: 0,
             left: 0,
             right: 0,
-            child: DailyhuntShortsTopBar(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DailyhuntShortsTopBar(),
+                ShortsLanguageBar(),
+              ],
+            ),
           ),
           Positioned(
             left: 14,
@@ -349,6 +404,44 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Full-viewport vertical snap between Shorts pages.
+class _ShortsSnapScrollPhysics extends ScrollPhysics {
+  const _ShortsSnapScrollPhysics({super.parent});
+
+  @override
+  _ShortsSnapScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return _ShortsSnapScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  SpringDescription get spring => const SpringDescription(
+        mass: 0.6,
+        stiffness: 280,
+        damping: 32,
+      );
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    final page = position.pixels / position.viewportDimension;
+    final target = velocity.abs() < 350
+        ? page.round()
+        : (velocity > 0 ? page.ceil() : page.floor());
+    final clamped = target.clamp(0, (position.maxScrollExtent / position.viewportDimension).round());
+    final to = clamped * position.viewportDimension;
+    if ((to - position.pixels).abs() < 0.5) return null;
+    return ScrollSpringSimulation(
+      spring,
+      position.pixels,
+      to,
+      velocity,
+      tolerance: toleranceFor(position),
     );
   }
 }

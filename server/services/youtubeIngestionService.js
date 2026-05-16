@@ -2,7 +2,10 @@ const NewsPost = require('../models/NewsPost');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const { canonicalizeUrl, hashUrl, normalizeTitle } = require('../utils/storyDedupe');
-const { getYoutubeSearchPlan, getYoutubeChannelIds } = require('../config/youtubeIngestPlan');
+const {
+  getYoutubeSearchPlan,
+  getYoutubeChannelsByLanguage,
+} = require('../config/youtubeIngestPlan');
 const { emitFeedUpdated } = require('./feedSocket');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
@@ -25,7 +28,7 @@ function parseIso8601Duration(iso) {
 }
 
 function thumbnailUrl(videoId) {
-  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  return `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
 }
 
 function watchUrl(videoId) {
@@ -114,7 +117,14 @@ function buildYoutubeMeta(videoId, snippet, status, contentDetails) {
   };
 }
 
-function normalizeFromVideoResource(videoId, snippet, status, contentDetails, categorySlug) {
+function normalizeFromVideoResource(
+  videoId,
+  snippet,
+  status,
+  contentDetails,
+  categorySlug,
+  language = 'en',
+) {
   const title = String(snippet?.title || '').trim();
   if (!title || title.toLowerCase() === 'private video' || title.toLowerCase() === 'deleted video') {
     return null;
@@ -133,11 +143,11 @@ function normalizeFromVideoResource(videoId, snippet, status, contentDetails, ca
     sourceUrl: youtube.watchUrl,
     sourcePublishedAt: publishedAt,
     sourceType: 'youtube',
-    language: 'en',
+    language: String(language || 'en').toLowerCase(),
     categorySlug,
     youtube,
     mediaUrl: thumbnailUrl(videoId),
-    tags: ['youtube', categorySlug].filter(Boolean),
+    tags: ['youtube', categorySlug, language].filter(Boolean),
   };
 }
 
@@ -159,14 +169,15 @@ async function fetchVideoDetails(videoIds) {
   return out;
 }
 
-async function searchVideos(query, maxResults) {
+async function searchVideos(query, maxResults, relevanceLanguage = 'en') {
+  const lang = String(relevanceLanguage || 'en').toLowerCase();
   const data = await youtubeGet('search', {
     part: 'snippet',
     type: 'video',
     q: query,
     order: 'date',
     regionCode: process.env.YOUTUBE_REGION_CODE || 'IN',
-    relevanceLanguage: process.env.YOUTUBE_RELEVANCE_LANG || 'en',
+    relevanceLanguage: lang,
     maxResults: String(Math.min(50, Math.max(1, maxResults))),
     safeSearch: 'strict',
   });
@@ -264,6 +275,7 @@ async function insertNormalizedItem(item, reporter, stats) {
     item.status,
     item.contentDetails,
     item.categorySlug || DEFAULT_CATEGORY_SLUG,
+    item.language || 'en',
   );
   if (!normalized) return false;
   if (normalized.skip === 'restricted') {
@@ -322,9 +334,9 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
 
   try {
     const reporter = await ensureSystemReporter();
-    const channelIds = getYoutubeChannelIds();
+    const channels = getYoutubeChannelsByLanguage();
 
-    for (const channelId of channelIds) {
+    for (const { channelId, language } of channels) {
       let insertedFromChannel = 0;
       try {
         const videos = await fetchChannelUploads(channelId, channelMax);
@@ -334,7 +346,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
           try {
             // eslint-disable-next-line no-await-in-loop
             const ok = await insertNormalizedItem(
-              { ...v, categorySlug: DEFAULT_CATEGORY_SLUG },
+              { ...v, categorySlug: DEFAULT_CATEGORY_SLUG, language },
               reporter,
               stats,
             );
@@ -345,7 +357,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
           }
         }
         stats.sourceRuns.push({
-          source: `YouTube:channel:${channelId}`,
+          source: `YouTube:channel:${channelId}:${language}`,
           mode: 'youtube',
           count: videos.length,
           success: true,
@@ -353,7 +365,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
       } catch (e) {
         stats.youtubeFailed += 1;
         stats.sourceRuns.push({
-          source: `YouTube:channel:${channelId}`,
+          source: `YouTube:channel:${channelId}:${language}`,
           success: false,
           error: e.message,
         });
@@ -365,14 +377,22 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
     for (const plan of plans) {
       let insertedFromSearch = 0;
       try {
-        const videos = await searchVideos(plan.query, searchPerCategory);
+        const videos = await searchVideos(
+          plan.query,
+          searchPerCategory,
+          plan.language || 'en',
+        );
         stats.youtubeFetched += videos.length;
         for (const v of videos) {
           if (insertedFromSearch >= targetInsertsPerSource) break;
           try {
             // eslint-disable-next-line no-await-in-loop
             const ok = await insertNormalizedItem(
-              { ...v, categorySlug: plan.categorySlug },
+              {
+                ...v,
+                categorySlug: plan.categorySlug,
+                language: plan.language || 'en',
+              },
               reporter,
               stats,
             );
@@ -383,7 +403,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
           }
         }
         stats.sourceRuns.push({
-          source: `YouTube:search:${plan.categorySlug}`,
+          source: `YouTube:search:${plan.categorySlug}:${plan.language || 'en'}`,
           mode: 'youtube',
           count: videos.length,
           success: true,

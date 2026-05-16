@@ -1,3 +1,5 @@
+import '../utils/youtube_thumb_url.dart';
+
 // models/user.dart
 class User {
   final String id;
@@ -242,13 +244,13 @@ class NewsPost {
       sourceType == 'youtube' || (youtube != null && youtube!.videoId.isNotEmpty);
 
   String get youtubeThumbnailUrl {
-    final fromMedia = firstVideo?.thumbnail?.trim();
-    if (fromMedia != null && fromMedia.isNotEmpty) return fromMedia;
     final vid = youtube?.videoId;
-    if (vid != null && vid.isNotEmpty) {
-      return 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
-    }
-    return '';
+    final fromMedia = firstVideo?.thumbnail?.trim();
+    return YoutubeThumbUrl.fromPost(
+          videoId: vid,
+          mediaThumbnail: fromMedia,
+        ) ??
+        '';
   }
 
   String? get youtubeWatchUrl =>

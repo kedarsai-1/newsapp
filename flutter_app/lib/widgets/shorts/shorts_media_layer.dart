@@ -12,10 +12,14 @@ class ShortsMediaLayer extends StatefulWidget {
   final NewsPost post;
   final bool isActive;
 
+  /// Full-bleed immersive vs filling a fixed aspect-ratio card slot.
+  final bool immersive;
+
   const ShortsMediaLayer({
     super.key,
     required this.post,
     required this.isActive,
+    this.immersive = true,
   });
 
   @override
@@ -120,6 +124,7 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
       return YoutubeShortsPlayer(
         post: widget.post,
         isActive: widget.isActive,
+        immersive: widget.immersive,
       );
     }
 

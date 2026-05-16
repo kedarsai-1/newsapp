@@ -6,6 +6,7 @@ import 'services/auth_provider.dart';
 import 'providers/news_provider.dart';
 import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
+import 'providers/shorts_playback_controller.dart';
 import 'providers/reporter_provider.dart';
 import 'providers/admin_provider.dart';
 import 'constants.dart';
@@ -398,6 +399,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NewsProvider()..init()),
         ChangeNotifierProvider(create: (_) => OnboardingDraftProvider()),
         ChangeNotifierProvider(create: (_) => ShortsProvider()),
+        ChangeNotifierProvider(create: (_) => ShortsPlaybackController()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],

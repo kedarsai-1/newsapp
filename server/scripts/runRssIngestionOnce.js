@@ -16,6 +16,7 @@ const Category = require('../models/Category');
 const { getRssFeeds } = require('../config/rssFeeds');
 const { fetchRssItems, normalizeRssItem, resolveGoogleNewsPublisherUrl } = require('../services/rssService');
 const { fetchBestImageFallback, isUnusableFeedImageUrl } = require('../services/newsApiService');
+const { matchesFeedCategory } = require('../utils/categoryRelevance');
 const { cloudinary } = require('../config/cloudinary');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
@@ -171,7 +172,9 @@ async function main() {
   const reporter = await ensureSystemReporter();
   const feeds = getRssFeeds();
 
-  const stats = { fetched: 0, inserted: 0, duplicates: 0, skippedNoImage: 0, failed: 0, byLang: {} };
+  const stats = {
+    fetched: 0, inserted: 0, duplicates: 0, skippedNoImage: 0, categoryFiltered: 0, failed: 0, byLang: {},
+  };
 
   for (const feed of feeds) {
     if (!feed?.url) continue;
@@ -191,6 +194,14 @@ async function main() {
         // eslint-disable-next-line no-await-in-loop
         if (await isDuplicate(item)) {
           stats.duplicates += 1;
+          continue;
+        }
+
+        if (
+          String(feed.categorySlug || '').toLowerCase() !== 'general'
+          && !matchesFeedCategory(item, feed.categorySlug, { feedUrl: feed.url })
+        ) {
+          stats.categoryFiltered += 1;
           continue;
         }
 

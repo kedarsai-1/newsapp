@@ -23,6 +23,15 @@ class NewsProvider extends ChangeNotifier {
   List<NewsPost> get posts => _posts;
   List<Category> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
+
+  /// Slug for the selected tab (`null` = Top News / all categories).
+  String? get selectedCategorySlug {
+    if (_selectedCategoryId == null) return null;
+    for (final c in _categories) {
+      if (c.id == _selectedCategoryId) return c.slug.toLowerCase();
+    }
+    return null;
+  }
   String get selectedLanguage =>
       (_selectedLanguage as dynamic) == null ? 'all' : _selectedLanguage;
   String get selectedConstituency => (_selectedConstituency as dynamic) == null
@@ -368,9 +377,15 @@ class NewsProvider extends ChangeNotifier {
         sourceTypes: const ['api', 'manual', 'rss'],
       );
       if (res['success'] == true) {
-        final fetched = (res['posts'] as List)
+        var fetched = (res['posts'] as List)
             .map((p) => NewsPost.fromJson(Map<String, dynamic>.from(p as Map)))
             .toList();
+        final wantSlug = selectedCategorySlug;
+        if (wantSlug != null) {
+          fetched = fetched
+              .where((p) => (p.category?.slug.toLowerCase() ?? '') == wantSlug)
+              .toList();
+        }
         fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
         if (reset) {
           _posts = dedupeNewsPosts(fetched);

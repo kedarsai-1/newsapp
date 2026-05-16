@@ -5,6 +5,7 @@ const {
   normalizeTitle,
   titleFingerprint,
 } = require('../utils/storyDedupe');
+const { matchesFeedCategory } = require('../utils/categoryRelevance');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const {
@@ -377,6 +378,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     inserted: 0,
     duplicates: 0,
     skippedNoImage: 0,
+    categoryFiltered: 0,
     failed: 0,
     fallbacks: 0,
     languageFiltered: 0,
@@ -584,6 +586,13 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               && !isTeluguPoliticalStory(item)
             ) {
               stats.politicsFiltered += 1;
+              continue;
+            }
+            if (
+              String(feed.categorySlug || '').toLowerCase() !== 'general'
+              && !matchesFeedCategory(item, feed.categorySlug, { feedUrl: feed.url })
+            ) {
+              stats.categoryFiltered += 1;
               continue;
             }
             const prep = prepareForHfSummaryFromRssItem(raw);

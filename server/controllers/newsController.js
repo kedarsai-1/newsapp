@@ -5,6 +5,7 @@ const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const { canonicalizeUrl, hashUrl, normalizeTitle } = require('../utils/storyDedupe');
+const { filterPostsForCategory } = require('../utils/categoryRelevance');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
 
@@ -103,6 +104,7 @@ const getFeed = async (req, res) => {
     } = req.query;
 
     const query = { status: 'approved' };
+    let categorySlugFilter = null;
 
     // Shorts / video feeds: only posts that include at least one video asset.
     if (String(hasVideo || '').toLowerCase() === 'true') {
@@ -113,7 +115,13 @@ const getFeed = async (req, res) => {
         },
       };
     }
-    if (category) query.category = category;
+    if (category) {
+      query.category = category;
+      if (mongoose.Types.ObjectId.isValid(String(category))) {
+        const catDoc = await Category.findById(category).select('slug').lean();
+        categorySlugFilter = catDoc?.slug ? String(catDoc.slug).toLowerCase() : null;
+      }
+    }
     if (city) query['location.city'] = new RegExp(city, 'i');
     if (constituency && String(constituency).trim().toLowerCase() !== 'all') {
       query.constituency = new RegExp(`^${String(constituency).trim()}$`, 'i');
@@ -278,7 +286,10 @@ const getFeed = async (req, res) => {
       },
     ]);
 
-    const posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
+    let posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
+    if (categorySlugFilter && categorySlugFilter !== 'general') {
+      posts = filterPostsForCategory(posts, categorySlugFilter);
+    }
 
     res.json({
       success: true,

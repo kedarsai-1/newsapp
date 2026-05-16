@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -49,30 +50,62 @@ const List<String> _kFeedTabLabels = [
   'Business',
 ];
 
-class _FeedScreenState extends State<FeedScreen> {
+class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   static const _likedCacheKey = 'feed_liked_state_cache_v1';
+  static const _autoRefreshInterval = Duration(minutes: 3);
 
   final ScrollController _scrollController = ScrollController();
   final Map<String, bool> _bookmarkedByPostId = {};
   final Map<String, bool> _likedByPostId = {};
+  Timer? _autoRefreshTimer;
+  DateTime? _lastFeedRefreshAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     _restoreLikedCache();
     _primeBookmarkState();
+    _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) => _autoRefreshFeed());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<NewsProvider>();
-      if (provider.posts.isEmpty && !provider.refreshing) provider.refresh();
+      if (provider.posts.isEmpty && !provider.refreshing) {
+        _refreshFeed(markAuto: true);
+      } else {
+        _maybeRefreshStaleFeed();
+      }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefreshTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _maybeRefreshStaleFeed();
+    }
+  }
+
+  void _maybeRefreshStaleFeed() {
+    final last = _lastFeedRefreshAt;
+    if (last == null || DateTime.now().difference(last) >= _autoRefreshInterval) {
+      _autoRefreshFeed();
+    }
+  }
+
+  Future<void> _autoRefreshFeed() async {
+    if (!mounted) return;
+    final news = context.read<NewsProvider>();
+    if (news.refreshing || news.loading) return;
+    await _refreshFeed(markAuto: true, scrollToTop: false);
   }
 
   void _scrollFeedToTop() {
@@ -265,9 +298,13 @@ class _FeedScreenState extends State<FeedScreen> {
     context.push('/article/${post.id}');
   }
 
-  Future<void> _refreshFeed() async {
+  Future<void> _refreshFeed({
+    bool markAuto = false,
+    bool scrollToTop = true,
+  }) async {
     await context.read<NewsProvider>().refresh();
-    _scrollFeedToTop();
+    if (markAuto) _lastFeedRefreshAt = DateTime.now();
+    if (scrollToTop) _scrollFeedToTop();
   }
 
   @override

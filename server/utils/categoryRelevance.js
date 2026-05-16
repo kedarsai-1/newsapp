@@ -93,7 +93,47 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
   return inc.test(text) || inc.test(articleUrl);
 }
 
+/** Legacy RSS labels that were mapped to the wrong category before feed fixes. */
+const LEGACY_MISCATEGORIZED = [
+  {
+    categorySlug: 'business',
+    sourcePattern: /rss\s*·\s*livemint news/i,
+  },
+];
+
+function isLegacyMiscategorized(post, categorySlug) {
+  const slug = String(categorySlug || '').toLowerCase();
+  const src = String(post?.sourceName || '');
+  for (const rule of LEGACY_MISCATEGORIZED) {
+    if (rule.categorySlug !== slug) continue;
+    if (!rule.sourcePattern.test(src)) continue;
+    return !matchesFeedCategory(post, slug, {});
+  }
+  return false;
+}
+
+/** Filter feed rows so category tabs only return on-topic stories. */
+function filterPostsForCategory(posts, categorySlug) {
+  const slug = String(categorySlug || '').toLowerCase();
+  if (!slug || slug === 'general') return posts;
+  return (posts || []).filter((p) => {
+    if (isLegacyMiscategorized(p, slug)) return false;
+    return matchesFeedCategory(
+      {
+        title: p.title,
+        summary: p.summary,
+        body: p.body,
+        sourceUrl: p.sourceUrl,
+      },
+      slug,
+      {},
+    );
+  });
+}
+
 module.exports = {
   matchesFeedCategory,
   isSectionSpecificSource,
+  isLegacyMiscategorized,
+  filterPostsForCategory,
 };

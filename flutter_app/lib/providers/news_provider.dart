@@ -4,6 +4,7 @@ import '../models/models.dart';
 import '../services/api_service.dart';
 import '../constants.dart';
 import '../utils/feed_dedupe.dart';
+import '../utils/feed_image_url.dart';
 
 class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
@@ -386,6 +387,10 @@ class NewsProvider extends ChangeNotifier {
               .where((p) => (p.category?.slug.toLowerCase() ?? '') == wantSlug)
               .toList();
         }
+        // Hide broken / missing hero images (legacy rows ingested before RSS_REQUIRE_IMAGE).
+        fetched = fetched
+            .where((p) => feedImageUrlForPost(p).isNotEmpty)
+            .toList();
         fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
         if (reset) {
           _posts = dedupeNewsPosts(fetched);

@@ -1,12 +1,17 @@
-const crypto = require('crypto');
 const NewsPost = require('../models/NewsPost');
+const {
+  canonicalizeUrl,
+  hashUrl,
+  normalizeTitle,
+  titleFingerprint,
+} = require('../utils/storyDedupe');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const {
   fetchNewsApiItems,
   fetchGNewsItems,
   fetchBestImageFallback,
-  buildDomainImageFallbackCandidates,
+  isUnusableFeedImageUrl,
 } = require('./newsApiService');
 const { newsApiIngestPlan } = require('../config/newsApiIngestPlan');
 const { cloudinary } = require('../config/cloudinary');
@@ -150,10 +155,6 @@ function isTeluguPoliticalStory(postLike) {
   return score >= 2;
 }
 
-function hashUrl(url) {
-  return crypto.createHash('sha256').update(url).digest('hex');
-}
-
 function isCloudinaryUrl(url) {
   if (!url || typeof url !== 'string') return false;
   return url.includes('res.cloudinary.com/') || url.includes('cloudinary.com/');
@@ -274,18 +275,28 @@ async function getCategoryBySlug(slug) {
 }
 
 async function isDuplicate(item) {
-  if (item.sourceUrl) {
-    const sourceUrlHash = hashUrl(item.sourceUrl);
-    const existsByHash = await NewsPost.exists({ sourceUrlHash });
-    if (existsByHash) return true;
+  const windowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const canonical = canonicalizeUrl(item.sourceUrl);
+  if (canonical) {
+    const sourceUrlHash = hashUrl(canonical);
+    if (await NewsPost.exists({ sourceUrlHash })) return true;
   }
 
-  const fuzzyWindowStart = new Date(Date.now() - 48 * 60 * 60 * 1000);
-  const existsByTitle = await NewsPost.exists({
+  const titleNorm = normalizeTitle(item.title);
+  if (titleNorm.length >= 12) {
+    if (await NewsPost.exists({
+      titleNormalized: titleNorm,
+      createdAt: { $gte: windowStart },
+    })) {
+      return true;
+    }
+  }
+
+  const existsByExactTitle = await NewsPost.exists({
     title: item.title,
-    createdAt: { $gte: fuzzyWindowStart },
+    createdAt: { $gte: windowStart },
   });
-  return !!existsByTitle;
+  return !!existsByExactTitle;
 }
 
 function toPostDoc(item, reporterId, categoryId, sourceName) {
@@ -303,7 +314,11 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     originalLanguage: item.originalLanguage || null,
     sourceName,
     sourceUrl: item.sourceUrl || null,
-    sourceUrlHash: item.sourceUrl ? hashUrl(item.sourceUrl) : null,
+    sourceUrlHash: (() => {
+      const c = canonicalizeUrl(item.sourceUrl);
+      return c ? hashUrl(c) : null;
+    })(),
+    titleNormalized: normalizeTitle(item.title) || null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
     politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(item.politicsScope || '').toLowerCase())
@@ -361,6 +376,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     fetched: 0,
     inserted: 0,
     duplicates: 0,
+    skippedNoImage: 0,
     failed: 0,
     fallbacks: 0,
     languageFiltered: 0,
@@ -455,13 +471,21 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
               // Re-host external thumbnails on Cloudinary for reliability (no hotlink blocking).
               let postFields = item;
-              if (item.mediaUrl) {
-                const reh = await rehostExternalImageToCloudinary(item.mediaUrl, {
+              let mediaUrl = item.mediaUrl;
+              if (mediaUrl && isUnusableFeedImageUrl(mediaUrl)) mediaUrl = null;
+              if (!mediaUrl && item.sourceUrl) {
+                // eslint-disable-next-line no-await-in-loop
+                mediaUrl = await fetchBestImageFallback(item.sourceUrl);
+              }
+              if (mediaUrl && !isUnusableFeedImageUrl(mediaUrl)) {
+                const reh = await rehostExternalImageToCloudinary(mediaUrl, {
                   referer: item.sourceUrl || null,
                 });
                 if (reh.ok && reh.url) {
                   postFields = { ...item, mediaUrl: reh.url };
                 }
+              } else {
+                postFields = { ...item, mediaUrl: null };
               }
 
               const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
@@ -536,6 +560,18 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               stats.failed += 1;
               continue;
             }
+            const publishedAt = item.sourcePublishedAt
+              ? new Date(item.sourcePublishedAt)
+              : null;
+            if (publishedAt && !Number.isNaN(publishedAt.getTime())) {
+              const maxAgeDays = String(feed.categorySlug || '').toLowerCase() === 'politics'
+                ? 12
+                : 28;
+              if (Date.now() - publishedAt.getTime() > maxAgeDays * 24 * 60 * 60 * 1000) {
+                stats.staleFiltered = (stats.staleFiltered || 0) + 1;
+                continue;
+              }
+            }
             if (!matchesExpectedFeedLanguage(raw, feed.language || '')) {
               stats.languageFiltered += 1;
               continue;
@@ -550,11 +586,6 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               stats.politicsFiltered += 1;
               continue;
             }
-            if (await isDuplicate(item)) {
-              stats.duplicates += 1;
-              continue;
-            }
-
             const prep = prepareForHfSummaryFromRssItem(raw);
             const summaryInput = prep.textForSummary;
             const originalLang = prep.originalLang;
@@ -632,6 +663,13 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               } catch { /* ignore */ }
             }
 
+            // Dedupe after publisher URL resolution (Google News links differ per feed).
+            // eslint-disable-next-line no-await-in-loop
+            if (await isDuplicate(postFields)) {
+              stats.duplicates += 1;
+              continue;
+            }
+
             // Some RSS (notably Google News RSS, but also several publisher feeds) ship without
             // enclosure/media tags. Always try og:image from the article page as a safety net so
             // every card has a real image — feeds can opt out by setting `ogImageFallback: false`,
@@ -645,7 +683,9 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               try {
                 // eslint-disable-next-line no-await-in-loop
                 const og = await fetchBestImageFallback(postFields.sourceUrl);
-                if (og) postFields = { ...postFields, mediaUrl: og };
+                if (og && !isUnusableFeedImageUrl(og)) {
+                  postFields = { ...postFields, mediaUrl: og };
+                }
               } catch { /* ignore */ }
             }
 
@@ -707,19 +747,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               } catch { /* ignore */ }
             }
 
-            // Last-resort thumbnail so cards never look empty when publisher blocks article images.
-            if (!postFields.mediaUrl && postFields.sourceUrl) {
-              const fallbackCandidates = buildDomainImageFallbackCandidates(postFields.sourceUrl);
-              for (const candidate of fallbackCandidates) {
-                // eslint-disable-next-line no-await-in-loop
-                const reh = await rehostExternalImageToCloudinary(candidate, {
-                  referer: postFields.sourceUrl || feed.url || null,
-                });
-                if (reh.ok && reh.url) {
-                  postFields = { ...postFields, mediaUrl: reh.url };
-                  break;
-                }
-              }
+            if (postFields.mediaUrl && isUnusableFeedImageUrl(postFields.mediaUrl)) {
+              postFields = { ...postFields, mediaUrl: null };
             }
 
             if (postFields.mediaUrl) {
@@ -729,6 +758,15 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               if (reh.ok && reh.url) {
                 postFields = { ...postFields, mediaUrl: reh.url };
               }
+            }
+
+            // Skip stories with no usable thumbnail (RSS + og:image both failed).
+            if (
+              process.env.RSS_REQUIRE_IMAGE !== 'false'
+              && (!postFields.mediaUrl || isUnusableFeedImageUrl(postFields.mediaUrl))
+            ) {
+              stats.skippedNoImage += 1;
+              continue;
             }
 
             const label = `RSS · ${feed.name || 'RSS'}`;

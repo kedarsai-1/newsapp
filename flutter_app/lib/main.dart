@@ -22,6 +22,11 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_verify_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/user/feed_screen.dart' show FeedScreen;
+import 'theme/xpresso_app_theme.dart';
+import 'widgets/feed/feed_xpresso_theme.dart';
+import 'widgets/dailyhunt/xpresso_bottom_nav_bar.dart';
+import 'widgets/dailyhunt/xpresso_menu_scope.dart';
+import 'widgets/dailyhunt/xpresso_side_menu.dart';
 import 'screens/user/dailyhunt_home_screen.dart';
 import 'screens/user/shorts_news_screen.dart';
 import 'screens/user/quick_news_screen.dart';
@@ -402,9 +407,9 @@ class NewsApp extends StatelessWidget {
             return Consumer<ThemeProvider>(
               builder: (context, theme, _) => MaterialApp(
                 debugShowCheckedModeBanner: false,
-                theme: AppTheme.light(),
-                darkTheme: AppTheme.dark(),
-                themeMode: theme.themeMode,
+                theme: XpressoAppTheme.theme(),
+                darkTheme: XpressoAppTheme.theme(),
+                themeMode: ThemeMode.dark,
                 home: ColoredBox(
                   color: OnboardingDesign.background,
                   child: Center(
@@ -453,12 +458,11 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = context.watch<ThemeProvider>();
     return MaterialApp.router(
       title: AppConstants.appName,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: theme.themeMode,
+      theme: XpressoAppTheme.theme(),
+      darkTheme: XpressoAppTheme.theme(),
+      themeMode: ThemeMode.dark,
       routerConfig: _router!,
       debugShowCheckedModeBanner: false,
     );
@@ -505,20 +509,27 @@ class _HorizontalShellSwipe extends StatelessWidget {
   }
 }
 
-class UserShell extends StatelessWidget {
+class UserShell extends StatefulWidget {
   final Widget child;
   const UserShell({super.key, required this.child});
+
+  @override
+  State<UserShell> createState() => _UserShellState();
+}
+
+class _UserShellState extends State<UserShell> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   void _goIfNeeded(BuildContext context, String current, String target) {
     if (current == target) return;
     context.go(target);
   }
 
+  void _openMenu() => _scaffoldKey.currentState?.openDrawer();
+
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final p = context.palette;
-    final isLight = Theme.of(context).brightness == Brightness.light;
     int idx = 0;
     if (loc == '/shorts') idx = 1;
     if (loc == '/categories') idx = 2;
@@ -528,119 +539,78 @@ class UserShell extends StatelessWidget {
     if (loc == '/home') {
       return Scaffold(
         backgroundColor: Colors.white,
-        body: child,
+        body: widget.child,
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: _HorizontalShellSwipe(
-        tabRoutes: const [
-          '/feed',
-          '/shorts',
-          '/categories',
-          '/bookmarks',
-          '/settings',
+    return XpressoMenuScope(
+      openMenu: _openMenu,
+      child: Scaffold(
+          key: _scaffoldKey,
+          drawer: const XpressoSideMenu(),
+          drawerEnableOpenDragGesture: true,
+          drawerEdgeDragWidth: 28,
+          backgroundColor: FeedXpressoTheme.background,
+          body: _HorizontalShellSwipe(
+            tabRoutes: const [
+              '/feed',
+              '/shorts',
+              '/categories',
+              '/bookmarks',
+              '/settings',
+            ],
+            child: widget.child,
+          ),
+          bottomNavigationBar: XpressoBottomNavBar(
+        selectedIndex: idx,
+        onSelected: (i) {
+          switch (i) {
+            case 0:
+              _goIfNeeded(context, loc, '/feed');
+              return;
+            case 1:
+              _goIfNeeded(context, loc, '/shorts');
+              return;
+            case 2:
+              _goIfNeeded(context, loc, '/categories');
+              return;
+            case 3:
+              _goIfNeeded(context, loc, '/bookmarks');
+              return;
+            case 4:
+              _goIfNeeded(context, loc, '/settings');
+              return;
+          }
+        },
+        destinations: [
+          XpressoNavDestination(
+            icon: Icons.dynamic_feed_outlined,
+            selectedIcon: Icons.dynamic_feed_rounded,
+            label: I18n.t(context, 'tab_feed'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.view_stream_outlined,
+            selectedIcon: Icons.view_stream_rounded,
+            label: I18n.t(context, 'tab_shorts'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.grid_view_outlined,
+            selectedIcon: Icons.grid_view_rounded,
+            label: I18n.t(context, 'feed_categories'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.bookmark_outline,
+            selectedIcon: Icons.bookmark_rounded,
+            label: I18n.t(context, 'tab_saved'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.person_outline,
+            selectedIcon: Icons.person_rounded,
+            label: I18n.t(context, 'tab_settings'),
+          ),
         ],
-        child: child,
-      ),
-      bottomNavigationBar: Material(
-        color: isLight ? Colors.white : p.surface,
-        elevation: 0,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: p.cardBorder.withValues(alpha: 0.35)),
-            ),
           ),
-          child: _buildNavBar(context, loc, idx),
         ),
-      ),
-    );
-  }
-
-  Widget _buildNavBar(BuildContext context, String loc, int idx) {
-    final p = context.palette;
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    return SafeArea(
-      top: false,
-      child: NavigationBarTheme(
-        data: NavigationBarThemeData(
-          height: 66,
-          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-          indicatorColor: p.primary.withValues(alpha: isLight ? 0.16 : 0.20),
-          indicatorShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          iconTheme: WidgetStateProperty.resolveWith((states) {
-            final selected = states.contains(WidgetState.selected);
-            return IconThemeData(
-              size: 26,
-              color: selected ? p.primary : p.navUnselected,
-            );
-          }),
-          labelTextStyle: WidgetStateProperty.resolveWith((states) {
-            final selected = states.contains(WidgetState.selected);
-            return TextStyle(
-              fontSize: 11.5,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-              color: selected ? p.primary : p.navUnselected,
-            );
-          }),
-        ),
-        child: NavigationBar(
-          animationDuration: const Duration(milliseconds: 80),
-          selectedIndex: idx,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          onDestinationSelected: (i) {
-            switch (i) {
-              case 0:
-                _goIfNeeded(context, loc, '/feed');
-                return;
-              case 1:
-                _goIfNeeded(context, loc, '/shorts');
-                return;
-              case 2:
-                _goIfNeeded(context, loc, '/categories');
-                return;
-              case 3:
-                _goIfNeeded(context, loc, '/bookmarks');
-                return;
-              case 4:
-                _goIfNeeded(context, loc, '/settings');
-                return;
-            }
-          },
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.dynamic_feed_outlined),
-              selectedIcon: const Icon(Icons.dynamic_feed_rounded),
-              label: I18n.t(context, 'tab_feed'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.view_stream_outlined),
-              selectedIcon: const Icon(Icons.view_stream_rounded),
-              label: I18n.t(context, 'tab_shorts'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.grid_view_outlined),
-              selectedIcon: const Icon(Icons.grid_view_rounded),
-              label: I18n.t(context, 'feed_categories'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.bookmark_outline),
-              selectedIcon: const Icon(Icons.bookmark_rounded),
-              label: I18n.t(context, 'tab_saved'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.person_outline),
-              selectedIcon: const Icon(Icons.person_rounded),
-              label: I18n.t(context, 'tab_settings'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

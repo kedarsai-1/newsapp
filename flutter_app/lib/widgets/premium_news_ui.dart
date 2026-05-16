@@ -7,7 +7,8 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../constants.dart';
 import '../models/models.dart';
-import 'feed/compact_news_row.dart';
+import '../utils/feed_image_url.dart';
+import 'feed/compact_list_row.dart';
 
 class PremiumScaffold extends StatelessWidget {
   final Widget child;
@@ -455,7 +456,7 @@ class PremiumNewsTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final source = post.category?.name ?? post.sourceName ?? 'News';
     return RepaintBoundary(
-      child: CompactNewsRow(
+      child: CompactListRow(
         title: post.title,
         imageUrl: premiumImageUrl(post),
         metaLine: '$source · ${timeago.format(post.displayTime)}',
@@ -491,8 +492,8 @@ class PremiumSkeletonCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: kFeedThumbWidth,
-              height: kFeedThumbHeight,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: _base,
                 borderRadius: BorderRadius.circular(3),
@@ -539,11 +540,7 @@ class PremiumSkeletonCard extends StatelessWidget {
   }
 }
 
-String premiumImageUrl(NewsPost post) {
-  final raw = post.firstImage?.url;
-  if (raw == null || raw.trim().isEmpty) return '';
-  return AppConstants.imageUrlForDisplay(raw, articleReferer: post.sourceUrl);
-}
+String premiumImageUrl(NewsPost post) => feedImageUrlForPost(post);
 
 String premiumSnippet(NewsPost post, {int maxLength = 360}) {
   final summary = post.summary?.replaceAll(RegExp(r'\s+'), ' ').trim();

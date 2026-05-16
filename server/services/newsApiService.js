@@ -117,6 +117,8 @@ function absoluteUrl(raw, baseUrl) {
 function looksLikeDecorativeImage(url) {
   const u = String(url || '').toLowerCase();
   if (!u) return true;
+  if (u.includes('clearbit.com')) return true;
+  if (u.includes('/s2/favicons')) return true;
   if (u.includes('logo') || u.includes('favicon') || u.includes('sprite') || u.includes('icon')) return true;
   if (u.includes('og-image') || u.includes('/theme/images/')) return true;
   if (u.includes('1x1') || u.includes('pixel') || u.includes('placeholder') || u.includes('default')) return true;
@@ -130,6 +132,12 @@ function looksLikeDecorativeImage(url) {
     if (w > 0 && h > 0 && w <= 256 && h <= 256) return true;
   }
   return false;
+}
+
+/** Logos, favicons, and publisher placeholders — never use as feed hero images. */
+function isUnusableFeedImageUrl(url) {
+  if (!url || typeof url !== 'string') return true;
+  return looksLikeDecorativeImage(url) || isGoogleNewsLogoUrl(url);
 }
 
 function parseFirstContentImageFromHtml(html, pageUrl) {
@@ -387,8 +395,9 @@ function newsApiCategoryToGNews(newsApiCategory) {
   const k = String(newsApiCategory).trim().toLowerCase();
   const allowed = new Set([
     'general', 'world', 'nation', 'business', 'technology',
-    'entertainment', 'sports', 'science', 'health',
+    'entertainment', 'sports', 'science', 'health', 'politics',
   ]);
+  if (k === 'politics') return 'nation';
   if (allowed.has(k)) return k;
   return 'general';
 }
@@ -478,4 +487,6 @@ module.exports = {
   fetchOgImageFallback,
   fetchBestImageFallback,
   buildDomainImageFallbackCandidates,
+  looksLikeDecorativeImage,
+  isUnusableFeedImageUrl,
 };

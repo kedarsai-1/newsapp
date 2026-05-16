@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../news_shimmer_loader.dart';
+import 'feed_xpresso_theme.dart';
 
-/// Full feed loading chrome: white surface, minimal top bar + chip strip + dense list shimmer.
+/// Xpresso feed loading — dark chrome + full-bleed image shimmer rows.
 class DailyhuntFeedSkeleton extends StatelessWidget {
   final int rowCount;
 
-  const DailyhuntFeedSkeleton({super.key, this.rowCount = 10});
+  const DailyhuntFeedSkeleton({super.key, this.rowCount = 6});
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom + 64;
+    final bottom = FeedXpressoTheme.feedBottomInset(context);
     return ColoredBox(
-      color: Colors.white,
+      color: FeedXpressoTheme.background,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _skeletonAppBar(context),
+          _skeletonAppBar(),
           _skeletonChipStrip(),
           Expanded(
             child: NewsShimmerLoader(
@@ -29,26 +30,24 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
     );
   }
 
-  Widget _skeletonAppBar(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 0.5,
-      shadowColor: Colors.black12,
+  Widget _skeletonAppBar() {
+    return ColoredBox(
+      color: FeedXpressoTheme.background,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
           height: kToolbarHeight,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               children: [
-                NewsShimmerLoader.greyBox(width: 36, height: 36, radius: 18),
+                NewsShimmerLoader.greyBox(width: 32, height: 32, radius: 16),
                 Expanded(
                   child: Center(
-                    child: NewsShimmerLoader.greyBox(width: 120, height: 18, radius: 4),
+                    child: NewsShimmerLoader.greyBox(width: 100, height: 14, radius: 3),
                   ),
                 ),
-                NewsShimmerLoader.greyBox(width: 36, height: 36, radius: 18),
+                NewsShimmerLoader.greyBox(width: 32, height: 32, radius: 16),
               ],
             ),
           ),
@@ -59,7 +58,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
 
   Widget _skeletonChipStrip() {
     return ColoredBox(
-      color: Colors.white,
+      color: FeedXpressoTheme.background,
       child: SizedBox(
         height: 32,
         child: ListView.separated(
@@ -71,7 +70,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
           itemBuilder: (_, i) {
             final w = 44.0 + (i % 3) * 14.0;
             return Center(
-              child: NewsShimmerLoader.greyBox(width: w, height: 14, radius: 3),
+              child: NewsShimmerLoader.greyBox(width: w, height: 12, radius: 2),
             );
           },
         ),

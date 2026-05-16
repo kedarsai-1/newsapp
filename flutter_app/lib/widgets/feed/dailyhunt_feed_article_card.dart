@@ -65,8 +65,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
         ? s
         : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (base.isEmpty) return null;
-    if (base.length <= 58) return base;
-    return '${base.substring(0, 58).trim()}…';
+    return base;
   }
 
   static String _buildMeta(NewsPost post) {
@@ -75,6 +74,9 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
         : (post.category?.name ?? 'News');
     return '$src · ${timeago.format(post.displayTime)}';
   }
+
+  Color _actionColor(bool isOn) =>
+      isOn ? FeedXpressoTheme.actionActive : FeedXpressoTheme.actionMuted;
 
   Future<void> _handleLike() async {
     setState(() => _liked = !_liked);
@@ -102,17 +104,17 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
         footerActions: [
           CompactFeedAction(
             icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: _liked ? CompactFeedAction.liked : CompactFeedAction.muted,
+            color: _actionColor(_liked),
             onTap: _handleLike,
           ),
           CompactFeedAction(
             icon: Icons.share_outlined,
-            color: CompactFeedAction.muted,
+            color: FeedXpressoTheme.actionMuted,
             onTap: widget.onShare,
           ),
           CompactFeedAction(
             icon: _saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-            color: _saved ? CompactFeedAction.saved : CompactFeedAction.muted,
+            color: _actionColor(_saved),
             onTap: _handleBookmark,
           ),
         ],

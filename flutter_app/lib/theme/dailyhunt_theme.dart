@@ -1,27 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../design_system/dailyhunt/dailyhunt_theme_builder.dart';
-import '../design_system/dailyhunt/dailyhunt_tokens.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
-/// Backward-compatible entry points for Dailyhunt-style UI.
-///
-/// Prefer importing `package:news_app/design_system/dailyhunt/dailyhunt.dart`
-/// for full tokens, typography, themes, and widgets.
+/// Dailyhunt / Xpresso theme entry points (legacy imports).
 class DailyhuntTheme {
   DailyhuntTheme._();
 
-  /// Primary green (alias of [DhTokens.accent]).
-  static const Color accentGreen = DhTokens.accent;
-  static const Color accentGreenDark = DhTokens.accentDark;
+  static const Color accentGreen = FeedXpressoTheme.iconFg;
+  static const Color accentGreenDark = FeedXpressoTheme.iconFgMuted;
 
-  /// Material 3 light color scheme (green seed).
-  static ColorScheme colorScheme() => DhTokens.lightColorScheme();
+  static ColorScheme colorScheme() => FeedXpressoTheme.theme().colorScheme;
 
-  /// Light overlay for embedding in the host app (e.g. settings / saved screens).
-  static ThemeData overlay(BuildContext context) {
-    final merged = DailyhuntDesignThemes.overlayLight(context);
-    return merged.copyWith(
-      scaffoldBackgroundColor: const Color(0xFFF5F5F5),
-    );
-  }
+  /// Xpresso dark overlay for embedded screens.
+  static ThemeData overlay(BuildContext context) => FeedXpressoTheme.theme();
 }

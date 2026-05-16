@@ -11,14 +11,13 @@ import '../../services/auth_provider.dart';
 import '../../utils/i18n.dart';
 import '../../widgets/news_shimmer_loader.dart';
 import '../../widgets/premium_news_ui.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
 import '../../widgets/shorts/shorts_chrome.dart';
 
 /// RSS-backed vertical shorts: [PageView.builder], Dailyhunt-style layout, light motion.
 class ShortsNewsScreen extends StatefulWidget {
   const ShortsNewsScreen({super.key});
-
-  static const double _navBarHeight = 66;
 
   @override
   State<ShortsNewsScreen> createState() => _ShortsNewsScreenState();
@@ -193,7 +192,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     final posts = shorts.posts;
 
     final bottomPad =
-        MediaQuery.paddingOf(context).bottom + ShortsNewsScreen._navBarHeight + 20;
+        FeedXpressoTheme.feedBottomInset(context) + 20;
 
     if (shorts.error != null && posts.isEmpty && !shorts.refreshing) {
       return Scaffold(
@@ -312,7 +311,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
           Positioned(
             left: 14,
             right: 14,
-            bottom: MediaQuery.paddingOf(context).bottom + ShortsNewsScreen._navBarHeight + 6,
+            bottom: FeedXpressoTheme.feedBottomInset(context) + 6,
             child: ShortsFeedProgress(
               total: posts.length,
               index: _index,
@@ -322,7 +321,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
             Positioned(
               left: 0,
               right: 0,
-              bottom: MediaQuery.paddingOf(context).bottom + 72,
+              bottom: FeedXpressoTheme.feedBottomInset(context),
               child: const SafeArea(
                 child: Center(
                   child: SizedBox(

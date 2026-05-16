@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../constants.dart';
+import '../utils/feed_dedupe.dart';
 
 class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
@@ -361,7 +362,7 @@ class NewsProvider extends ChangeNotifier {
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).
         // RSS items in your DB are ~15 days old, so 7 days hides everything.
         // Once NewsAPI ingestion is confirmed working, you can tighten back to 7.
-        days: 30,
+        days: isPoliticsMode ? 7 : 30,
         // Show reporter/manual + NewsAPI. Temporarily also allow RSS since your DB currently contains RSS
         // and NewsAPI is returning apiKeyInvalid (so api feed would be empty otherwise).
         sourceTypes: const ['api', 'manual', 'rss'],
@@ -372,10 +373,10 @@ class NewsProvider extends ChangeNotifier {
             .toList();
         fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
         if (reset) {
-          _posts = fetched;
+          _posts = dedupeNewsPosts(fetched);
           _page = 2;
         } else {
-          _posts.addAll(fetched);
+          _posts = mergeDedupedPosts(_posts, fetched);
           _page++;
         }
         _hasMore = fetched.length == AppConstants.pageSize;

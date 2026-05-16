@@ -1,54 +1,128 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/dailyhunt_theme.dart';
+import '../feed/feed_xpresso_theme.dart';
 
-/// Minimal rounded white card for a settings group (Dailyhunt-style).
+/// Xpresso settings block — section label + content + hairline separator.
 class DailyhuntSettingsSection extends StatelessWidget {
   final String title;
   final Widget child;
-  final EdgeInsetsGeometry padding;
+  final bool showTitle;
+  final bool showDivider;
 
   const DailyhuntSettingsSection({
     super.key,
     required this.title,
     required this.child,
-    this.padding = const EdgeInsets.fromLTRB(16, 14, 16, 16),
+    this.showTitle = true,
+    this.showDivider = true,
+  });
+
+  static const _sectionLabelStyle = TextStyle(
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.45,
+    fontSize: 10,
+    color: FeedXpressoTheme.meta,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showTitle && title.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 6),
+            child: Text(title.toUpperCase(), style: _sectionLabelStyle),
+          ),
+        child,
+        if (showDivider)
+          const Padding(
+            padding: EdgeInsets.only(top: 10),
+            child: Divider(
+              height: 1,
+              thickness: 0.5,
+              color: FeedXpressoTheme.divider,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Tappable settings row — compact, no card chrome.
+class XpressoSettingsRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  const XpressoSettingsRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      surfaceTintColor: Colors.transparent,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: padding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              title.toUpperCase(),
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                    fontSize: 11,
-                    color: cs.onSurface.withValues(alpha: 0.45),
-                  ),
-            ),
-            const SizedBox(height: 12),
-            child,
-          ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: Colors.white10,
+        highlightColor: Colors.white10,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: FeedXpressoTheme.iconFg),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        height: 1.15,
+                        color: FeedXpressoTheme.title,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.2,
+                          color: FeedXpressoTheme.summary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: FeedXpressoTheme.iconFgMuted,
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Primary filled button using Dailyhunt green (for Sign in / key actions).
+/// Compact filled action (sign in).
 class DailyhuntPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -62,11 +136,12 @@ class DailyhuntPrimaryButton extends StatelessWidget {
   });
 
   static final ButtonStyle _buttonStyle = FilledButton.styleFrom(
-    backgroundColor: DailyhuntTheme.accentGreen,
-    foregroundColor: Colors.white,
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+    backgroundColor: FeedXpressoTheme.iconSurface,
+    foregroundColor: FeedXpressoTheme.title,
+    minimumSize: const Size(0, 40),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
   );
 
   @override
@@ -74,7 +149,7 @@ class DailyhuntPrimaryButton extends StatelessWidget {
     if (icon != null) {
       return FilledButton.icon(
         onPressed: onPressed,
-        icon: Icon(icon, size: 20),
+        icon: Icon(icon, size: 18),
         label: Text(label),
         style: _buttonStyle,
       );

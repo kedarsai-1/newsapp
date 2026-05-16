@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/models.dart';
-import '../feed/compact_news_row.dart';
+import '../feed/compact_list_row.dart';
+import '../feed/feed_xpresso_theme.dart';
 import '../premium_news_ui.dart';
 
-/// Saved article — same dense row as the main feed.
+/// Saved article — light compact row (feed uses Xpresso).
 class DailyhuntSavedArticleTile extends StatelessWidget {
   final NewsPost post;
   final VoidCallback onTap;
@@ -25,7 +26,7 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CompactNewsRow(
+    return CompactListRow(
       title: post.title,
       imageUrl: premiumImageUrl(post),
       metaLine: '$_source · ${timeago.format(post.displayTime)}',
@@ -36,7 +37,7 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
         tooltip: 'Remove from saved',
         onPressed: onRemove,
-        icon: const Icon(Icons.close_rounded, size: 17, color: Color(0xFF9E9E9E)),
+        icon: const Icon(Icons.close_rounded, size: 17, color: FeedXpressoTheme.iconFgMuted),
       ),
     );
   }

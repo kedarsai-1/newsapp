@@ -389,6 +389,8 @@ function normalizeMediaUrl(url) {
   return u;
 }
 
+const { isUnusableFeedImageUrl } = require('./newsApiService');
+
 function pickImageFromItem(item) {
   const it = item || {};
   
@@ -437,7 +439,7 @@ function pickImageFromItem(item) {
   const candidates = [enclosure, mediaContent, mediaThumbnail, itunesImg, htmlImg].filter(Boolean);
   for (const c of candidates) {
     const u = normalizeMediaUrl(c);
-    if (u) return u;
+    if (u && !isUnusableFeedImageUrl(u)) return u;
   }
   return null;
 }
@@ -534,6 +536,11 @@ async function resolveGoogleNewsPublisherUrl(googleNewsUrl, { preferredHost } = 
 async function fetchRssItems(feedUrl) {
   const parsed = await parser.parseURL(feedUrl);
   const items = parsed.items || [];
+  items.sort((a, b) => {
+    const ta = new Date(a.isoDate || a.pubDate || 0).getTime();
+    const tb = new Date(b.isoDate || b.pubDate || 0).getTime();
+    return tb - ta;
+  });
   return items;
 }
 

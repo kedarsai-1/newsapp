@@ -82,6 +82,8 @@ const newsPostSchema = new mongoose.Schema({
   sourceName: { type: String, default: null, trim: true },
   sourceUrl: { type: String, default: null, trim: true },
   sourceUrlHash: { type: String, default: null, index: true, sparse: true },
+  /** Normalized headline for cross-feed duplicate detection. */
+  titleNormalized: { type: String, default: null, index: true, sparse: true },
   sourcePublishedAt: { type: Date, default: null },
   sourceType: { type: String, enum: ['rss', 'html', 'manual', 'api'], default: 'manual' },
   politicsScope: { type: String, trim: true, lowercase: true, default: undefined, index: true },
@@ -99,6 +101,8 @@ const newsPostSchema = new mongoose.Schema({
 // Index for fast feed queries
 newsPostSchema.index({ status: 1, createdAt: -1 });
 newsPostSchema.index({ category: 1, status: 1, createdAt: -1 });
+newsPostSchema.index({ category: 1, status: 1, sourcePublishedAt: -1 });
+newsPostSchema.index({ titleNormalized: 1, status: 1, createdAt: -1 }, { sparse: true });
 newsPostSchema.index({ reporter: 1, createdAt: -1 });
 newsPostSchema.index({ 'location.city': 1, status: 1 });
 newsPostSchema.index({ language: 1, status: 1, createdAt: -1 });

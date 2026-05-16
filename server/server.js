@@ -91,7 +91,7 @@ mongoose.connect(process.env.MONGO_URI)
       } else {
         const s = result.stats || {};
         console.log(
-          `[scraper] run completed (${triggeredBy}): inserted=${s.inserted ?? 0} fetched=${s.fetched ?? 0} duplicates=${s.duplicates ?? 0} failed=${s.failed ?? 0}`,
+          `[scraper] run completed (${triggeredBy}): inserted=${s.inserted ?? 0} fetched=${s.fetched ?? 0} duplicates=${s.duplicates ?? 0} skippedNoImage=${s.skippedNoImage ?? 0} failed=${s.failed ?? 0}`,
         );
         if (s.sourceRuns?.length) {
           console.log('[scraper] details:', JSON.stringify(s.sourceRuns));

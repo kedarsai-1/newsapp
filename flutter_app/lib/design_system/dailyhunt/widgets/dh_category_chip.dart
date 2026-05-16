@@ -43,7 +43,7 @@ class DhCategoryChip extends StatelessWidget {
                 Icon(
                   leadingIcon,
                   size: 13,
-                  color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColor,
+                  color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColorLight,
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -51,7 +51,7 @@ class DhCategoryChip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColor,
+                    color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColorLight,
                   ),
                 ),
               ],

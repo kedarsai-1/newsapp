@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
-import '../../theme/dailyhunt_theme.dart';
 import 'dailyhunt_feed_article_card.dart';
 import 'feed_image_cache.dart';
 import 'feed_list_tuning.dart';
+import 'feed_xpresso_theme.dart';
 
 /// Scrollable feed list — isolated from [NewsProvider] rebuilds above the list.
 class FeedListView extends StatefulWidget {
@@ -50,11 +50,14 @@ class _FeedListViewState extends State<FeedListView>
     super.build(context);
     final itemCount = widget.posts.length + (widget.loadingMore ? 1 : 0);
 
-    return FeedListTuning.clampingScroll(
-      child: RefreshIndicator(
-        color: DailyhuntTheme.accentGreen,
-        onRefresh: widget.onRefresh,
-        child: ListView.builder(
+    return ColoredBox(
+      color: FeedXpressoTheme.background,
+      child: FeedListTuning.clampingScroll(
+        child: RefreshIndicator(
+          color: FeedXpressoTheme.iconFg,
+          backgroundColor: FeedXpressoTheme.background,
+          onRefresh: widget.onRefresh,
+          child: ListView.builder(
           controller: widget.scrollController,
           physics: FeedListTuning.scrollPhysics,
           cacheExtent: FeedListTuning.cacheExtent,
@@ -78,6 +81,7 @@ class _FeedListViewState extends State<FeedListView>
               onBookmark: () => widget.onBookmark(post),
             );
           },
+          ),
         ),
       ),
     );

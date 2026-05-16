@@ -9,6 +9,8 @@
  * Usage:
  *   node scripts/backfillMissingImages.js
  *   BACKFILL_LIMIT=800 node scripts/backfillMissingImages.js
+ *   REPLACE_BAD_THUMBNAILS=1 node scripts/backfillMissingImages.js
+ *     (re-fetch og:image for posts that already have logo/favicon thumbnails)
  */
 
 require('dotenv').config();
@@ -16,7 +18,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const NewsPost = require('../models/NewsPost');
 const { cloudinary } = require('../config/cloudinary');
-const { fetchBestImageFallback, buildDomainImageFallbackCandidates } = require('../services/newsApiService');
+const { fetchBestImageFallback, isUnusableFeedImageUrl } = require('../services/newsApiService');
 const { resolveGoogleNewsPublisherUrl } = require('../services/rssService');
 
 function hashUrl(url) {
@@ -74,19 +76,32 @@ async function main() {
   if (!process.env.MONGO_URI?.trim()) throw new Error('Missing MONGO_URI');
   await mongoose.connect(process.env.MONGO_URI);
 
+  const replaceBad = ['1', 'true', 'yes'].includes(
+    String(process.env.REPLACE_BAD_THUMBNAILS || '').toLowerCase(),
+  );
   const limit = Math.min(1500, Math.max(1, Number(process.env.BACKFILL_LIMIT || 600)));
-  const posts = await NewsPost.find({
-    status: 'approved',
-    sourceType: { $in: ['rss', 'api'] },
-    sourceUrl: { $exists: true, $ne: null, $ne: '' },
-    $or: [{ media: { $exists: false } }, { media: { $size: 0 } }],
-  })
+  const posts = await NewsPost.find(
+    replaceBad
+      ? {
+          status: 'approved',
+          sourceType: { $in: ['rss', 'api'] },
+          sourceUrl: { $exists: true, $ne: null, $ne: '' },
+          'media.0': { $exists: true },
+        }
+      : {
+          status: 'approved',
+          sourceType: { $in: ['rss', 'api'] },
+          sourceUrl: { $exists: true, $ne: null, $ne: '' },
+          $or: [{ media: { $exists: false } }, { media: { $size: 0 } }],
+        },
+  )
     .select('_id sourceUrl sourceName sourceUrlHash media')
     .sort({ createdAt: -1 })
     .limit(limit);
 
   let updated = 0;
   let failed = 0;
+  let cleared = 0;
   let resolved = 0;
   for (const p of posts) {
     let articleUrl = p.sourceUrl;
@@ -105,26 +120,22 @@ async function main() {
     let finalPublicId = null;
 
     const img = await fetchBestImageFallback(articleUrl);
-    if (img) {
+    if (img && !isUnusableFeedImageUrl(img)) {
       // eslint-disable-next-line no-await-in-loop
       const reh = await rehostExternalImageToCloudinary(img, { referer: articleUrl });
       finalUrl = reh?.url || img;
       finalPublicId = reh?.publicId || null;
-    } else {
-      const logoCandidates = buildDomainImageFallbackCandidates(articleUrl);
-      for (const candidate of logoCandidates) {
-        // eslint-disable-next-line no-await-in-loop
-        const reh = await rehostExternalImageToCloudinary(candidate, { referer: articleUrl });
-        if (reh?.url) {
-          finalUrl = reh.url;
-          finalPublicId = reh.publicId || null;
-          break;
-        }
-      }
     }
 
     if (!finalUrl) {
-      failed += 1;
+      if (replaceBad && Array.isArray(p.media) && p.media.length) {
+        p.media = [];
+        // eslint-disable-next-line no-await-in-loop
+        await p.save();
+        cleared += 1;
+      } else {
+        failed += 1;
+      }
       continue;
     }
 
@@ -139,8 +150,10 @@ async function main() {
   const total = await NewsPost.countDocuments();
   const withMedia = await NewsPost.countDocuments({ 'media.0': { $exists: true } });
   console.log(JSON.stringify({
+    mode: replaceBad ? 'replace_bad_thumbnails' : 'missing_only',
     scanned: posts.length,
     updated,
+    cleared,
     failed,
     resolvedGoogleNewsLinks: resolved,
     total,

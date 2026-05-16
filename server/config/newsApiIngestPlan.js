@@ -6,6 +6,7 @@
  */
 const newsApiIngestPlan = [
   { categorySlug: 'general', newsApiCategory: null },
+  { categorySlug: 'politics', newsApiCategory: 'nation' },
   { categorySlug: 'sports', newsApiCategory: 'sports' },
   { categorySlug: 'technology', newsApiCategory: 'technology' },
   { categorySlug: 'technology', newsApiCategory: 'science' },

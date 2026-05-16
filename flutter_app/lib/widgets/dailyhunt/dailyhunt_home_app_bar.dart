@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../constants.dart';
-import '../../theme/dailyhunt_theme.dart';
+import '../feed/feed_xpresso_theme.dart';
 
 /// Top bar: profile (left), logo/title (center), notifications (right).
 class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onProfileTap;
   final VoidCallback? onNotificationTap;
+  final bool dark;
 
   const DailyhuntHomeAppBar({
     super.key,
     this.onProfileTap,
     this.onNotificationTap,
+    this.dark = false,
   });
 
   @override
@@ -19,10 +21,14 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Colors.white,
-      elevation: 0,
+    final fg = dark ? FeedXpressoTheme.title : Theme.of(context).colorScheme.onSurface;
+    final iconBg = dark ? FeedXpressoTheme.iconSurface : const Color(0xFFF0F0F0);
+    final iconFg = dark ? FeedXpressoTheme.iconFg : fg;
+    final logoBg = dark ? FeedXpressoTheme.iconSurface : const Color(0xFF0A8F57);
+    final logoIcon = dark ? FeedXpressoTheme.iconFg : Colors.white;
+
+    return ColoredBox(
+      color: dark ? FeedXpressoTheme.background : Colors.white,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
@@ -34,8 +40,8 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                 _IconCircleButton(
                   tooltip: 'Profile',
                   onTap: onProfileTap,
-                  child:
-                      Icon(Icons.person_rounded, color: cs.onSurface, size: 22),
+                  backgroundColor: iconBg,
+                  child: Icon(Icons.person_rounded, color: iconFg, size: 22),
                 ),
                 Expanded(
                   child: Row(
@@ -46,13 +52,13 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                         width: 34,
                         height: 34,
                         decoration: BoxDecoration(
-                          color: DailyhuntTheme.accentGreen,
+                          color: logoBg,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         alignment: Alignment.center,
-                        child: const Icon(
+                        child: Icon(
                           Icons.article_rounded,
-                          color: Colors.white,
+                          color: logoIcon,
                           size: 20,
                         ),
                       ),
@@ -67,7 +73,7 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                               Theme.of(context).textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: -0.6,
-                                    color: cs.onSurface,
+                                    color: fg,
                                     fontSize: 20,
                                   ),
                         ),
@@ -78,8 +84,8 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                 _IconCircleButton(
                   tooltip: 'Notifications',
                   onTap: onNotificationTap,
-                  child: Icon(Icons.notifications_none_rounded,
-                      color: cs.onSurface, size: 22),
+                  backgroundColor: iconBg,
+                  child: Icon(Icons.notifications_none_rounded, color: iconFg, size: 22),
                 ),
               ],
             ),
@@ -94,9 +100,11 @@ class _IconCircleButton extends StatelessWidget {
   final Widget child;
   final String? tooltip;
   final VoidCallback? onTap;
+  final Color backgroundColor;
 
   const _IconCircleButton({
     required this.child,
+    required this.backgroundColor,
     this.tooltip,
     this.onTap,
   });
@@ -104,7 +112,7 @@ class _IconCircleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final button = Material(
-      color: const Color(0xFFF0F0F0),
+      color: backgroundColor,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

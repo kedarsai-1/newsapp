@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../widgets/feed/compact_news_row.dart';
+import '../../../widgets/feed/compact_list_row.dart';
 
-/// Search / saved list row — same dense layout as the main feed.
+/// Search results row — light compact list (not Xpresso).
 class DhNewsCard extends StatelessWidget {
   final String title;
   final String? summary;
@@ -25,7 +25,7 @@ class DhNewsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CompactNewsRow(
+    return CompactListRow(
       title: title,
       summary: summary,
       imageUrl: imageUrl.isEmpty ? null : imageUrl,

@@ -5,8 +5,9 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
-import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/dailyhunt/xpresso_sliver_app_bar.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/saved/dailyhunt_saved_article_tile.dart';
 import '../../widgets/saved/dailyhunt_saved_list_shimmer.dart';
 
@@ -94,51 +95,30 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Widget build(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
     final horizontal = w >= 720 ? 20.0 : 14.0;
-    final bottomInset = MediaQuery.paddingOf(context).bottom + 88;
+    final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
-    return Theme(
-      data: DailyhuntTheme.overlay(context),
-      child: Builder(
-        builder: (context) {
-          final cs = Theme.of(context).colorScheme;
-          return Scaffold(
-            backgroundColor: cs.surface,
-            body: RefreshIndicator(
-              color: DailyhuntTheme.accentGreen,
-              edgeOffset: 8,
-              onRefresh: _load,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: ClampingScrollPhysics(),
-                    ),
-                    slivers: [
-                      SliverAppBar(
-                        pinned: true,
-                        toolbarHeight: 52,
-                        backgroundColor: Colors.white,
-                        surfaceTintColor: Colors.transparent,
-                        elevation: 0,
-                        shadowColor: Colors.black.withValues(alpha: 0.06),
-                        title: Text(
-                          'Saved',
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                      ),
+    return Scaffold(
+      backgroundColor: FeedXpressoTheme.background,
+      body: RefreshIndicator(
+        color: FeedXpressoTheme.iconFg,
+        backgroundColor: FeedXpressoTheme.background,
+        edgeOffset: 8,
+        onRefresh: _load,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: ClampingScrollPhysics(),
+              ),
+              slivers: [
+                const XpressoSliverAppBar(title: 'Saved'),
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
                           child: Text(
                             'Articles you bookmarked appear here. Tap to read or remove.',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.56),
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
                                   height: 1.35,
@@ -161,6 +141,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                             title: 'No saved articles yet',
                             subtitle:
                                 'Save stories from the feed or Shorts with the bookmark button.',
+                            dark: true,
                           ),
                         )
                       else ...[
@@ -207,6 +188,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                               icon: Icons.filter_alt_off_rounded,
                               title: 'Nothing in this topic',
                               subtitle: 'Try “All” or pick another category.',
+                              dark: true,
                             ),
                           )
                         else
@@ -221,16 +203,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                               delegate: SliverChildBuilderDelegate(
                                 (context, index) {
                                   final post = _filtered[index];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: DailyhuntSavedArticleTile(
+                                  return DailyhuntSavedArticleTile(
                                       key: ValueKey('saved-${post.id}'),
                                       post: post,
                                       onTap: () =>
                                           context.push('/article/${post.id}'),
                                       onRemove: () => _remove(post),
-                                    ),
-                                  );
+                                    );
                                 },
                                 childCount: _filtered.length,
                               ),
@@ -242,9 +221,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                 ),
               ),
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -276,21 +252,17 @@ class _SavedFilterChip extends StatelessWidget {
         label,
         style: TextStyle(
           fontWeight: FontWeight.w700,
-          fontSize: 13,
-          color: selected ? Colors.white : const Color(0xFF374151),
+          fontSize: 12,
+          color: selected ? FeedXpressoTheme.title : FeedXpressoTheme.summary,
         ),
       ),
       selected: selected,
       onSelected: (_) => onTap(),
       showCheckmark: false,
-      selectedColor: DailyhuntTheme.accentGreen,
-      backgroundColor: Colors.white,
-      side: BorderSide(
-        color: selected
-            ? DailyhuntTheme.accentGreen
-            : const Color(0xFFE5E7EB),
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      selectedColor: FeedXpressoTheme.iconSurface,
+      backgroundColor: FeedXpressoTheme.surface,
+      side: const BorderSide(color: FeedXpressoTheme.divider, width: 0.5),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
     );
   }

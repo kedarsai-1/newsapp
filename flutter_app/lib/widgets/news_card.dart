@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-import '../constants.dart';
 import '../models/models.dart';
+import '../utils/feed_image_url.dart';
 import 'feed/compact_news_row.dart';
 
 String _snippet(NewsPost post, {int maxLen = 140}) {
@@ -28,10 +28,7 @@ class NewsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = AppConstants.imageUrlForDisplay(
-      post.firstImage?.url,
-      articleReferer: post.sourceUrl,
-    );
+    final imageUrl = feedImageUrlForPost(post);
     final source = (post.sourceName?.trim().isNotEmpty == true)
         ? post.sourceName!.trim()
         : (post.category?.name ?? 'News').trim();

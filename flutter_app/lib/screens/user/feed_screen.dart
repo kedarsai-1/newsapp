@@ -12,12 +12,13 @@ import '../../models/models.dart';
 import '../../providers/news_provider.dart';
 import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
-import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/feed/dailyhunt_feed_skeleton.dart';
 import '../../widgets/feed/feed_image_cache.dart';
 import '../../widgets/feed/feed_list_view.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
+import '../../widgets/dailyhunt/xpresso_side_menu.dart';
 import '../../widgets/premium_news_ui.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -271,22 +272,19 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.paddingOf(context).bottom + 72;
+    final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
-    return Theme(
-      data: DailyhuntTheme.overlay(context),
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const RepaintBoundary(child: _DailyhuntFeedAppBar()),
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const RepaintBoundary(child: _DailyhuntFeedAppBar()),
             RepaintBoundary(
               child: Selector<NewsProvider, int>(
                 selector: (_, news) => _chipIndexForProvider(news),
                 builder: (_, chipIndex, __) => DailyhuntCategoryTabBar(
                   categories: _kFeedTabLabels,
                   selectedIndex: chipIndex,
+                  dark: true,
                   onSelected: _selectCategoryChip,
                 ),
               ),
@@ -298,6 +296,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   if (snap.error != null) {
                     return ErrorState(
                       message: snap.error!,
+                      dark: true,
                       onRetry: context.read<NewsProvider>().refresh,
                     );
                   }
@@ -310,6 +309,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       icon: Icons.article_outlined,
                       title: 'No stories yet',
                       subtitle: 'Pull down to refresh or pick another category.',
+                      dark: true,
                     );
                   }
                   scheduleFeedImagePrecache(
@@ -334,8 +334,6 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
             ),
           ],
-        ),
-      ),
     );
   }
 }
@@ -347,32 +345,31 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
     fontWeight: FontWeight.w900,
     fontSize: 17,
     letterSpacing: -0.4,
-    color: Color(0xFF111111),
+    color: Colors.white,
   );
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 0,
+    return ColoredBox(
+      color: FeedXpressoTheme.background,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
           height: kToolbarHeight,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Row(
               children: [
                 IconButton(
-                  tooltip: 'Profile',
-                  onPressed: () => context.go('/settings'),
+                  tooltip: 'Menu',
+                  onPressed: () => XpressoSideMenu.open(context),
                   icon: const CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Color(0xFFE8EAED),
+                    radius: 17,
+                    backgroundColor: FeedXpressoTheme.iconSurface,
                     child: Icon(
                       Icons.person_rounded,
-                      size: 20,
-                      color: Color(0xFF5F6368),
+                      size: 19,
+                      color: FeedXpressoTheme.iconFg,
                     ),
                   ),
                 ),
@@ -382,20 +379,20 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 30,
-                        height: 30,
+                        width: 28,
+                        height: 28,
                         decoration: BoxDecoration(
-                          color: DailyhuntTheme.accentGreen,
-                          borderRadius: BorderRadius.circular(8),
+                          color: FeedXpressoTheme.iconSurface,
+                          borderRadius: BorderRadius.circular(6),
                         ),
                         alignment: Alignment.center,
                         child: const Icon(
                           Icons.article_rounded,
-                          color: Colors.white,
-                          size: 18,
+                          color: FeedXpressoTheme.iconFg,
+                          size: 16,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 7),
                       Flexible(
                         child: Text(
                           AppConstants.appName,
@@ -421,7 +418,7 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                   },
                   icon: const Icon(
                     Icons.notifications_none_rounded,
-                    color: Color(0xFF5F6368),
+                    color: FeedXpressoTheme.iconFg,
                   ),
                 ),
               ],

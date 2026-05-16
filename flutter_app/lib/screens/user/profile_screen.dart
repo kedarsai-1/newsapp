@@ -4,14 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/news_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../services/auth_provider.dart';
-import '../../theme/dailyhunt_theme.dart';
 import '../../utils/app_utils.dart';
 import '../../utils/i18n.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/profile/dailyhunt_settings_section.dart';
 
-/// Dailyhunt-style profile & settings: light cards, green accent, Material 3.
+/// Profile & settings — dense Xpresso dark layout.
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -21,6 +20,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   static const _translatedCacheKey = 'feed_translated_summary_cache_v1';
+  static const _padH = 10.0;
 
   final Set<String> _interests = {
     'politics',
@@ -57,156 +57,119 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'local',
   ];
 
+  static const _denseChipTheme = ChipThemeData(
+    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+    labelPadding: EdgeInsets.symmetric(horizontal: 2),
+  );
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final news = context.watch<NewsProvider>();
-    final themeProv = context.watch<ThemeProvider>();
-    final w = MediaQuery.sizeOf(context).width;
-    final horizontal = w >= 720 ? 20.0 : 14.0;
-    final bottomInset = MediaQuery.paddingOf(context).bottom + 88;
+    final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
-    return Theme(
-      data: DailyhuntTheme.overlay(context),
-      child: Builder(
-        builder: (context) {
-          final cs = Theme.of(context).colorScheme;
-          return Scaffold(
-            backgroundColor: cs.surface,
-            body: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  slivers: [
-                SliverAppBar(
-                  pinned: true,
-                  toolbarHeight: 52,
-                  backgroundColor: Colors.white,
-                  surfaceTintColor: Colors.transparent,
-                  elevation: 0,
-                  shadowColor: Colors.black.withValues(alpha: 0.06),
-                  title: Text(
-                    I18n.t(context, 'profile_title'),
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      tooltip: I18n.t(context, 'profile_privacy_tooltip'),
-                      onPressed: () => context.push('/privacy-policy'),
-                      icon: Icon(
-                        Icons.policy_outlined,
-                        color: cs.onSurface.withValues(alpha: 0.65),
-                      ),
-                    ),
-                  ],
+    return Scaffold(
+      backgroundColor: FeedXpressoTheme.background,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: CustomScrollView(
+            physics: const ClampingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                toolbarHeight: 46,
+                backgroundColor: FeedXpressoTheme.background,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                title: Text(
+                  I18n.t(context, 'profile_title'),
+                  style: FeedXpressoTheme.screenTitleStyle.copyWith(fontSize: 18),
                 ),
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(horizontal, 8, horizontal, bottomInset),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      if (user == null) ...[
-                        _GuestHeader(colorScheme: cs),
-                        const SizedBox(height: 12),
-                      ] else ...[
-                        _UserHeaderCard(userName: user.name, userEmail: user.email),
-                        const SizedBox(height: 12),
-                      ],
-                      DailyhuntSettingsSection(
-                        title: I18n.t(context, 'section_language'),
-                        child: DropdownButtonFormField<String>(
-                          key: ValueKey<String>(news.selectedLanguage),
-                          initialValue: news.selectedLanguage,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: const Color(0xFFF6F7F8),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          items: _languageCodes
-                              .map(
-                                (code) => DropdownMenuItem<String>(
-                                  value: code,
-                                  child: Text(_languageLabel(context, code)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) news.selectLanguage(value);
-                          },
-                        ),
+                actions: [
+                  IconButton(
+                    tooltip: I18n.t(context, 'profile_privacy_tooltip'),
+                    onPressed: () => context.push('/privacy-policy'),
+                    icon: const Icon(
+                      Icons.policy_outlined,
+                      color: FeedXpressoTheme.iconFg,
+                      size: 22,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(_padH, 4, _padH, bottomInset),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    if (user == null)
+                      _GuestIdentity(onSignIn: () => context.push('/login'))
+                    else
+                      _UserIdentity(
+                        userName: user.name,
+                        userEmail: user.email,
                       ),
-                      const SizedBox(height: 10),
-                      DailyhuntSettingsSection(
-                        title: I18n.t(context, 'section_appearance'),
-                        child: SegmentedButton<ThemeMode>(
-                          segments: [
-                            ButtonSegment<ThemeMode>(
-                              value: ThemeMode.light,
-                              label: Text(I18n.t(context, 'appearance_light')),
-                              icon: const Icon(Icons.light_mode_outlined, size: 18),
-                            ),
-                            ButtonSegment<ThemeMode>(
-                              value: ThemeMode.dark,
-                              label: Text(I18n.t(context, 'appearance_dark')),
-                              icon: const Icon(Icons.dark_mode_outlined, size: 18),
-                            ),
-                          ],
-                          selected: {
-                            themeProv.themeMode == ThemeMode.dark
-                                ? ThemeMode.dark
-                                : ThemeMode.light,
-                          },
-                          onSelectionChanged: (s) {
-                            themeProv.setThemeMode(s.first);
-                          },
-                          style: SegmentedButton.styleFrom(
-                            selectedBackgroundColor: DailyhuntTheme.accentGreen
-                                .withValues(alpha: 0.18),
-                            selectedForegroundColor: DailyhuntTheme.accentGreen,
-                            foregroundColor: cs.onSurface,
-                            side: const BorderSide(color: Color(0xFFE5E7EB)),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                          ),
+                    DailyhuntSettingsSection(
+                      title: I18n.t(context, 'section_language'),
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey<String>(news.selectedLanguage),
+                        initialValue: news.selectedLanguage,
+                        isDense: true,
+                        isExpanded: true,
+                        dropdownColor: FeedXpressoTheme.sheet,
+                        borderRadius: BorderRadius.circular(6),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: FeedXpressoTheme.title,
                         ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          filled: true,
+                          fillColor: FeedXpressoTheme.surface,
+                        ),
+                        items: _languageCodes
+                            .map(
+                              (code) => DropdownMenuItem<String>(
+                                value: code,
+                                child: Text(_languageLabel(context, code)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) news.selectLanguage(value);
+                        },
                       ),
-                      const SizedBox(height: 10),
-                      DailyhuntSettingsSection(
+                    ),
+                    Theme(
+                      data: Theme.of(context).copyWith(chipTheme: _denseChipTheme),
+                      child: DailyhuntSettingsSection(
                         title: I18n.t(context, 'section_interests'),
                         child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                          spacing: 6,
+                          runSpacing: 6,
                           children: _interestSlugs.map((slug) {
                             final selected = _interests.contains(slug);
                             return FilterChip(
                               label: Text(
                                 I18n.t(context, 'cat_$slug'),
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13,
-                                  color: selected ? Colors.white : const Color(0xFF374151),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                  color: selected
+                                      ? FeedXpressoTheme.title
+                                      : FeedXpressoTheme.summary,
                                 ),
                               ),
                               selected: selected,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
                               onSelected: (_) {
                                 setState(() {
                                   if (selected) {
@@ -217,280 +180,285 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 });
                               },
                               showCheckmark: false,
-                              selectedColor: DailyhuntTheme.accentGreen,
-                              backgroundColor: Colors.white,
-                              side: BorderSide(
-                                color: selected
-                                    ? DailyhuntTheme.accentGreen
-                                    : const Color(0xFFE5E7EB),
+                              selectedColor: FeedXpressoTheme.iconSurface,
+                              backgroundColor: FeedXpressoTheme.surface,
+                              side: const BorderSide(
+                                color: FeedXpressoTheme.divider,
+                                width: 0.5,
                               ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(6),
                               ),
                             );
                           }).toList(),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      DailyhuntSettingsSection(
-                        title: I18n.t(context, 'section_notifications'),
-                        child: Column(
-                          children: [
-                            SwitchListTile.adaptive(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(I18n.t(context, 'notif_breaking')),
-                              value: _breakingAlerts,
-                              activeThumbColor: DailyhuntTheme.accentGreen,
-                              onChanged: (v) => setState(() => _breakingAlerts = v),
-                            ),
-                            SwitchListTile.adaptive(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(I18n.t(context, 'notif_daily_digest')),
-                              value: _dailyDigest,
-                              activeThumbColor: DailyhuntTheme.accentGreen,
-                              onChanged: (v) => setState(() => _dailyDigest = v),
-                            ),
-                            SwitchListTile.adaptive(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(I18n.t(context, 'notif_recommended')),
-                              value: _recommendedAlerts,
-                              activeThumbColor: DailyhuntTheme.accentGreen,
-                              onChanged: (v) =>
-                                  setState(() => _recommendedAlerts = v),
-                            ),
-                          ],
-                        ),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: I18n.t(context, 'section_notifications'),
+                      child: Column(
+                        children: [
+                          _CompactSwitchRow(
+                            label: I18n.t(context, 'notif_breaking'),
+                            value: _breakingAlerts,
+                            onChanged: (v) => setState(() => _breakingAlerts = v),
+                          ),
+                          _CompactSwitchRow(
+                            label: I18n.t(context, 'notif_daily_digest'),
+                            value: _dailyDigest,
+                            onChanged: (v) => setState(() => _dailyDigest = v),
+                          ),
+                          _CompactSwitchRow(
+                            label: I18n.t(context, 'notif_recommended'),
+                            value: _recommendedAlerts,
+                            onChanged: (v) =>
+                                setState(() => _recommendedAlerts = v),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      DailyhuntSettingsSection(
-                        title: I18n.t(context, 'section_library'),
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            Icons.bookmark_outline_rounded,
-                            color: DailyhuntTheme.accentGreen,
-                            size: 26,
-                          ),
-                          title: Text(
-                            I18n.t(context, 'library_saved_articles'),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                            ),
-                          ),
-                          subtitle: Text(
-                            I18n.t(context, 'library_saved_subtitle'),
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.55),
-                              fontSize: 13,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: cs.onSurface.withValues(alpha: 0.35),
-                          ),
-                          onTap: () => context.go('/bookmarks'),
-                        ),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: I18n.t(context, 'section_library'),
+                      child: XpressoSettingsRow(
+                        icon: Icons.bookmark_outline_rounded,
+                        title: I18n.t(context, 'library_saved_articles'),
+                        subtitle: I18n.t(context, 'library_saved_subtitle'),
+                        onTap: () => context.go('/bookmarks'),
                       ),
-                      const SizedBox(height: 10),
-                      DailyhuntSettingsSection(
-                        title: I18n.t(context, 'section_storage'),
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            Icons.cleaning_services_rounded,
-                            color: DailyhuntTheme.accentGreen,
-                            size: 24,
-                          ),
-                          title: Text(
-                            I18n.t(context, 'storage_clear_translated'),
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text(
-                            I18n.t(context, 'storage_clear_translated_sub'),
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.55),
-                              fontSize: 13,
-                            ),
-                          ),
-                          trailing: Icon(
-                            Icons.chevron_right_rounded,
-                            color: cs.onSurface.withValues(alpha: 0.35),
-                          ),
-                          onTap: () async {
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.remove(_translatedCacheKey);
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  I18n.t(context, 'snack_translated_cleared'),
-                                ),
-                                behavior: SnackBarBehavior.floating,
-                                width: 320,
-                                duration: const Duration(milliseconds: 1200),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: I18n.t(context, 'section_storage'),
+                      showDivider: false,
+                      child: XpressoSettingsRow(
+                        icon: Icons.cleaning_services_rounded,
+                        title: I18n.t(context, 'storage_clear_translated'),
+                        subtitle: I18n.t(context, 'storage_clear_translated_sub'),
+                        onTap: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.remove(_translatedCacheKey);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                I18n.t(context, 'snack_translated_cleared'),
                               ),
-                            );
-                          },
-                        ),
+                              behavior: SnackBarBehavior.floating,
+                              width: 320,
+                              duration: const Duration(milliseconds: 1200),
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(height: 18),
-                      if (user == null)
-                        DailyhuntPrimaryButton(
-                          label: I18n.t(context, 'action_signin'),
-                          icon: Icons.login_rounded,
-                          onPressed: () => context.push('/login'),
-                        )
-                      else
-                        TextButton.icon(
+                    ),
+                    const SizedBox(height: 12),
+                    if (user == null)
+                      DailyhuntPrimaryButton(
+                        label: I18n.t(context, 'action_signin'),
+                        icon: Icons.login_rounded,
+                        onPressed: () => context.push('/login'),
+                      )
+                    else
+                      Center(
+                        child: TextButton.icon(
                           onPressed: () async {
                             final auth = context.read<AuthProvider>();
                             await auth.logout();
                             if (!context.mounted) return;
                             context.go('/login');
                           },
-                          icon: Icon(Icons.logout_rounded, color: cs.error),
+                          icon: const Icon(
+                            Icons.logout_rounded,
+                            size: 18,
+                            color: FeedXpressoTheme.iconFg,
+                          ),
                           label: Text(
                             I18n.t(context, 'action_signout'),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: cs.error,
-                              fontSize: 15,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: FeedXpressoTheme.summary,
+                              fontSize: 13,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 6,
                             ),
                           ),
                         ),
-                      const SizedBox(height: 8),
-                    ]),
-                  ),
-                ),
-                  ],
+                      ),
+                  ]),
                 ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _UserHeaderCard extends StatelessWidget {
+class _UserIdentity extends StatelessWidget {
   final String userName;
   final String userEmail;
 
-  const _UserHeaderCard({
+  const _UserIdentity({
     required this.userName,
     required this.userEmail,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      surfaceTintColor: Colors.transparent,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 36,
-              backgroundColor: DailyhuntTheme.accentGreen,
-              child: Text(
-                AppUtils.initials(userName),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: FeedXpressoTheme.iconSurface,
+            child: Text(
+              AppUtils.initials(userName),
+              style: const TextStyle(
+                color: FeedXpressoTheme.title,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    height: 1.15,
+                    color: FeedXpressoTheme.title,
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    userName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.4,
-                          color: cs.onSurface,
-                        ),
+                const SizedBox(height: 2),
+                Text(
+                  userEmail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    height: 1.2,
+                    color: FeedXpressoTheme.summary,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    userEmail,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.55),
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _GuestHeader extends StatelessWidget {
-  final ColorScheme colorScheme;
+class _GuestIdentity extends StatelessWidget {
+  final VoidCallback onSignIn;
 
-  const _GuestHeader({required this.colorScheme});
+  const _GuestIdentity({required this.onSignIn});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withValues(alpha: 0.08),
-      surfaceTintColor: Colors.transparent,
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 36,
-              backgroundColor:
-                  DailyhuntTheme.accentGreen.withValues(alpha: 0.15),
-              child: Icon(
-                Icons.person_outline_rounded,
-                size: 36,
-                color: DailyhuntTheme.accentGreen,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            radius: 22,
+            backgroundColor: FeedXpressoTheme.iconSurface,
+            child: Icon(
+              Icons.person_outline_rounded,
+              size: 22,
+              color: FeedXpressoTheme.iconFg,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  I18n.t(context, 'profile_guest_title'),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    color: FeedXpressoTheme.title,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  I18n.t(context, 'profile_guest_subtitle'),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    height: 1.25,
+                    color: FeedXpressoTheme.summary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onSignIn,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              foregroundColor: FeedXpressoTheme.iconFg,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: Text(I18n.t(context, 'action_signin')),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactSwitchRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _CompactSwitchRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: FeedXpressoTheme.title,
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    I18n.t(context, 'profile_guest_title'),
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: colorScheme.onSurface,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    I18n.t(context, 'profile_guest_subtitle'),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.55),
-                          height: 1.35,
-                        ),
-                  ),
-                ],
-              ),
+          ),
+          Transform.scale(
+            scale: 0.82,
+            child: Switch.adaptive(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: FeedXpressoTheme.title,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

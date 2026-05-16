@@ -6,7 +6,7 @@ const {
   runIngestion,
   getIngestionStatus,
 } = require('../services/newsIngestionService');
-const { fetchBestImageFallback, buildDomainImageFallbackCandidates } = require('../services/newsApiService');
+const { fetchBestImageFallback, isUnusableFeedImageUrl } = require('../services/newsApiService');
 const { resolveGoogleNewsPublisherUrl } = require('../services/rssService');
 const { cloudinary } = require('../config/cloudinary');
 
@@ -358,22 +358,11 @@ const backfillThumbnails = async (req, res) => {
       let finalUrl = null;
       let finalPublicId = null;
 
-      if (og) {
+      if (og && !isUnusableFeedImageUrl(og)) {
         // eslint-disable-next-line no-await-in-loop
         const reh = await rehostExternalImageToCloudinary(og, { referer: articleUrl });
         finalUrl = reh?.url || og;
         finalPublicId = reh?.publicId || null;
-      } else {
-        const logoCandidates = buildDomainImageFallbackCandidates(articleUrl);
-        for (const c of logoCandidates) {
-          // eslint-disable-next-line no-await-in-loop
-          const reh = await rehostExternalImageToCloudinary(c, { referer: articleUrl });
-          if (reh?.url) {
-            finalUrl = reh.url;
-            finalPublicId = reh.publicId || null;
-            break;
-          }
-        }
       }
 
       if (!finalUrl) {

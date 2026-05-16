@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../constants.dart';
+import '../dailyhunt/xpresso_side_menu.dart';
 
 /// Thin segment progress for RSS shorts (bottom of screen, above nav).
 class ShortsFeedProgress extends StatelessWidget {
@@ -44,8 +45,8 @@ class DailyhuntShortsTopBar extends StatelessWidget {
           children: [
             _TopIconButton(
               icon: Icons.person_outline_rounded,
-              tooltip: 'Profile',
-              onTap: () => context.push('/settings'),
+              tooltip: 'Menu',
+              onTap: () => XpressoSideMenu.open(context),
             ),
             Expanded(
               child: Center(

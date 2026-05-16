@@ -1,36 +1,41 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/dailyhunt_theme.dart';
+import '../feed/feed_xpresso_theme.dart';
 
-/// Compact category tab — text + subtle bottom indicator (not a pill).
+/// Compact category tab — underline active state.
 class DailyhuntCategoryChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool dark;
 
   const DailyhuntCategoryChip({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.dark = false,
   });
 
-  static const Color inactiveColor = Color(0xFF6B6B6B);
-  static const Color activeColor = DailyhuntTheme.accentGreen;
+  static const Color inactiveColorLight = Color(0xFF6B6B6B);
+  static const Color activeColor = Color(0xFF0A8F57);
 
   @override
   Widget build(BuildContext context) {
+    final inactive = dark ? FeedXpressoTheme.chipInactive : inactiveColorLight;
+    final active = dark ? FeedXpressoTheme.chipActive : activeColor;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(6, 4, 6, 5),
+          padding: EdgeInsets.fromLTRB(5, dark ? 2 : 4, 5, dark ? 3 : 5),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: selected ? activeColor : Colors.transparent,
+                color: selected ? active : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -39,12 +44,9 @@ class DailyhuntCategoryChip extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.1,
+            style: FeedXpressoTheme.chipStyle.copyWith(
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? activeColor : inactiveColor,
-              letterSpacing: -0.05,
+              color: selected ? active : inactive,
             ),
           ),
         ),

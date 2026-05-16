@@ -125,6 +125,45 @@ class AppPalette extends ThemeExtension<AppPalette> {
     categoryChipBg: Color(0x2634D399),
   );
 
+  /// Dailyhunt Xpresso — pure black, grey accents, no color UI.
+  static const AppPalette xpresso = AppPalette(
+    scaffoldBackground: Color(0xFF000000),
+    surface: Color(0xFF141414),
+    glassSurface: Color(0xFF141414),
+    dialogBackground: Color(0xFF0D0D0D),
+    snackBarBg: Color(0xFF141414),
+    inputFill: Color(0xFF0A0A0A),
+    cardBorder: Color(0xFF1E1E1E),
+    glassBorder: Color(0xFF1E1E1E),
+    glassBorderBright: Color(0xFF2A2A2A),
+    inputBorder: Color(0xFF1E1E1E),
+    primary: Color(0xFF8A8A8A),
+    primaryDark: Color(0xFF5A5A5A),
+    accentGreen: Color(0xFF8A8A8A),
+    accentGreenLight: Color(0xFFAAAAAA),
+    accentOrange: Color(0xFF8A8A8A),
+    accentOrangeLight: Color(0xFF8A8A8A),
+    accentPurple: Color(0xFF8A8A8A),
+    gradientStart: Color(0xFF000000),
+    gradientMid: Color(0xFF000000),
+    gradientEnd: Color(0xFF000000),
+    blobGreen: Color(0xFF1A1A1A),
+    blobPurple: Color(0xFF1A1A1A),
+    blobOrange: Color(0xFF1A1A1A),
+    textPrimary: Color(0xFFFFFFFF),
+    textSecondary: Color(0xFF6B6B6B),
+    textTertiary: Color(0xFF505050),
+    textHint: Color(0xFF5A5A5A),
+    breaking: Color(0xFF8A8A8A),
+    error: Color(0xFF9E9E9E),
+    warning: Color(0xFF8A8A8A),
+    success: Color(0xFF8A8A8A),
+    info: Color(0xFF8A8A8A),
+    navSelected: Color(0xFFCCCCCC),
+    navUnselected: Color(0xFF454545),
+    categoryChipBg: Color(0xFF1A1A1A),
+  );
+
   /// Light theme: airy paper, crisp emerald accent.
   static const AppPalette light = AppPalette(
     // Brand (richer green for production visibility)

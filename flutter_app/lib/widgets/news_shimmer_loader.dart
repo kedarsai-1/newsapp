@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'feed/compact_news_row.dart';
+import 'feed/feed_xpresso_theme.dart';
 
-/// Dense grey shimmer rows aligned with [CompactNewsRow] sizing.
+/// Editorial feed shimmer — rounded card, image on top, copy below.
 class NewsShimmerLoader extends StatelessWidget {
   final int count;
   final bool shrinkWrap;
@@ -17,11 +17,11 @@ class NewsShimmerLoader extends StatelessWidget {
     this.shrinkWrap = false,
     this.physics,
     this.padding = EdgeInsets.zero,
-    this.backgroundColor = Colors.white,
+    this.backgroundColor = FeedXpressoTheme.background,
   });
 
-  static const Color kBase = Color(0xFFE0E0E0);
-  static const Color kHighlight = Color(0xFFF5F5F5);
+  static const Color kBase = FeedXpressoTheme.shimmerBase;
+  static const Color kHighlight = FeedXpressoTheme.shimmerHighlight;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,7 @@ class NewsShimmerLoader extends StatelessWidget {
             : (physics ?? const ClampingScrollPhysics()),
         padding: padding,
         itemCount: count,
-        itemBuilder: (_, __) => const _FeedRowSkeleton(),
+        itemBuilder: (_, __) => const _EditorialRowSkeleton(),
       ),
     );
   }
@@ -59,70 +59,54 @@ class NewsShimmerLoader extends StatelessWidget {
   }
 }
 
-class _FeedRowSkeleton extends StatelessWidget {
-  const _FeedRowSkeleton();
+class _EditorialRowSkeleton extends StatelessWidget {
+  const _EditorialRowSkeleton();
 
-  static const Color _base = Color(0xFFE0E0E0);
+  static const Color _base = FeedXpressoTheme.shimmerBase;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 3, 8, 0),
-      child: Shimmer.fromColors(
-        baseColor: _base,
-        highlightColor: NewsShimmerLoader.kHighlight,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Shimmer.fromColors(
+      baseColor: NewsShimmerLoader.kBase,
+      highlightColor: NewsShimmerLoader.kHighlight,
+      child: Padding(
+        padding: FeedXpressoTheme.cardMargin,
+        child: ClipRRect(
+          borderRadius: FeedXpressoTheme.cardBorderRadius,
+          child: ColoredBox(
+            color: FeedXpressoTheme.cardSurface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  width: kFeedThumbWidth,
-                  height: kFeedThumbHeight,
-                  decoration: BoxDecoration(
-                    color: _base,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
+                const AspectRatio(
+                  aspectRatio: FeedXpressoTheme.imageAspectRatio,
+                  child: ColoredBox(color: _base),
                 ),
-                const SizedBox(width: 7),
-                Expanded(
+                Padding(
+                  padding: FeedXpressoTheme.rowContentPadding,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        height: 11,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: _base,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Container(
-                        height: 11,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: _base,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Container(
-                        height: 9,
-                        width: 96,
-                        decoration: BoxDecoration(
-                          color: _base,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                      Container(height: 14, width: double.infinity, color: _base),
+                      const SizedBox(height: 5),
+                      Container(height: 12, width: double.infinity, color: _base),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(child: Container(height: 10, color: _base)),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: FeedXpressoTheme.actionRowWidth,
+                            child: Container(height: 10, color: _base),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const Divider(height: 1, thickness: 0.5, color: Color(0xFFE6E6E6)),
-          ],
+          ),
         ),
       ),
     );

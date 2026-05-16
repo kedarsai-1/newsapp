@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-import '../../theme/dailyhunt_theme.dart';
 import '../feed/compact_news_row.dart';
 
 /// Demo feed row — local interaction state.
@@ -51,8 +50,7 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
   String? get _shortSummary {
     final s = widget.summary.trim();
     if (s.isEmpty) return null;
-    if (s.length <= 58) return s;
-    return '${s.substring(0, 58).trim()}…';
+    return s;
   }
 
   @override
@@ -66,7 +64,7 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
       footerActions: [
         CompactFeedAction(
           icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          color: _liked ? const Color(0xFFE57373) : CompactFeedAction.muted,
+          color: _liked ? CompactFeedAction.active : CompactFeedAction.muted,
           onTap: () => setState(() => _liked = !_liked),
         ),
         CompactFeedAction(
@@ -76,7 +74,7 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
         ),
         CompactFeedAction(
           icon: _bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-          color: _bookmarked ? CompactFeedAction.saved : CompactFeedAction.muted,
+          color: _bookmarked ? CompactFeedAction.active : CompactFeedAction.muted,
           onTap: () {
             setState(() => _bookmarked = !_bookmarked);
             widget.onBookmark?.call();

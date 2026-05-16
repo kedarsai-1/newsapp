@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../utils/i18n.dart';
+import 'feed/feed_xpresso_theme.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;
@@ -8,11 +9,66 @@ class EmptyState extends StatelessWidget {
   final String? subtitle;
   final String? buttonLabel;
   final VoidCallback? onButtonTap;
+  final bool dark;
 
-  const EmptyState({super.key, required this.icon, required this.title, this.subtitle, this.buttonLabel, this.onButtonTap});
+  const EmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.buttonLabel,
+    this.onButtonTap,
+    this.dark = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (dark) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 44, color: FeedXpressoTheme.iconFgMuted),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: FeedXpressoTheme.title,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  subtitle!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: FeedXpressoTheme.meta,
+                    height: 1.45,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              if (buttonLabel != null && onButtonTap != null) ...[
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: onButtonTap,
+                  style: TextButton.styleFrom(
+                    foregroundColor: FeedXpressoTheme.iconFg,
+                  ),
+                  child: Text(buttonLabel!),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
     final p = context.palette;
     return Center(
       child: Padding(
@@ -58,7 +114,14 @@ class EmptyState extends StatelessWidget {
 class ErrorState extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
-  const ErrorState({super.key, required this.message, this.onRetry});
+  final bool dark;
+
+  const ErrorState({
+    super.key,
+    required this.message,
+    this.onRetry,
+    this.dark = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +131,7 @@ class ErrorState extends StatelessWidget {
       subtitle: message,
       buttonLabel: onRetry != null ? I18n.t(context, 'action_try_again') : null,
       onButtonTap: onRetry,
+      dark: dark,
     );
   }
 }

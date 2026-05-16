@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'feed_xpresso_theme.dart';
+
 /// Shared list scroll + cache settings for feed surfaces.
 abstract final class FeedListTuning {
   static const scrollPhysics = AlwaysScrollableScrollPhysics(
     parent: ClampingScrollPhysics(),
   );
 
-  static const double cacheExtent = 200;
+  static const double cacheExtent = 280;
 
-  static const EdgeInsets listPadding = EdgeInsets.zero;
+  static const EdgeInsets listPadding = EdgeInsets.only(top: 6);
 
   /// Applies [ClampingScrollPhysics] to descendant scrollables.
   static Widget clampingScroll({required Widget child}) {
@@ -35,12 +37,15 @@ class FeedListLoadingFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Padding(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.symmetric(vertical: 10),
       child: Center(
         child: SizedBox(
           width: 24,
           height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: FeedXpressoTheme.iconFg,
+          ),
         ),
       ),
     );

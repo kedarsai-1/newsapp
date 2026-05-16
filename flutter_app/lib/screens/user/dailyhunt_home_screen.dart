@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-
-import '../../theme/dailyhunt_theme.dart';
 import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/dailyhunt/dailyhunt_feed_card.dart';
 import '../../widgets/dailyhunt/dailyhunt_feed_shimmer.dart';
 import '../../widgets/dailyhunt/dailyhunt_home_app_bar.dart';
+import '../../widgets/dailyhunt/xpresso_side_menu.dart';
 import '../../widgets/feed/feed_list_tuning.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Demo feed item for UI-only home (replace with API models later).
 class DailyhuntFeedItem {
@@ -128,22 +127,13 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      data: DailyhuntTheme.overlay(context),
-      child: Builder(
-        builder: (context) {
-          final items = _itemsForCategory(_categoryIndex);
-          final dividerColor = Theme.of(context)
-              .colorScheme
-              .onSurface
-              .withValues(alpha: 0.07);
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: Column(
+    final items = _itemsForCategory(_categoryIndex);
+    return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DailyhuntHomeAppBar(
-                  onProfileTap: () => context.push('/settings'),
+                  dark: true,
+                  onProfileTap: () => XpressoSideMenu.open(context),
                   onNotificationTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -155,24 +145,24 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                     );
                   },
                 ),
-                Divider(height: 1, thickness: 1, color: dividerColor),
+                const Divider(
+                  height: 1,
+                  thickness: 0.5,
+                  color: FeedXpressoTheme.divider,
+                ),
                 DailyhuntCategoryTabBar(
                   categories: DailyhuntHomeScreen.categories,
                   selectedIndex: _categoryIndex,
+                  dark: true,
                   onSelected: _onCategoryChanged,
                 ),
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.06),
-                ),
                 Expanded(
-                  child: RefreshIndicator(
-                    color: DailyhuntTheme.accentGreen,
-                    edgeOffset: 8,
+                  child: ColoredBox(
+                    color: FeedXpressoTheme.background,
+                    child: RefreshIndicator(
+                    color: FeedXpressoTheme.iconFg,
+                    backgroundColor: FeedXpressoTheme.background,
+                    edgeOffset: 4,
                     onRefresh: _onRefresh,
                     child: _loading
                         ? const SingleChildScrollView(
@@ -213,13 +203,10 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                             },
                           ),
                           ),
+                    ),
                   ),
                 ),
               ],
-            ),
-          );
-        },
-      ),
     );
   }
 }

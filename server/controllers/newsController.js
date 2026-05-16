@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
+const { canonicalizeUrl, hashUrl, normalizeTitle } = require('../utils/storyDedupe');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
 
@@ -21,6 +22,22 @@ function cleanTextForClient(input) {
 }
 
 /** Same filter as find(), but with ObjectId fields cast for aggregation $match. */
+/** Remove duplicate headlines/URLs within a single feed page response. */
+function dedupeFeedPosts(rows) {
+  const seen = new Set();
+  const out = [];
+  for (const p of rows) {
+    const urlKey = p.sourceUrlHash
+      || (p.sourceUrl ? hashUrl(canonicalizeUrl(p.sourceUrl) || String(p.sourceUrl)) : '');
+    const titleKey = p.titleNormalized || normalizeTitle(p.title);
+    const keys = [urlKey, titleKey].filter((k) => k && k.length > 8);
+    if (keys.length && keys.some((k) => seen.has(k))) continue;
+    for (const k of keys) seen.add(k);
+    out.push(p);
+  }
+  return out;
+}
+
 function feedMatchForAggregate(query) {
   const m = { ...query };
   if (m.category != null) {
@@ -261,12 +278,14 @@ const getFeed = async (req, res) => {
       },
     ]);
 
+    const posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
+
     res.json({
       success: true,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      posts: postsRaw.map(sanitizeStoryTextFields),
+      posts,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

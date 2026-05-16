@@ -18,6 +18,8 @@ class CompactNewsRow extends StatelessWidget {
   final int titleMaxLines;
   final int summaryMaxLines;
   final bool showDivider;
+  final bool showSummary;
+  final VoidCallback? onImageUnavailable;
 
   const CompactNewsRow({
     super.key,
@@ -31,6 +33,8 @@ class CompactNewsRow extends StatelessWidget {
     this.titleMaxLines = FeedXpressoTheme.titleMaxLines,
     this.summaryMaxLines = FeedXpressoTheme.summaryMaxLines,
     this.showDivider = false,
+    this.showSummary = false,
+    this.onImageUnavailable,
   });
 
   @override
@@ -38,7 +42,8 @@ class CompactNewsRow extends StatelessWidget {
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final memW = (MediaQuery.sizeOf(context).width * dpr).round().clamp(480, 1400);
     final url = imageUrl?.trim() ?? '';
-    final hasSummary = summary != null && summary!.trim().isNotEmpty;
+    final hasSummary =
+        showSummary && summary != null && summary!.trim().isNotEmpty;
     final actions = footerActions;
     final hasActions = actions != null && actions.isNotEmpty;
 
@@ -54,9 +59,10 @@ class CompactNewsRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AspectRatio(
-                  aspectRatio: FeedXpressoTheme.imageAspectRatio,
-                  child: _HeroImage(url: url, memCacheWidth: memW),
+                _HeroImage(
+                  url: url,
+                  memCacheWidth: memW,
+                  onUnavailable: onImageUnavailable,
                 ),
                 Padding(
                   padding: FeedXpressoTheme.rowContentPadding,
@@ -124,49 +130,84 @@ class CompactNewsRow extends StatelessWidget {
   }
 }
 
-class _HeroImage extends StatelessWidget {
+class _HeroImage extends StatefulWidget {
   final String url;
   final int memCacheWidth;
+  final VoidCallback? onUnavailable;
 
-  const _HeroImage({required this.url, required this.memCacheWidth});
+  const _HeroImage({
+    required this.url,
+    required this.memCacheWidth,
+    this.onUnavailable,
+  });
+
+  @override
+  State<_HeroImage> createState() => _HeroImageState();
+}
+
+class _HeroImageState extends State<_HeroImage> {
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.url.trim().isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onUnavailable?.call();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _HeroImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _failed = false;
+      if (widget.url.trim().isEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          widget.onUnavailable?.call();
+        });
+      }
+    }
+  }
+
+  void _reportUnavailable() {
+    if (_failed) return;
+    _failed = true;
+    widget.onUnavailable?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (url.isEmpty) {
-      return const ColoredBox(
-        color: FeedXpressoTheme.imagePlaceholder,
-        child: Center(
-          child: Icon(
-            Icons.article_outlined,
-            color: FeedXpressoTheme.iconFgMuted,
-            size: 28,
-          ),
-        ),
-      );
+    final url = widget.url.trim();
+    if (url.isEmpty || _failed) {
+      return const SizedBox.shrink();
     }
-    return ColoredBox(
-      color: FeedXpressoTheme.imagePlaceholder,
-      child: CachedNetworkImage(
-        imageUrl: url,
-        fit: FeedXpressoTheme.imageFit,
-        alignment: FeedXpressoTheme.imageAlignment,
-        width: double.infinity,
-        height: double.infinity,
-        memCacheWidth: kIsWeb ? null : memCacheWidth,
-        fadeInDuration: const Duration(milliseconds: 160),
-        fadeOutDuration: Duration.zero,
-        placeholder: (_, __) => const ColoredBox(color: FeedXpressoTheme.imagePlaceholder),
-        errorWidget: (_, __, ___) => const ColoredBox(
-          color: FeedXpressoTheme.imagePlaceholder,
-          child: Center(
-            child: Icon(
-              Icons.broken_image_outlined,
-              color: FeedXpressoTheme.iconFgMuted,
-              size: 20,
-            ),
+
+    return CachedNetworkImage(
+      imageUrl: url,
+      fit: FeedXpressoTheme.imageFit,
+      alignment: FeedXpressoTheme.imageAlignment,
+      memCacheWidth: kIsWeb ? null : widget.memCacheWidth,
+      fadeInDuration: const Duration(milliseconds: 160),
+      fadeOutDuration: Duration.zero,
+      placeholder: (_, __) => const SizedBox.shrink(),
+      errorWidget: (_, __, ___) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _reportUnavailable());
+        return const SizedBox.shrink();
+      },
+      imageBuilder: (context, imageProvider) {
+        return AspectRatio(
+          aspectRatio: FeedXpressoTheme.imageAspectRatio,
+          child: Image(
+            image: imageProvider,
+            fit: FeedXpressoTheme.imageFit,
+            alignment: FeedXpressoTheme.imageAlignment,
+            width: double.infinity,
+            height: double.infinity,
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

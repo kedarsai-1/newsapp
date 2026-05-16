@@ -51,6 +51,15 @@ class SocketService {
     });
   }
 
+  /// RSS/API ingestion inserted new stories — refresh feeds.
+  static void onFeedUpdated(void Function(Map<String, dynamic> data) callback) {
+    _socket?.on('feed_updated', (data) {
+      if (data is Map) {
+        callback(Map<String, dynamic>.from(data));
+      }
+    });
+  }
+
   /// Join a specific category room for targeted updates
   static void joinCategory(String categorySlug) {
     _socket?.emit('join_feed', categorySlug);

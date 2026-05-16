@@ -39,6 +39,38 @@ let ingestState = {
   lastError: null,
 };
 
+let ingestionSocket = null;
+
+/** Optional Socket.IO instance — emits `feed_updated` after inserts. */
+function setIngestionSocket(io) {
+  ingestionSocket = io;
+}
+
+/** Round-robin across categorySlug so politics/sports/business all get processed each run. */
+function interleaveFeedsByCategory(feeds) {
+  const buckets = new Map();
+  for (const f of feeds) {
+    if (!f?.url) continue;
+    const key = String(f.categorySlug || 'general').toLowerCase();
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(f);
+  }
+  const keys = [...buckets.keys()];
+  const out = [];
+  let more = true;
+  while (more) {
+    more = false;
+    for (const key of keys) {
+      const arr = buckets.get(key);
+      if (arr?.length) {
+        out.push(arr.shift());
+        more = true;
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Hard wall-clock limit so a single run cannot hold `isRunning` forever (cron then skips every slot).
  * RSS-only runs with many feeds + og:image + body enrich + HF summarize can exceed 15–30+ minutes otherwise.
@@ -520,14 +552,23 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
     // RSS ingestion (second source): reliable thumbnails + extra coverage.
     if (rssEnabled) {
-      const feeds = getRssFeeds();
+      const feeds = interleaveFeedsByCategory(getRssFeeds());
       budget.throwIfExpired('rss:before-loop');
       const maxPerFeed = Math.min(
         50,
         Math.max(5, Number(process.env.RSS_ITEMS_PER_FEED || 20)),
       );
+      const maxScanPerFeed = Math.min(
+        80,
+        Math.max(maxPerFeed, Number(process.env.RSS_SCAN_PER_FEED || 40)),
+      );
+      const targetInsertsPerFeed = Math.max(
+        1,
+        Number(process.env.RSS_INSERTS_PER_FEED || 2),
+      );
       console.log(
-        `[ingest] RSS processing ${feeds.length} feeds (up to ${maxPerFeed} items each)`,
+        `[ingest] RSS processing ${feeds.length} feeds `
+          + `(scan up to ${maxScanPerFeed}, target ${targetInsertsPerFeed} new/feed, interleaved by category)`,
       );
 
       let feedIdx = 0;
@@ -549,10 +590,12 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
         try {
           const items = await fetchRssItems(feed.url);
-          const slice = items.slice(0, maxPerFeed);
+          const slice = items.slice(0, maxScanPerFeed);
           stats.fetched += slice.length;
+          let insertedThisFeed = 0;
 
           for (let ri = 0; ri < slice.length; ri++) {
+            if (insertedThisFeed >= targetInsertsPerFeed) break;
             if (ri % 10 === 0) {
               budget.throwIfExpired(`rss:${feedIdx}/${feeds.length}:${feed.name || 'feed'}`);
             }
@@ -782,10 +825,12 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             const { apiSourceName, ...postDocFields } = postFields;
             await NewsPost.create(toPostDoc(postDocFields, reporter._id, category._id, label));
             stats.inserted += 1;
+            insertedThisFeed += 1;
           }
 
           console.log(
-            `[ingest] RSS ${feedIdx}/${feeds.length} done: ${feed.name || 'RSS'} (${slice.length} items processed)`,
+            `[ingest] RSS ${feedIdx}/${feeds.length} done: ${feed.name || 'RSS'} `
+              + `(scanned ${slice.length}, +${insertedThisFeed} new)`,
           );
 
           stats.sourceRuns.push({
@@ -816,6 +861,12 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     }
     ingestState.lastSuccessAt = stats.endedAt;
     ingestState.lastSummary = stats;
+    if (stats.inserted > 0 && ingestionSocket) {
+      ingestionSocket.to('all').emit('feed_updated', {
+        inserted: stats.inserted,
+        at: stats.endedAt,
+      });
+    }
     return { success: true, stats };
   } catch (error) {
     ingestState.lastError = error.message;
@@ -837,4 +888,6 @@ function getIngestionStatus() {
 module.exports = {
   runIngestion,
   getIngestionStatus,
+  setIngestionSocket,
+  interleaveFeedsByCategory,
 };

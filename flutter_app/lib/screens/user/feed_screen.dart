@@ -52,7 +52,8 @@ const List<String> _kFeedTabLabels = [
 
 class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   static const _likedCacheKey = 'feed_liked_state_cache_v1';
-  static const _autoRefreshInterval = Duration(minutes: 3);
+  /// Web has no socket push — poll API often enough to match server cron (~5 min).
+  static const _autoRefreshInterval = Duration(minutes: 2);
 
   final ScrollController _scrollController = ScrollController();
   final Map<String, bool> _bookmarkedByPostId = {};

@@ -33,39 +33,33 @@ class DailyhuntFeedArticleCard extends StatefulWidget {
 class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   late bool _liked;
   late bool _saved;
-  late final String? _summary;
-  late final String _metaLine;
-  late final String _imageUrl;
+  late String _metaLine;
+  late String _imageUrl;
+  bool _hideCard = false;
 
   @override
   void initState() {
     super.initState();
+    _syncFromPost();
+  }
+
+  void _syncFromPost() {
     _liked = widget.liked;
     _saved = widget.saved;
     _imageUrl = premiumImageUrl(widget.post);
-    _summary = _buildSummary(widget.post);
     _metaLine = _buildMeta(widget.post);
+    _hideCard = _imageUrl.trim().isEmpty;
   }
 
   @override
   void didUpdateWidget(covariant DailyhuntFeedArticleCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post.id != widget.post.id) {
-      _liked = widget.liked;
-      _saved = widget.saved;
+      _syncFromPost();
     } else {
       if (oldWidget.liked != widget.liked) _liked = widget.liked;
       if (oldWidget.saved != widget.saved) _saved = widget.saved;
     }
-  }
-
-  static String? _buildSummary(NewsPost post) {
-    final s = post.summary?.replaceAll(RegExp(r'\s+'), ' ').trim();
-    final base = (s != null && s.isNotEmpty)
-        ? s
-        : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (base.isEmpty) return null;
-    return base;
   }
 
   static String _buildMeta(NewsPost post) {
@@ -92,15 +86,23 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
     setState(() => _saved = !_saved);
   }
 
+  void _onImageUnavailable() {
+    if (_hideCard || !mounted) return;
+    setState(() => _hideCard = true);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_hideCard) return const SizedBox.shrink();
+
     return RepaintBoundary(
       child: CompactNewsRow(
         title: widget.post.title,
-        summary: _summary,
+        showSummary: false,
         imageUrl: _imageUrl,
         metaLine: _metaLine,
         onTap: widget.onOpen,
+        onImageUnavailable: _onImageUnavailable,
         footerActions: [
           CompactFeedAction(
             icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,

@@ -5,7 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cron = require('node-cron');
 require('dotenv').config();
-const { runIngestion } = require('./services/newsIngestionService');
+const { runIngestion, setIngestionSocket } = require('./services/newsIngestionService');
 const { purgeOldNews } = require('./services/retentionCleanupService');
 const { ensureDefaultCategories } = require('./utils/ensureDefaultData');
 
@@ -20,6 +20,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
+setIngestionSocket(io);
 
 // Middleware
 app.use(cors());

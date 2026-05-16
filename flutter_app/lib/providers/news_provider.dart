@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../constants.dart';
 import '../utils/feed_dedupe.dart';
 import '../utils/feed_image_url.dart';
@@ -108,6 +110,17 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
     // Prime category IDs for Browse / chips before the first full feed refresh.
     loadCategories();
+    _wireRealtimeFeedRefresh();
+  }
+
+  /// Mobile: refresh when server cron inserts stories. Web polls on FeedScreen timer.
+  void _wireRealtimeFeedRefresh() {
+    if (kIsWeb) return;
+    SocketService.connect();
+    SocketService.onFeedUpdated((_) {
+      if (_refreshing || _loading) return;
+      refresh();
+    });
   }
 
   /// Insert or replace a category from slug lookups so Browse taps work offline-next.

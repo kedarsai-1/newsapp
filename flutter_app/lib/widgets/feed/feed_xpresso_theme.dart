@@ -39,7 +39,7 @@ abstract final class FeedXpressoTheme {
   /// Editorial card — fixed 16:9 hero.
   static double feedImageAspectRatio(double width) => imageAspectRatio;
 
-  static const int titleMaxLines = 2;
+  static const int titleMaxLines = 3;
   static const int summaryMaxLines = 1;
 
   static const double cardRadius = 10;
@@ -49,7 +49,7 @@ abstract final class FeedXpressoTheme {
   static const EdgeInsets cardMargin = EdgeInsets.fromLTRB(12, 0, 12, 14);
 
   /// Copy block below the image.
-  static const EdgeInsets rowContentPadding = EdgeInsets.fromLTRB(12, 10, 12, 11);
+  static const EdgeInsets rowContentPadding = EdgeInsets.fromLTRB(14, 12, 14, 13);
 
   static const EdgeInsets overlayContentPadding = rowContentPadding;
 
@@ -57,10 +57,10 @@ abstract final class FeedXpressoTheme {
   static const double actionRowWidth = 52;
 
   static const TextStyle titleStyle = TextStyle(
-    fontWeight: FontWeight.w700,
-    fontSize: 14,
-    height: 1.26,
-    letterSpacing: -0.2,
+    fontWeight: FontWeight.w800,
+    fontSize: 17,
+    height: 1.32,
+    letterSpacing: -0.35,
     color: title,
   );
 
@@ -72,7 +72,7 @@ abstract final class FeedXpressoTheme {
   );
 
   static const TextStyle metaStyle = TextStyle(
-    fontSize: 10,
+    fontSize: 11,
     height: 1.2,
     fontWeight: FontWeight.w500,
     color: meta,
@@ -380,4 +380,4 @@ abstract final class FeedXpressoTheme {
 
 /// Approx. row height at ~390pt width (16:9 hero + divider; copy lives on overlay).
 /// Approx. row height at ~390pt width (16:9 image + copy + card margin).
-const double kFeedRowExtent = 318;
+const double kFeedRowExtent = 340;

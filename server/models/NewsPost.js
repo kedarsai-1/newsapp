@@ -85,7 +85,24 @@ const newsPostSchema = new mongoose.Schema({
   /** Normalized headline for cross-feed duplicate detection. */
   titleNormalized: { type: String, default: null, index: true, sparse: true },
   sourcePublishedAt: { type: Date, default: null },
-  sourceType: { type: String, enum: ['rss', 'html', 'manual', 'api'], default: 'manual' },
+  sourceType: {
+    type: String,
+    enum: ['rss', 'html', 'manual', 'api', 'youtube'],
+    default: 'manual',
+  },
+  /** YouTube embed metadata only — no video file stored. */
+  youtube: {
+    videoId: { type: String, trim: true, default: null },
+    channelId: { type: String, trim: true, default: null },
+    channelTitle: { type: String, trim: true, default: null },
+    embedUrl: { type: String, trim: true, default: null },
+    watchUrl: { type: String, trim: true, default: null },
+    channelUrl: { type: String, trim: true, default: null },
+    durationSeconds: { type: Number, default: null },
+    isShort: { type: Boolean, default: false },
+    embeddable: { type: Boolean, default: true },
+    privacyStatus: { type: String, trim: true, default: null },
+  },
   politicsScope: { type: String, trim: true, lowercase: true, default: undefined, index: true },
   constituency: { type: String, trim: true, default: 'Unknown', index: true },
   entities: [{
@@ -107,6 +124,8 @@ newsPostSchema.index({ reporter: 1, createdAt: -1 });
 newsPostSchema.index({ 'location.city': 1, status: 1 });
 newsPostSchema.index({ language: 1, status: 1, createdAt: -1 });
 newsPostSchema.index({ sourceUrlHash: 1 }, { unique: true, sparse: true });
+newsPostSchema.index({ 'youtube.videoId': 1 }, { unique: true, sparse: true });
+newsPostSchema.index({ status: 1, sourceType: 1, sourcePublishedAt: -1 });
 
 // Virtual: has video
 newsPostSchema.virtual('hasVideo').get(function () {

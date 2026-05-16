@@ -117,6 +117,7 @@ function filterPostsForCategory(posts, categorySlug) {
   const slug = String(categorySlug || '').toLowerCase();
   if (!slug || slug === 'general') return posts;
   return (posts || []).filter((p) => {
+    if (String(p?.sourceType || '').toLowerCase() === 'youtube') return true;
     if (isLegacyMiscategorized(p, slug)) return false;
     return matchesFeedCategory(
       {

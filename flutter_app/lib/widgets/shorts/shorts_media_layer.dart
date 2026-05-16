@@ -5,8 +5,9 @@ import 'package:video_player/video_player.dart';
 
 import '../../models/models.dart';
 import '../premium_news_ui.dart';
+import 'youtube_shorts_player.dart';
 
-/// Full-bleed image or looping video for shorts (RSS media). Only active page plays video.
+/// Full-bleed media for shorts — YouTube iframe or direct video/image fallback.
 class ShortsMediaLayer extends StatefulWidget {
   final NewsPost post;
   final bool isActive;
@@ -115,6 +116,13 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.post.isYoutube) {
+      return YoutubeShortsPlayer(
+        post: widget.post,
+        isActive: widget.isActive,
+      );
+    }
+
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final memW = (MediaQuery.sizeOf(context).width * dpr).clamp(720, 1600).round();
 

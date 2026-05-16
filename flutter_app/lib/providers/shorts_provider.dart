@@ -3,8 +3,9 @@ import 'package:flutter/foundation.dart';
 import '../constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 
-/// RSS-only vertical shorts feed (independent from the main mixed feed).
+/// YouTube-only vertical video feed (official iframe embeds).
 class ShortsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
   int _page = 1;
@@ -14,6 +15,7 @@ class ShortsProvider extends ChangeNotifier {
   String? _error;
   String? _loadedLanguageTag;
   bool _busy = false;
+  bool _socketWired = false;
 
   List<NewsPost> get posts => List.unmodifiable(_posts);
   bool get loading => _loading;
@@ -21,14 +23,28 @@ class ShortsProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   String? get error => _error;
 
+  ShortsProvider() {
+    _wireRealtimeRefresh();
+  }
+
   static String _tag(String? language) => language ?? '__all__';
 
   bool languageMatches(String? language) =>
       _loadedLanguageTag == _tag(language);
 
-  /// True when we already have posts for this language filter.
   bool hasContentFor(String? language) =>
       _posts.isNotEmpty && languageMatches(language);
+
+  void _wireRealtimeRefresh() {
+    if (kIsWeb || _socketWired) return;
+    _socketWired = true;
+    SocketService.connect();
+    SocketService.onFeedUpdated((_) {
+      if (_refreshing || _loading || _busy) return;
+      final lang = _loadedLanguageTag == '__all__' ? null : _loadedLanguageTag;
+      refresh(language: lang);
+    });
+  }
 
   Future<void> refresh({required String? language}) async {
     if (_busy) return;
@@ -71,8 +87,8 @@ class ShortsProvider extends ChangeNotifier {
         search: null,
         breaking: false,
         days: 30,
-        sourceTypes: const ['rss'],
-        hasVideo: false,
+        sourceTypes: const ['youtube'],
+        hasVideo: true,
       );
       if (res['success'] == true && res['posts'] is List) {
         final raw = res['posts'] as List;
@@ -80,9 +96,11 @@ class ShortsProvider extends ChangeNotifier {
         for (final p in raw) {
           if (p is! Map) continue;
           try {
-            fetched.add(
-              NewsPost.fromJson(Map<String, dynamic>.from(p)),
-            );
+            final post = NewsPost.fromJson(Map<String, dynamic>.from(p));
+            if (!post.isYoutube) continue;
+            final vid = post.youtube?.videoId ?? '';
+            if (vid.isEmpty) continue;
+            fetched.add(post);
           } catch (_) {
             // Skip malformed API rows.
           }
@@ -106,7 +124,7 @@ class ShortsProvider extends ChangeNotifier {
         final msg = res['message']?.toString().trim();
         _error = (msg != null && msg.isNotEmpty)
             ? msg
-            : 'Could not load RSS shorts.';
+            : 'Could not load YouTube videos.';
       }
     } catch (e) {
       if (reset) {

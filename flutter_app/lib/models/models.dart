@@ -146,6 +146,44 @@ DateTime? _parseOptionalDate(dynamic v) {
   return DateTime.tryParse(s);
 }
 
+class YoutubeMeta {
+  final String videoId;
+  final String? channelTitle;
+  final String? channelId;
+  final String? watchUrl;
+  final String? channelUrl;
+  final String? embedUrl;
+  final int? durationSeconds;
+  final bool isShort;
+  final bool embeddable;
+
+  const YoutubeMeta({
+    required this.videoId,
+    this.channelTitle,
+    this.channelId,
+    this.watchUrl,
+    this.channelUrl,
+    this.embedUrl,
+    this.durationSeconds,
+    this.isShort = false,
+    this.embeddable = true,
+  });
+
+  factory YoutubeMeta.fromJson(Map<String, dynamic> json) => YoutubeMeta(
+        videoId: (json['videoId'] ?? '').toString(),
+        channelTitle: json['channelTitle']?.toString(),
+        channelId: json['channelId']?.toString(),
+        watchUrl: json['watchUrl']?.toString(),
+        channelUrl: json['channelUrl']?.toString(),
+        embedUrl: json['embedUrl']?.toString(),
+        durationSeconds: json['durationSeconds'] is num
+            ? (json['durationSeconds'] as num).toInt()
+            : int.tryParse(json['durationSeconds']?.toString() ?? ''),
+        isShort: json['isShort'] == true,
+        embeddable: json['embeddable'] != false,
+      );
+}
+
 class NewsPost {
   final String id;
   final String title;
@@ -167,6 +205,8 @@ class NewsPost {
   final String? constituency;
   final String? sourceUrl;
   final String? sourceName;
+  final String? sourceType;
+  final YoutubeMeta? youtube;
   /// When the publisher released the story (RSS/API). Prefer over [createdAt] for display.
   final DateTime? sourcePublishedAt;
   final DateTime createdAt;
@@ -192,9 +232,34 @@ class NewsPost {
     this.constituency,
     this.sourceUrl,
     this.sourceName,
+    this.sourceType,
+    this.youtube,
     this.sourcePublishedAt,
     required this.createdAt,
   });
+
+  bool get isYoutube =>
+      sourceType == 'youtube' || (youtube != null && youtube!.videoId.isNotEmpty);
+
+  String get youtubeThumbnailUrl {
+    final fromMedia = firstVideo?.thumbnail?.trim();
+    if (fromMedia != null && fromMedia.isNotEmpty) return fromMedia;
+    final vid = youtube?.videoId;
+    if (vid != null && vid.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
+    }
+    return '';
+  }
+
+  String? get youtubeWatchUrl =>
+      youtube?.watchUrl ?? sourceUrl ?? firstVideo?.url;
+
+  String? get youtubeChannelUrl => youtube?.channelUrl;
+
+  String get youtubeChannelLabel =>
+      youtube?.channelTitle?.trim().isNotEmpty == true
+          ? youtube!.channelTitle!.trim()
+          : 'YouTube';
 
   /// Prefer original publish time so cards don’t all show the same “ingested X ago”.
   DateTime get displayTime => sourcePublishedAt ?? createdAt;
@@ -227,6 +292,10 @@ class NewsPost {
         constituency: json['constituency']?.toString(),
         sourceUrl: json['sourceUrl'],
         sourceName: json['sourceName']?.toString(),
+        sourceType: json['sourceType']?.toString(),
+        youtube: json['youtube'] is Map
+            ? YoutubeMeta.fromJson(Map<String, dynamic>.from(json['youtube']))
+            : null,
         sourcePublishedAt: _parseOptionalDate(json['sourcePublishedAt']),
         createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
       );

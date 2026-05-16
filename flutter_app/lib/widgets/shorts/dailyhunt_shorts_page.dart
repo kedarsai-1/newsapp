@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/models.dart';
 import '../../theme/app_palette.dart';
@@ -79,12 +80,22 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
 
   String _buildSourceLine() {
     final post = widget.post;
+    if (post.isYoutube) {
+      return 'YouTube · ${post.youtubeChannelLabel} · ${timeago.format(post.displayTime)}';
+    }
     final src = (post.sourceName?.trim().isNotEmpty == true)
         ? post.sourceName!.trim()
-        : (post.category?.name ?? 'RSS');
+        : (post.category?.name ?? 'News');
     final lang = post.language.trim().toUpperCase();
     final langBit = lang.isNotEmpty && lang != 'EN' ? ' · $lang' : '';
     return '$src · ${timeago.format(post.displayTime)}$langBit';
+  }
+
+  Future<void> _openUrl(String? url) async {
+    if (url == null || url.trim().isEmpty) return;
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _handleLike() async {
@@ -104,10 +115,13 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final snippet = widget.translatedSummary != null &&
-            widget.translatedSummary!.trim().isNotEmpty
-        ? widget.translatedSummary!.trim()
-        : _snippet;
+    final isYt = widget.post.isYoutube;
+    final snippet = isYt
+        ? null
+        : (widget.translatedSummary != null &&
+                widget.translatedSummary!.trim().isNotEmpty
+            ? widget.translatedSummary!.trim()
+            : _snippet);
 
     return ColoredBox(
       color: Colors.black,
@@ -131,7 +145,12 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                   widget.bottomContentPadding,
                 ),
                 child: GestureDetector(
-                  onTap: widget.onOpenArticle,
+                  onTap: isYt
+                      ? () => _openUrl(widget.post.youtubeWatchUrl)
+                      : widget.onOpenArticle,
+                  onLongPress: isYt && widget.post.youtubeChannelUrl != null
+                      ? () => _openUrl(widget.post.youtubeChannelUrl)
+                      : null,
                   behavior: HitTestBehavior.opaque,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,36 +158,52 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                     children: [
                       Text(
                         widget.post.title,
-                        maxLines: 2,
+                        maxLines: isYt ? 3 : 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
                           height: 1.2,
-                          fontSize: 16,
+                          fontSize: isYt ? 17 : 16,
                         ),
                       ),
+                      if (snippet != null && snippet.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          snippet,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFE0E0E0),
+                            height: 1.3,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 6),
-                      Text(
-                        snippet,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFE0E0E0),
-                          height: 1.3,
-                          fontSize: 13,
+                      if (isYt)
+                        GestureDetector(
+                          onTap: () => _openUrl(widget.post.youtubeChannelUrl),
+                          child: Text(
+                            _sourceLine,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFB0B0B0),
+                              fontSize: 11,
+                            ),
+                          ),
+                        )
+                      else
+                        Text(
+                          _sourceLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFB0B0B0),
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _sourceLine,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFFB0B0B0),
-                          fontSize: 11,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -198,12 +233,19 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                   label: 'Share',
                   onTap: widget.onShare,
                 ),
-                _SideAction(
-                  icon: Icons.translate_rounded,
-                  label: widget.translatedSummary == null ? 'Translate' : 'Original',
-                  busy: widget.translating,
-                  onTap: widget.onTranslate,
-                ),
+                if (isYt)
+                  _SideAction(
+                    icon: Icons.play_circle_outline_rounded,
+                    label: 'YouTube',
+                    onTap: () => _openUrl(widget.post.youtubeWatchUrl),
+                  )
+                else
+                  _SideAction(
+                    icon: Icons.translate_rounded,
+                    label: widget.translatedSummary == null ? 'Translate' : 'Original',
+                    busy: widget.translating,
+                    onTap: widget.onTranslate,
+                  ),
               ],
             ),
           ),

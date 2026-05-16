@@ -39,7 +39,7 @@ async function destroyCloudinaryPublicIds(publicIds, { resourceType = 'image' } 
  * Delete ingested news older than N days from Mongo + remove their Cloudinary media.
  *
  * We keep reporter/manual posts by default (production safety), and only purge:
- *   sourceType in ['api','rss','html']
+ *   sourceType in ['api','rss','html','youtube']
  *
  * The cutoff uses sourcePublishedAt when present, else createdAt.
  */
@@ -53,7 +53,9 @@ async function purgeOldNews({
   const max = clampInt(limit, 1, 10_000, 1200);
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const sourceTypes = keepManual ? ['api', 'rss', 'html'] : ['api', 'rss', 'html', 'manual'];
+  const sourceTypes = keepManual
+    ? ['api', 'rss', 'html', 'youtube']
+    : ['api', 'rss', 'html', 'youtube', 'manual'];
 
   const query = {
     sourceType: { $in: sourceTypes },

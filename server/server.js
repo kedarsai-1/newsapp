@@ -5,7 +5,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cron = require('node-cron');
 require('dotenv').config();
-const { runIngestion, setIngestionSocket } = require('./services/newsIngestionService');
+const { runIngestion } = require('./services/newsIngestionService');
+const { setIngestionSocket } = require('./services/feedSocket');
+const { runYoutubeIngestion } = require('./services/youtubeIngestionService');
 const { purgeOldNews } = require('./services/retentionCleanupService');
 const { ensureDefaultCategories } = require('./utils/ensureDefaultData');
 
@@ -122,6 +124,53 @@ mongoose.connect(process.env.MONGO_URI)
       }
     } else {
       console.log('[scraper] scheduler disabled by SCRAPER_ENABLED=false');
+    }
+
+    const youtubeEnabled = process.env.YOUTUBE_ENABLED !== 'false';
+    const youtubeCronExpr = process.env.YOUTUBE_CRON || '*/15 * * * *';
+    const youtubeRunOnStart = process.env.YOUTUBE_RUN_ON_START !== 'false';
+
+    async function runScheduledYoutube(triggeredBy) {
+      console.log(`[youtube] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
+      const result = await runYoutubeIngestion({ triggeredBy });
+      if (result.skipped) {
+        console.log(`[youtube] skipped (${triggeredBy}): ${result.message || ''}`);
+        return;
+      }
+      if (!result.success) {
+        console.error('[youtube] run failed:', result.error);
+        return;
+      }
+      const s = result.stats || {};
+      console.log(
+        `[youtube] run completed (${triggeredBy}): inserted=${s.youtubeInserted ?? 0} `
+          + `fetched=${s.youtubeFetched ?? 0} duplicates=${s.youtubeDuplicates ?? 0} `
+          + `restricted=${s.youtubeSkippedRestricted ?? 0}`,
+      );
+      if ((s.youtubeInserted ?? 0) > 0) {
+        io.to('all').emit('feed_updated', {
+          inserted: s.youtubeInserted,
+          at: new Date(),
+        });
+      }
+    }
+
+    if (youtubeEnabled && process.env.YOUTUBE_API_KEY?.trim()) {
+      cron.schedule(youtubeCronExpr, () => {
+        runScheduledYoutube('youtube-cron').catch((e) =>
+          console.error('[youtube] scheduler error:', e),
+        );
+      });
+      console.log(`[youtube] scheduler active with cron "${youtubeCronExpr}"`);
+      if (youtubeRunOnStart) {
+        setTimeout(() => {
+          runScheduledYoutube('youtube-startup').catch((e) =>
+            console.error('[youtube] startup error:', e),
+          );
+        }, 5000);
+      }
+    } else {
+      console.log('[youtube] scheduler disabled (YOUTUBE_ENABLED=false or missing YOUTUBE_API_KEY)');
     }
 
     async function runRetention(triggeredBy) {

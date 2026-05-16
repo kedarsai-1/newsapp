@@ -30,6 +30,7 @@ const {
 } = require('./rssService');
 const { extractReadableArticle } = require('./articleExtractionService');
 const { classifyArticleConstituency } = require('./constituencyClassifierService');
+const { runYoutubeIngestion } = require('./youtubeIngestionService');
 
 let ingestState = {
   isRunning: false,
@@ -39,12 +40,7 @@ let ingestState = {
   lastError: null,
 };
 
-let ingestionSocket = null;
-
-/** Optional Socket.IO instance — emits `feed_updated` after inserts. */
-function setIngestionSocket(io) {
-  ingestionSocket = io;
-}
+const { setIngestionSocket, emitFeedUpdated } = require('./feedSocket');
 
 /** Round-robin across categorySlug so politics/sports/business all get processed each run. */
 function interleaveFeedsByCategory(feeds) {
@@ -403,7 +399,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
   ingestState.lastRunAt = new Date();
   ingestState.lastError = null;
 
-  const stats = {
+  const     stats = {
     triggeredBy,
     startedAt: new Date(),
     fetched: 0,
@@ -411,6 +407,9 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     duplicates: 0,
     skippedNoImage: 0,
     categoryFiltered: 0,
+    youtubeInserted: 0,
+    youtubeDuplicates: 0,
+    youtubeSkippedRestricted: 0,
     failed: 0,
     fallbacks: 0,
     languageFiltered: 0,
@@ -850,6 +849,31 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       }
     }
 
+    // YouTube ingestion (metadata + embed URLs only).
+    if (process.env.YOUTUBE_ENABLED !== 'false') {
+      try {
+        budget.throwIfExpired('youtube:start');
+        const yt = await runYoutubeIngestion({ triggeredBy: `${triggeredBy}:youtube` });
+        if (yt?.stats) {
+          stats.youtubeInserted = yt.stats.youtubeInserted || 0;
+          stats.youtubeDuplicates = yt.stats.youtubeDuplicates || 0;
+          stats.youtubeSkippedRestricted = yt.stats.youtubeSkippedRestricted || 0;
+          stats.inserted += yt.stats.youtubeInserted || 0;
+          stats.youtubeFetched = yt.stats.youtubeFetched || 0;
+          if (Array.isArray(yt.stats.sourceRuns)) {
+            stats.sourceRuns.push(...yt.stats.sourceRuns);
+          }
+        }
+        if (!yt.success && !yt.skipped) {
+          stats.failed += 1;
+          console.warn('[ingest] YouTube ingestion failed:', yt.error);
+        }
+      } catch (e) {
+        stats.failed += 1;
+        console.warn('[ingest] YouTube ingestion error:', e?.message || e);
+      }
+    }
+
     stats.endedAt = new Date();
     if (stats.fetched === 0 && stats.inserted === 0) {
       console.warn(
@@ -889,5 +913,6 @@ module.exports = {
   runIngestion,
   getIngestionStatus,
   setIngestionSocket,
+  emitFeedUpdated,
   interleaveFeedsByCategory,
 };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
@@ -15,7 +16,7 @@ import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
 import '../../widgets/shorts/shorts_chrome.dart';
 
-/// RSS-backed vertical shorts: [PageView.builder], Dailyhunt-style layout, light motion.
+/// YouTube-backed vertical shorts: [PageView.builder], official iframe embeds.
 class ShortsNewsScreen extends StatefulWidget {
   const ShortsNewsScreen({super.key});
 
@@ -63,7 +64,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     }
   }
 
-  /// After each RSS reload, show the newest story first (page 0).
+  /// After each reload, show the newest video first (page 0).
   void _onShortsRefreshTick() {
     final s = _shorts;
     if (_wasShortsRefreshing && !s.refreshing && s.posts.isNotEmpty) {
@@ -151,8 +152,12 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   }
 
   Future<void> _share(NewsPost post) async {
-    final text =
-        '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n${post.sourceUrl ?? ''}';
+    final link = post.isYoutube
+        ? (post.youtubeWatchUrl ?? post.sourceUrl ?? '')
+        : (post.sourceUrl ?? '');
+    final text = post.isYoutube
+        ? '${post.title}\n\n$link'
+        : '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n$link';
     await Share.share(text, subject: post.title);
   }
 
@@ -181,6 +186,13 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   }
 
   void _openArticle(NewsPost post) {
+    if (post.isYoutube) {
+      final url = post.youtubeWatchUrl;
+      if (url != null && url.isNotEmpty) {
+        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      }
+      return;
+    }
     context.push('/article/${post.id}');
   }
 

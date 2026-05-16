@@ -6,6 +6,7 @@ const {
   runIngestion,
   getIngestionStatus,
 } = require('../services/newsIngestionService');
+const { runYoutubeIngestion } = require('../services/youtubeIngestionService');
 const { fetchBestImageFallback, isUnusableFeedImageUrl } = require('../services/newsApiService');
 const { resolveGoogleNewsPublisherUrl } = require('../services/rssService');
 const { cloudinary } = require('../config/cloudinary');
@@ -306,6 +307,24 @@ const runIngestionNow = async (req, res) => {
   }
 };
 
+// POST /api/admin/youtube/ingest
+const runYoutubeIngestionNow = async (req, res) => {
+  try {
+    const result = await runYoutubeIngestion({
+      triggeredBy: `admin:${req.user._id.toString()}`,
+    });
+    if (!result.success && result.skipped) {
+      return res.json(result);
+    }
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // GET /api/admin/ingestion/status
 const getIngestionRunStatus = async (req, res) => {
   try {
@@ -406,6 +425,7 @@ module.exports = {
   toggleUserActive,
   createCategory,
   runIngestionNow,
+  runYoutubeIngestionNow,
   getIngestionRunStatus,
   backfillThumbnails,
 };

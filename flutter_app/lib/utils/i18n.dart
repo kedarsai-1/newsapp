@@ -165,9 +165,9 @@ class I18n {
       'snack_translated_cleared': 'Translated cache cleared',
 
       // Shorts
-      'shorts_empty_title': 'No shorts yet',
+      'shorts_empty_title': 'No videos yet',
       'shorts_empty_subtitle':
-          'New stories appear here after every refresh. Try again in a moment.',
+          'YouTube videos appear here after ingestion. Pull to refresh in a moment.',
       'action_refresh': 'Refresh',
     },
     'hi': {

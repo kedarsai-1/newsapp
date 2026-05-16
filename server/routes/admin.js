@@ -12,6 +12,7 @@ const {
   toggleUserActive,
   createCategory,
   runIngestionNow,
+  runYoutubeIngestionNow,
   getIngestionRunStatus,
   backfillThumbnails,
 } = require('../controllers/adminController');
@@ -39,6 +40,7 @@ router.post('/categories', createCategory);
 
 // News ingestion
 router.post('/ingestion/run', runIngestionNow);
+router.post('/youtube/ingest', runYoutubeIngestionNow);
 router.get('/ingestion/status', getIngestionRunStatus);
 
 // Media maintenance

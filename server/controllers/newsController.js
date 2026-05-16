@@ -142,7 +142,7 @@ const getFeed = async (req, res) => {
     // Restrict feed to specific sources (e.g. NewsAPI + reporter/manual).
     // Example: ?sourceTypes=api,manual
     if (sourceTypes) {
-      const allowed = new Set(['api', 'manual', 'rss', 'html']);
+      const allowed = new Set(['api', 'manual', 'rss', 'html', 'youtube']);
       const list = String(sourceTypes)
         .split(',')
         .map((s) => s.trim().toLowerCase())

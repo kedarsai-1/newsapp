@@ -18,7 +18,6 @@ import 'screens/onboarding/onboarding_language_screen.dart';
 import 'screens/onboarding/onboarding_location_screen.dart';
 import 'screens/onboarding/onboarding_notifications_screen.dart';
 import 'screens/onboarding/onboarding_welcome_screen.dart';
-import 'screens/onboarding/onboarding_design.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_verify_screen.dart';
 import 'screens/auth/register_screen.dart';
@@ -440,6 +439,8 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
     final news = context.watch<NewsProvider>();
     final booting = !auth.initialized || !news.prefsLoaded;
 
+    final themeMode = context.watch<ThemeProvider>().themeMode;
+
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Stack(
@@ -447,26 +448,41 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
         children: [
           MaterialApp.router(
             title: AppConstants.appName,
-            theme: XpressoAppTheme.theme(),
-            darkTheme: XpressoAppTheme.theme(),
-            themeMode: ThemeMode.dark,
+            theme: XpressoAppTheme.light(),
+            darkTheme: XpressoAppTheme.dark(),
+            themeMode: themeMode,
             routerConfig: _router!,
             debugShowCheckedModeBanner: false,
           ),
           if (booting)
             Positioned.fill(
-              child: Material(
-                color: OnboardingDesign.background,
-                child: Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: OnboardingDesign.accent.withValues(alpha: 0.72),
+              child: Builder(
+                builder: (bootCtx) {
+                  final isDark = themeMode == ThemeMode.dark ||
+                      (themeMode == ThemeMode.system &&
+                          MediaQuery.platformBrightnessOf(bootCtx) ==
+                              Brightness.dark);
+                  final bootPalette =
+                      isDark ? FeedXpressoPalette.dark : FeedXpressoPalette.light;
+                  return Theme(
+                    data: isDark
+                        ? XpressoAppTheme.dark()
+                        : XpressoAppTheme.light(),
+                    child: Material(
+                      color: bootPalette.background,
+                      child: Center(
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: bootPalette.accent.withValues(alpha: 0.72),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
         ],
@@ -544,7 +560,7 @@ class _UserShellState extends State<UserShell> {
 
     if (loc == '/home') {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: FeedXpressoTheme.fx(context).background,
         body: widget.child,
       );
     }
@@ -556,7 +572,7 @@ class _UserShellState extends State<UserShell> {
           drawer: const XpressoSideMenu(),
           drawerEnableOpenDragGesture: true,
           drawerEdgeDragWidth: 28,
-          backgroundColor: FeedXpressoTheme.background,
+          backgroundColor: FeedXpressoTheme.fx(context).background,
           body: _HorizontalShellSwipe(
             tabRoutes: const [
               '/feed',
@@ -713,8 +729,9 @@ class ReporterShell extends StatelessWidget {
       sel = 0;
     }
 
+    final fx = FeedXpressoTheme.fx(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: fx.background,
       body: _HorizontalShellSwipe(
         tabRoutes: const [
           '/reporter',

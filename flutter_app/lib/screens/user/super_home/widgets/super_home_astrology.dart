@@ -434,7 +434,7 @@ class _ZodiacChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected
-                ? DailyhuntTheme.accentGreen
+                ? DailyhuntTheme.accentGreen(context)
                 : Colors.white.withValues(alpha: 0.7),
             width: selected ? 2 : 1,
           ),

@@ -7,13 +7,11 @@ import '../feed/feed_xpresso_theme.dart';
 class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onProfileTap;
   final VoidCallback? onNotificationTap;
-  final bool dark;
 
   const DailyhuntHomeAppBar({
     super.key,
     this.onProfileTap,
     this.onNotificationTap,
-    this.dark = false,
   });
 
   @override
@@ -21,14 +19,9 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
 
   @override
   Widget build(BuildContext context) {
-    final fg = dark ? FeedXpressoTheme.title : Theme.of(context).colorScheme.onSurface;
-    final iconBg = dark ? FeedXpressoTheme.iconSurface : const Color(0xFFF0F0F0);
-    final iconFg = dark ? FeedXpressoTheme.iconFg : fg;
-    final logoBg = dark ? FeedXpressoTheme.iconSurface : const Color(0xFF0A8F57);
-    final logoIcon = dark ? FeedXpressoTheme.iconFg : Colors.white;
-
+    final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: dark ? FeedXpressoTheme.background : Colors.white,
+      color: fx.background,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
@@ -40,8 +33,8 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                 _IconCircleButton(
                   tooltip: 'Profile',
                   onTap: onProfileTap,
-                  backgroundColor: iconBg,
-                  child: Icon(Icons.person_rounded, color: iconFg, size: 22),
+                  backgroundColor: fx.iconSurface,
+                  child: Icon(Icons.person_rounded, color: fx.iconFg, size: 22),
                 ),
                 Expanded(
                   child: Row(
@@ -52,13 +45,24 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                         width: 34,
                         height: 34,
                         decoration: BoxDecoration(
-                          color: logoBg,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              fx.accent.withValues(alpha: 0.35),
+                              fx.iconSurface,
+                            ],
+                          ),
                           borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: fx.accent.withValues(alpha: 0.45),
+                            width: 0.5,
+                          ),
                         ),
                         alignment: Alignment.center,
                         child: Icon(
                           Icons.article_rounded,
-                          color: logoIcon,
+                          color: fx.accent,
                           size: 20,
                         ),
                       ),
@@ -69,13 +73,11 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.6,
-                                    color: fg,
-                                    fontSize: 20,
-                                  ),
+                          style: fx.screenTitleStyle.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                            fontSize: 20,
+                          ),
                         ),
                       ),
                     ],
@@ -84,8 +86,12 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                 _IconCircleButton(
                   tooltip: 'Notifications',
                   onTap: onNotificationTap,
-                  backgroundColor: iconBg,
-                  child: Icon(Icons.notifications_none_rounded, color: iconFg, size: 22),
+                  backgroundColor: fx.iconSurface,
+                  child: Icon(
+                    Icons.notifications_none_rounded,
+                    color: fx.iconFg,
+                    size: 22,
+                  ),
                 ),
               ],
             ),

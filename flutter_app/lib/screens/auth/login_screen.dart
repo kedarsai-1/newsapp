@@ -154,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _mode == _LoginMode.mobile ? 'Continue' : 'Sign in';
 
     return Scaffold(
-      backgroundColor: OnboardingDesign.background,
+      backgroundColor: OnboardingDesign.background(context),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -255,7 +255,7 @@ class _LoginScreenState extends State<LoginScreen> {
           "We'll send you a 6-digit OTP to verify",
           style: GoogleFonts.notoSans(
             fontSize: 12.5,
-            color: OnboardingDesign.subtitleColor,
+            color: OnboardingDesign.subtitleColor(context),
           ),
         ),
       ],
@@ -275,10 +275,10 @@ class _LoginScreenState extends State<LoginScreen> {
           hintText: 'you@example.com',
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
-          prefix: const Padding(
-            padding: EdgeInsets.only(left: 12, right: 8),
+          prefix: Padding(
+            padding: const EdgeInsets.only(left: 12, right: 8),
             child: Icon(Icons.alternate_email,
-                size: 18, color: OnboardingDesign.subtitleColor),
+                size: 18, color: OnboardingDesign.subtitleColor(context)),
           ),
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);
@@ -294,10 +294,10 @@ class _LoginScreenState extends State<LoginScreen> {
           hintText: 'Enter your password',
           obscureText: _obscure,
           textInputAction: TextInputAction.done,
-          prefix: const Padding(
-            padding: EdgeInsets.only(left: 12, right: 8),
+          prefix: Padding(
+            padding: const EdgeInsets.only(left: 12, right: 8),
             child: Icon(Icons.lock_outline,
-                size: 18, color: OnboardingDesign.subtitleColor),
+                size: 18, color: OnboardingDesign.subtitleColor(context)),
           ),
           suffix: IconButton(
             tooltip: _obscure ? 'Show password' : 'Hide password',
@@ -305,7 +305,7 @@ class _LoginScreenState extends State<LoginScreen> {
               _obscure
                   ? Icons.visibility_off_outlined
                   : Icons.visibility_outlined,
-              color: OnboardingDesign.subtitleColor,
+              color: OnboardingDesign.subtitleColor(context),
               size: 20,
             ),
             onPressed: () => setState(() => _obscure = !_obscure),
@@ -333,12 +333,12 @@ class _BrandHeader extends StatelessWidget {
           width: 64,
           height: 64,
           decoration: BoxDecoration(
-            color: OnboardingDesign.accent.withValues(alpha: 0.1),
+            color: OnboardingDesign.accent(context).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Icon(
+          child: Icon(
             Icons.newspaper_rounded,
-            color: OnboardingDesign.accent,
+            color: OnboardingDesign.accent(context),
             size: 32,
           ),
         ),
@@ -348,7 +348,7 @@ class _BrandHeader extends StatelessWidget {
           style: GoogleFonts.notoSans(
             fontSize: 24,
             fontWeight: FontWeight.w800,
-            color: OnboardingDesign.titleColor,
+            color: OnboardingDesign.titleColor(context),
             letterSpacing: -0.4,
           ),
         ),
@@ -358,7 +358,7 @@ class _BrandHeader extends StatelessWidget {
           style: GoogleFonts.notoSans(
             fontSize: 13.5,
             fontWeight: FontWeight.w500,
-            color: OnboardingDesign.subtitleColor,
+            color: OnboardingDesign.subtitleColor(context),
           ),
         ),
       ],
@@ -424,8 +424,8 @@ class _ModeSwitcher extends StatelessWidget {
               icon,
               size: 17,
               color: selected
-                  ? OnboardingDesign.titleColor
-                  : OnboardingDesign.subtitleColor,
+                  ? OnboardingDesign.titleColor(context)
+                  : OnboardingDesign.subtitleColor(context),
             ),
             const SizedBox(width: 8),
             Text(
@@ -434,8 +434,8 @@ class _ModeSwitcher extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: selected
-                    ? OnboardingDesign.titleColor
-                    : OnboardingDesign.subtitleColor,
+                    ? OnboardingDesign.titleColor(context)
+                    : OnboardingDesign.subtitleColor(context),
               ),
             ),
           ],
@@ -463,11 +463,11 @@ class _CountryCodePrefix extends StatelessWidget {
             style: GoogleFonts.notoSans(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: OnboardingDesign.titleColor,
+              color: OnboardingDesign.titleColor(context),
             ),
           ),
           const SizedBox(width: 6),
-          Container(width: 1, height: 22, color: OnboardingDesign.outline),
+          Container(width: 1, height: 22, color: OnboardingDesign.outline(context)),
         ],
       ),
     );
@@ -487,7 +487,7 @@ class _FieldLabel extends StatelessWidget {
       style: GoogleFonts.notoSans(
         fontSize: 13,
         fontWeight: FontWeight.w700,
-        color: OnboardingDesign.titleColor,
+        color: OnboardingDesign.titleColor(context),
       ),
     );
   }
@@ -513,9 +513,9 @@ class _PrimaryActionButton extends StatelessWidget {
       child: FilledButton(
         onPressed: loading ? null : onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: OnboardingDesign.accent,
+          backgroundColor: OnboardingDesign.accent(context),
           disabledBackgroundColor:
-              OnboardingDesign.accent.withValues(alpha: 0.55),
+              OnboardingDesign.accent(context).withValues(alpha: 0.55),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OnboardingDesign.radiusButton),
@@ -531,7 +531,7 @@ class _PrimaryActionButton extends StatelessWidget {
                   color: Colors.white,
                 ),
               )
-            : Text(label, style: OnboardingDesign.buttonLabel()),
+            : Text(label, style: OnboardingDesign.buttonLabel(context)),
       ),
     );
   }
@@ -546,7 +546,7 @@ class _OrDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Expanded(child: Divider(color: OnboardingDesign.outline)),
+        Expanded(child: Divider(color: OnboardingDesign.outline(context))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
@@ -554,11 +554,11 @@ class _OrDivider extends StatelessWidget {
             style: GoogleFonts.notoSans(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: OnboardingDesign.subtitleColor,
+              color: OnboardingDesign.subtitleColor(context),
             ),
           ),
         ),
-        const Expanded(child: Divider(color: OnboardingDesign.outline)),
+        Expanded(child: Divider(color: OnboardingDesign.outline(context))),
       ],
     );
   }
@@ -584,7 +584,7 @@ class _SocialButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: OnboardingDesign.outline),
+          side: BorderSide(color: OnboardingDesign.outline(context)),
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OnboardingDesign.radiusButton),
@@ -600,7 +600,7 @@ class _SocialButton extends StatelessWidget {
               style: GoogleFonts.notoSans(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w700,
-                color: OnboardingDesign.titleColor,
+                color: OnboardingDesign.titleColor(context),
               ),
             ),
           ],
@@ -677,7 +677,7 @@ class _RegisterPrompt extends StatelessWidget {
         text: TextSpan(
           style: GoogleFonts.notoSans(
             fontSize: 13.5,
-            color: OnboardingDesign.subtitleColor,
+            color: OnboardingDesign.subtitleColor(context),
             fontWeight: FontWeight.w500,
           ),
           children: [
@@ -686,7 +686,7 @@ class _RegisterPrompt extends StatelessWidget {
               text: 'Create one',
               style: GoogleFonts.notoSans(
                 fontSize: 13.5,
-                color: OnboardingDesign.accent,
+                color: OnboardingDesign.accent(context),
                 fontWeight: FontWeight.w700,
               ),
               recognizer: TapGestureRecognizer()..onTap = onTap,
@@ -714,7 +714,7 @@ class _LegalFooter extends StatelessWidget {
         text: TextSpan(
           style: GoogleFonts.notoSans(
             fontSize: 12,
-            color: OnboardingDesign.subtitleColor,
+            color: OnboardingDesign.subtitleColor(context),
             height: 1.45,
             fontWeight: FontWeight.w500,
           ),
@@ -724,7 +724,7 @@ class _LegalFooter extends StatelessWidget {
               text: 'Terms',
               style: GoogleFonts.notoSans(
                 fontSize: 12,
-                color: OnboardingDesign.accent,
+                color: OnboardingDesign.accent(context),
                 fontWeight: FontWeight.w700,
               ),
               recognizer: TapGestureRecognizer()..onTap = openTerms,
@@ -734,7 +734,7 @@ class _LegalFooter extends StatelessWidget {
               text: 'Privacy Policy',
               style: GoogleFonts.notoSans(
                 fontSize: 12,
-                color: OnboardingDesign.accent,
+                color: OnboardingDesign.accent(context),
                 fontWeight: FontWeight.w700,
               ),
               recognizer: TapGestureRecognizer()..onTap = openPrivacy,

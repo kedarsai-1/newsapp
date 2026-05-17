@@ -122,11 +122,12 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final st = ShortsFeedTheme.fx(context);
     final isYt = widget.post.isYoutube;
     final topSafe = MediaQuery.paddingOf(context).top;
 
     return ColoredBox(
-      color: ShortsFeedTheme.background,
+      color: st.background,
       child: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(
@@ -148,13 +149,13 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                   height: constraints.maxHeight,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: ShortsFeedTheme.card,
+                      color: st.card,
                       borderRadius:
                           BorderRadius.circular(ShortsFeedTheme.cardRadius),
-                      border: Border.all(color: ShortsFeedTheme.cardBorder),
+                      border: Border.all(color: st.cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.35),
+                          color: st.scrim.withValues(alpha: 0.55),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -258,7 +259,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                     widget.post.title,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: ShortsFeedTheme.titleStyle,
+                                    style: st.titleStyle(),
                                   ),
                                 ),
                                 const SizedBox(height: 12),
@@ -288,8 +289,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                     style: GoogleFonts.notoSans(
-                                                      color: ShortsFeedTheme
-                                                          .title,
+                                                      color: st.title,
                                                       fontSize: 13,
                                                       fontWeight:
                                                           FontWeight.w700,
@@ -314,7 +314,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                               ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: ShortsFeedTheme.metaStyle,
+                                              style: st.metaStyle(),
                                             ),
                                           ],
                                         ),
@@ -483,10 +483,11 @@ class _MoreMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final st = ShortsFeedTheme.fx(context);
     return PopupMenuButton<String>(
       padding: EdgeInsets.zero,
-      icon: const Icon(Icons.more_vert, color: ShortsFeedTheme.meta, size: 22),
-      color: const Color(0xFF1E1E1E),
+      icon: Icon(Icons.more_vert, color: st.meta, size: 22),
+      color: st.card,
       onSelected: (v) {
         switch (v) {
           case 'open':
@@ -522,13 +523,14 @@ class _ChannelAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final st = ShortsFeedTheme.fx(context);
     final initial = label.isNotEmpty ? label[0].toUpperCase() : '?';
     return CircleAvatar(
       radius: 18,
-      backgroundColor: ShortsFeedTheme.surfaceMuted,
+      backgroundColor: st.surfaceMuted,
       child: Text(
         initial,
-        style: ShortsFeedTheme.titleStyle.copyWith(
+        style: st.titleStyle().copyWith(
           fontSize: 14,
           fontWeight: FontWeight.w700,
         ),
@@ -620,11 +622,12 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final st = ShortsFeedTheme.fx(context);
     final color = active
-        ? (activeColor ?? ShortsFeedTheme.accent)
-        : (iconColor ?? ShortsFeedTheme.body);
+        ? (activeColor ?? st.accent)
+        : (iconColor ?? st.body);
     return Material(
-      color: ShortsFeedTheme.surfaceMuted,
+      color: st.surfaceMuted,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: onTap,
@@ -638,7 +641,7 @@ class _ActionChip extends StatelessWidget {
               const SizedBox(width: 5),
               Text(
                 label,
-                style: ShortsFeedTheme.actionLabelStyle.copyWith(
+                style: st.actionLabelStyle().copyWith(
                   color: color,
                   fontSize: 12,
                 ),

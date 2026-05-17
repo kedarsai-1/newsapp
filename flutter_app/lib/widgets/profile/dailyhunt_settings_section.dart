@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../feed/feed_xpresso_theme.dart';
 
-/// Xpresso settings block — section label + content + hairline separator.
+/// Settings block — section label + content + hairline separator.
 class DailyhuntSettingsSection extends StatelessWidget {
   final String title;
   final Widget child;
@@ -17,31 +17,33 @@ class DailyhuntSettingsSection extends StatelessWidget {
     this.showDivider = true,
   });
 
-  static const _sectionLabelStyle = TextStyle(
-    fontWeight: FontWeight.w700,
-    letterSpacing: 0.45,
-    fontSize: 10,
-    color: FeedXpressoTheme.meta,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showTitle && title.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 10, bottom: 6),
-            child: Text(title.toUpperCase(), style: _sectionLabelStyle),
+            child: Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.45,
+                fontSize: 10,
+                color: fx.meta,
+              ),
+            ),
           ),
         child,
         if (showDivider)
-          const Padding(
-            padding: EdgeInsets.only(top: 10),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
             child: Divider(
               height: 1,
               thickness: 0.5,
-              color: FeedXpressoTheme.divider,
+              color: fx.divider,
             ),
           ),
       ],
@@ -49,7 +51,7 @@ class DailyhuntSettingsSection extends StatelessWidget {
   }
 }
 
-/// Tappable settings row — compact, no card chrome.
+/// Tappable settings row.
 class XpressoSettingsRow extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -66,18 +68,20 @@ class XpressoSettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: Colors.white10,
-        highlightColor: Colors.white10,
+        borderRadius: BorderRadius.circular(8),
+        splashColor: fx.accent.withValues(alpha: 0.08),
+        highlightColor: fx.accent.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon, size: 20, color: FeedXpressoTheme.iconFg),
+              Icon(icon, size: 20, color: fx.iconFg),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -85,11 +89,11 @@ class XpressoSettingsRow extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                         height: 1.15,
-                        color: FeedXpressoTheme.title,
+                        color: fx.title,
                       ),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
@@ -98,10 +102,10 @@ class XpressoSettingsRow extends StatelessWidget {
                         subtitle!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           height: 1.2,
-                          color: FeedXpressoTheme.summary,
+                          color: fx.summary,
                         ),
                       ),
                     ],
@@ -109,10 +113,10 @@ class XpressoSettingsRow extends StatelessWidget {
                 ),
               ),
               if (onTap != null)
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   size: 18,
-                  color: FeedXpressoTheme.iconFgMuted,
+                  color: fx.iconFgMuted,
                 ),
             ],
           ),
@@ -122,7 +126,7 @@ class XpressoSettingsRow extends StatelessWidget {
   }
 }
 
-/// Compact filled action (sign in).
+/// Primary action button — accent fill in light, elevated in dark.
 class DailyhuntPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -135,28 +139,29 @@ class DailyhuntPrimaryButton extends StatelessWidget {
     this.icon,
   });
 
-  static final ButtonStyle _buttonStyle = FilledButton.styleFrom(
-    backgroundColor: FeedXpressoTheme.iconSurface,
-    foregroundColor: FeedXpressoTheme.title,
-    minimumSize: const Size(0, 40),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-  );
-
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
+    final isDark = FeedXpressoTheme.isDark(context);
+    final style = FilledButton.styleFrom(
+      backgroundColor: isDark ? fx.iconSurface : fx.accent,
+      foregroundColor: isDark ? fx.title : Colors.white,
+      minimumSize: const Size(0, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+    );
     if (icon != null) {
       return FilledButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
         label: Text(label),
-        style: _buttonStyle,
+        style: style,
       );
     }
     return FilledButton(
       onPressed: onPressed,
-      style: _buttonStyle,
+      style: style,
       child: Text(label),
     );
   }

@@ -41,7 +41,7 @@ class AuthTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(OnboardingDesign.radiusCard),
-      borderSide: const BorderSide(color: OnboardingDesign.outline),
+      borderSide: BorderSide(color: OnboardingDesign.outline(context)),
     );
 
     return TextFormField(
@@ -58,14 +58,14 @@ class AuthTextField extends StatelessWidget {
       style: GoogleFonts.notoSans(
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        color: OnboardingDesign.titleColor,
+        color: OnboardingDesign.titleColor(context),
       ),
-      cursorColor: OnboardingDesign.accent,
+      cursorColor: OnboardingDesign.accent(context),
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: GoogleFonts.notoSans(
           fontSize: 14.5,
-          color: OnboardingDesign.subtitleColor,
+          color: OnboardingDesign.subtitleColor(context),
           fontWeight: FontWeight.w500,
         ),
         prefixIcon: prefix,
@@ -78,8 +78,8 @@ class AuthTextField extends StatelessWidget {
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(
-          borderSide: const BorderSide(
-            color: OnboardingDesign.accent,
+          borderSide: BorderSide(
+            color: OnboardingDesign.accent(context),
             width: 1.6,
           ),
         ),

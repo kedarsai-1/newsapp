@@ -64,7 +64,7 @@ class _DailyhuntSplashScreenState extends State<DailyhuntSplashScreen>
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom + 24;
     return Scaffold(
-      backgroundColor: OnboardingDesign.background,
+      backgroundColor: OnboardingDesign.background(context),
       body: SafeArea(
         child: FadeTransition(
           opacity: _fade,
@@ -82,27 +82,27 @@ class _DailyhuntSplashScreenState extends State<DailyhuntSplashScreen>
                           height: 80,
                           decoration: BoxDecoration(
                             color:
-                                OnboardingDesign.accent.withValues(alpha: 0.12),
+                                OnboardingDesign.accent(context).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(22),
                           ),
                           child: Icon(
                             Icons.article_rounded,
                             size: 42,
-                            color: OnboardingDesign.accent,
+                            color: OnboardingDesign.accent(context),
                           ),
                         ),
                         const SizedBox(height: 20),
                         Text(
                           AppConstants.appName,
                           textAlign: TextAlign.center,
-                          style: OnboardingDesign.titleStyle()
+                          style: OnboardingDesign.titleStyle(context)
                               .copyWith(fontSize: 28),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'News in your language',
                           textAlign: TextAlign.center,
-                          style: OnboardingDesign.subtitleStyle(),
+                          style: OnboardingDesign.subtitleStyle(context),
                         ),
                       ],
                     ),
@@ -116,7 +116,7 @@ class _DailyhuntSplashScreenState extends State<DailyhuntSplashScreen>
                   height: 28,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    color: OnboardingDesign.accent.withValues(alpha: 0.65),
+                    color: OnboardingDesign.accent(context).withValues(alpha: 0.65),
                   ),
                 ),
               ),

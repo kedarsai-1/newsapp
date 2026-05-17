@@ -11,7 +11,7 @@ import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/saved/dailyhunt_saved_article_tile.dart';
 import '../../widgets/saved/dailyhunt_saved_list_shimmer.dart';
 
-/// Dailyhunt-style saved list: white cards, thumbnails, remove bookmark, empty states.
+/// Saved articles — theme-aware list matching main feed polish.
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
 
@@ -93,15 +93,16 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final w = MediaQuery.sizeOf(context).width;
     final horizontal = w >= 720 ? 20.0 : 14.0;
     final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
     return Scaffold(
-      backgroundColor: FeedXpressoTheme.background,
+      backgroundColor: fx.background,
       body: RefreshIndicator(
-        color: FeedXpressoTheme.iconFg,
-        backgroundColor: FeedXpressoTheme.background,
+        color: fx.accent,
+        backgroundColor: fx.background,
         edgeOffset: 8,
         onRefresh: _load,
         child: Center(
@@ -113,114 +114,112 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               ),
               slivers: [
                 const XpressoSliverAppBar(title: 'Saved'),
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
-                          child: Text(
-                            'Articles you bookmarked appear here. Tap to read or remove.',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  height: 1.35,
-                                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 4, horizontal, 12),
+                    child: Text(
+                      'Articles you bookmarked appear here. Tap to read or remove.',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        height: 1.35,
+                        color: fx.summary,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_loading)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
+                    sliver: SliverToBoxAdapter(
+                      child: DailyhuntSavedListShimmer(itemCount: 7),
+                    ),
+                  )
+                else if (_bookmarks.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      icon: Icons.bookmark_border_rounded,
+                      title: 'No saved articles yet',
+                      subtitle:
+                          'Save stories from the feed or Shorts with the bookmark button.',
+                    ),
+                  )
+                else ...[
+                  if (_distinctCategories.isNotEmpty) ...[
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const ClampingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              _SavedFilterChip(
+                                label: 'All',
+                                selected: _selectedCategoryId == null,
+                                onTap: () =>
+                                    setState(() => _selectedCategoryId = null),
+                              ),
+                              const SizedBox(width: 8),
+                              ..._distinctCategories.map((cat) {
+                                final selected =
+                                    _selectedCategoryId == cat.id;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _SavedFilterChip(
+                                    label: '${cat.icon} ${cat.name}',
+                                    selected: selected,
+                                    onTap: () => setState(
+                                      () => _selectedCategoryId = cat.id,
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
                           ),
                         ),
                       ),
-                      if (_loading)
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 24),
-                          sliver: const SliverToBoxAdapter(
-                            child: DailyhuntSavedListShimmer(itemCount: 7),
-                          ),
-                        )
-                      else if (_bookmarks.isEmpty)
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: EmptyState(
-                            icon: Icons.bookmark_border_rounded,
-                            title: 'No saved articles yet',
-                            subtitle:
-                                'Save stories from the feed or Shorts with the bookmark button.',
-                            dark: true,
-                          ),
-                        )
-                      else ...[
-                        if (_distinctCategories.isNotEmpty) ...[
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 10),
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                physics: const ClampingScrollPhysics(),
-                                child: Row(
-                                  children: [
-                                    _SavedFilterChip(
-                                      label: 'All',
-                                      selected: _selectedCategoryId == null,
-                                      onTap: () =>
-                                          setState(() => _selectedCategoryId = null),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ..._distinctCategories.map((cat) {
-                                      final selected =
-                                          _selectedCategoryId == cat.id;
-                                      return Padding(
-                                        padding: const EdgeInsets.only(right: 8),
-                                        child: _SavedFilterChip(
-                                          label: '${cat.icon} ${cat.name}',
-                                          selected: selected,
-                                          onTap: () => setState(
-                                            () => _selectedCategoryId = cat.id,
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                        if (_filtered.isEmpty)
-                          const SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: EmptyState(
-                              icon: Icons.filter_alt_off_rounded,
-                              title: 'Nothing in this topic',
-                              subtitle: 'Try “All” or pick another category.',
-                              dark: true,
-                            ),
-                          )
-                        else
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                              horizontal,
-                              0,
-                              horizontal,
-                              bottomInset,
-                            ),
-                            sliver: SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final post = _filtered[index];
-                                  return DailyhuntSavedArticleTile(
-                                      key: ValueKey('saved-${post.id}'),
-                                      post: post,
-                                      onTap: () =>
-                                          context.push('/article/${post.id}'),
-                                      onRemove: () => _remove(post),
-                                    );
-                                },
-                                childCount: _filtered.length,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
+                    ),
+                  ],
+                  if (_filtered.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: EmptyState(
+                        icon: Icons.filter_alt_off_rounded,
+                        title: 'Nothing in this topic',
+                        subtitle: 'Try “All” or pick another category.',
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: EdgeInsets.fromLTRB(
+                        horizontal,
+                        0,
+                        horizontal,
+                        bottomInset,
+                      ),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final post = _filtered[index];
+                            return DailyhuntSavedArticleTile(
+                              key: ValueKey('saved-${post.id}'),
+                              post: post,
+                              onTap: () => context.push('/article/${post.id}'),
+                              onRemove: () => _remove(post),
+                            );
+                          },
+                          childCount: _filtered.length,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
             ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -247,23 +246,27 @@ class _SavedFilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return FilterChip(
       label: Text(
         label,
         style: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 12,
-          color: selected ? FeedXpressoTheme.title : FeedXpressoTheme.summary,
+          color: selected ? fx.accent : fx.chipInactive,
         ),
       ),
       selected: selected,
       onSelected: (_) => onTap(),
       showCheckmark: false,
-      selectedColor: FeedXpressoTheme.iconSurface,
-      backgroundColor: FeedXpressoTheme.surface,
-      side: const BorderSide(color: FeedXpressoTheme.divider, width: 0.5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      selectedColor: fx.chipInactiveBg,
+      backgroundColor: fx.surface,
+      side: BorderSide(
+        color: selected ? fx.accent : fx.chipInactiveBorder,
+        width: selected ? 1.2 : 0.5,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     );
   }
 }

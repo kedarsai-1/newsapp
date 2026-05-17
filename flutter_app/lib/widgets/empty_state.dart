@@ -23,21 +23,23 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (dark) {
+    final useXpresso = dark || FeedXpressoTheme.isDark(context);
+    if (useXpresso) {
+      final fx = FeedXpressoTheme.fx(context);
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 44, color: FeedXpressoTheme.iconFgMuted),
+              Icon(icon, size: 44, color: fx.iconFgMuted),
               const SizedBox(height: 16),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: FeedXpressoTheme.title,
+                  color: fx.title,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -45,9 +47,9 @@ class EmptyState extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   subtitle!,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: FeedXpressoTheme.meta,
+                    color: fx.meta,
                     height: 1.45,
                   ),
                   textAlign: TextAlign.center,
@@ -58,7 +60,7 @@ class EmptyState extends StatelessWidget {
                 TextButton(
                   onPressed: onButtonTap,
                   style: TextButton.styleFrom(
-                    foregroundColor: FeedXpressoTheme.iconFg,
+                    foregroundColor: fx.iconFg,
                   ),
                   child: Text(buttonLabel!),
                 ),

@@ -27,13 +27,14 @@ class CompactListRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final memW = (_thumbSize * dpr).round().clamp(96, 200);
     final url = imageUrl?.trim() ?? '';
     final hasSummary = summary != null && summary!.trim().isNotEmpty;
 
     return ColoredBox(
-      color: FeedXpressoTheme.background,
+      color: fx.background,
       child: InkWell(
         onTap: onTap,
         child: Column(
@@ -54,7 +55,7 @@ class CompactListRow extends StatelessWidget {
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: FeedXpressoTheme.titleStyle.copyWith(fontSize: 13.5),
+                          style: fx.titleStyle.copyWith(fontSize: 13.5),
                         ),
                         if (hasSummary)
                           Padding(
@@ -63,7 +64,7 @@ class CompactListRow extends StatelessWidget {
                               summary!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: FeedXpressoTheme.summaryStyle,
+                              style: fx.summaryStyle,
                             ),
                           ),
                         Padding(
@@ -72,7 +73,7 @@ class CompactListRow extends StatelessWidget {
                             metaLine,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: FeedXpressoTheme.metaStyle,
+                            style: fx.metaStyle,
                           ),
                         ),
                       ],
@@ -82,10 +83,10 @@ class CompactListRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Divider(
+            Divider(
               height: 1,
               thickness: 0.5,
-              color: FeedXpressoTheme.divider,
+              color: fx.divider,
             ),
           ],
         ),
@@ -102,17 +103,18 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(8),
       child: SizedBox(
         width: CompactListRow._thumbSize,
         height: CompactListRow._thumbSize * 0.68,
         child: url.isEmpty
-            ? const ColoredBox(
-                color: FeedXpressoTheme.imagePlaceholder,
+            ? ColoredBox(
+                color: fx.imagePlaceholder,
                 child: Icon(
                   Icons.article_outlined,
-                  color: FeedXpressoTheme.iconFgMuted,
+                  color: fx.iconFgMuted,
                   size: 16,
                 ),
               )
@@ -123,12 +125,12 @@ class _Thumb extends StatelessWidget {
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
                 placeholder: (_, __) =>
-                    const ColoredBox(color: FeedXpressoTheme.imagePlaceholder),
-                errorWidget: (_, __, ___) => const ColoredBox(
-                  color: FeedXpressoTheme.imagePlaceholder,
+                    ColoredBox(color: fx.imagePlaceholder),
+                errorWidget: (_, __, ___) => ColoredBox(
+                  color: fx.imagePlaceholder,
                   child: Icon(
                     Icons.broken_image_outlined,
-                    color: FeedXpressoTheme.iconFgMuted,
+                    color: fx.iconFgMuted,
                     size: 14,
                   ),
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../widgets/dailyhunt/dailyhunt_category_chip.dart';
+import '../../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Topic filter chip — same compact style as feed category tabs.
 class DhCategoryChip extends StatelessWidget {
@@ -22,6 +23,9 @@ class DhCategoryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (showLeadingIcon && leadingIcon != null) {
+      final fx = FeedXpressoTheme.fx(context);
+      final active = fx.accent;
+      final inactive = fx.chipInactive;
       return Material(
         color: Colors.transparent,
         child: InkWell(
@@ -32,7 +36,7 @@ class DhCategoryChip extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: selected ? DailyhuntCategoryChip.activeColor : Colors.transparent,
+                  color: selected ? active : Colors.transparent,
                   width: 2,
                 ),
               ),
@@ -43,7 +47,7 @@ class DhCategoryChip extends StatelessWidget {
                 Icon(
                   leadingIcon,
                   size: 13,
-                  color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColorLight,
+                  color: selected ? active : inactive,
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -51,7 +55,7 @@ class DhCategoryChip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? DailyhuntCategoryChip.activeColor : DailyhuntCategoryChip.inactiveColorLight,
+                    color: selected ? active : inactive,
                   ),
                 ),
               ],
@@ -60,7 +64,6 @@ class DhCategoryChip extends StatelessWidget {
         ),
       );
     }
-
     return DailyhuntCategoryChip(
       label: label,
       selected: selected,

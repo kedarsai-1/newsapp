@@ -6,12 +6,15 @@ import 'feed_xpresso_theme.dart';
 
 export 'feed_xpresso_theme.dart' show FeedXpressoTheme, kFeedRowExtent;
 
-/// Editorial feed row — 16:9 image on top, copy in a separate block below.
+/// Dailyhunt-style feed row — flat on black, image on top, headline, meta + actions.
 class CompactNewsRow extends StatelessWidget {
   final String title;
   final String? summary;
   final String? imageUrl;
   final String metaLine;
+  final String? sourceName;
+  final String? timeLabel;
+  final bool showVerified;
   final VoidCallback? onTap;
   final Widget? trailing;
   final List<CompactFeedAction>? footerActions;
@@ -26,19 +29,23 @@ class CompactNewsRow extends StatelessWidget {
     required this.title,
     this.summary,
     this.imageUrl,
-    required this.metaLine,
+    this.metaLine = '',
+    this.sourceName,
+    this.timeLabel,
+    this.showVerified = true,
     this.onTap,
     this.trailing,
     this.footerActions,
     this.titleMaxLines = FeedXpressoTheme.titleMaxLines,
     this.summaryMaxLines = FeedXpressoTheme.summaryMaxLines,
-    this.showDivider = false,
+    this.showDivider = true,
     this.showSummary = false,
     this.onImageUnavailable,
   });
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final memW = (MediaQuery.sizeOf(context).width * dpr).round().clamp(480, 1400);
     final url = imageUrl?.trim() ?? '';
@@ -47,108 +54,159 @@ class CompactNewsRow extends StatelessWidget {
     final actions = footerActions;
     final hasActions = actions != null && actions.isNotEmpty;
 
-    return Padding(
-      padding: FeedXpressoTheme.cardMargin,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: FeedXpressoTheme.cardBorderRadius,
-          border: Border.all(color: FeedXpressoTheme.cardBorder, width: 0.5),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x18000000),
-              blurRadius: 12,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: FeedXpressoTheme.cardBorderRadius,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: FeedXpressoTheme.cardMargin,
           child: Material(
-            color: FeedXpressoTheme.cardSurface,
+            color: Colors.transparent,
             child: InkWell(
-            onTap: onTap,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _HeroImage(
-                  url: url,
-                  memCacheWidth: memW,
-                  onUnavailable: onImageUnavailable,
-                ),
-                Padding(
-                  padding: FeedXpressoTheme.rowContentPadding,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+              onTap: onTap,
+              borderRadius: FeedXpressoTheme.cardBorderRadius,
+              splashColor: fx.accent.withValues(alpha: 0.1),
+              highlightColor: fx.accent.withValues(alpha: 0.05),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _HeroImage(
+                    fx: fx,
+                    url: url,
+                    memCacheWidth: memW,
+                    onUnavailable: onImageUnavailable,
+                  ),
+                  const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
+                  Text(
+                    title,
+                    maxLines: titleMaxLines,
+                    overflow: TextOverflow.ellipsis,
+                    style: fx.titleStyle,
+                  ),
+                  if (hasSummary) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      summary!.trim(),
+                      maxLines: summaryMaxLines.clamp(1, 2),
+                      overflow: TextOverflow.ellipsis,
+                      style: fx.summaryStyle,
+                    ),
+                  ],
+                  SizedBox(height: hasSummary ? 10 : 9),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        title,
-                        maxLines: titleMaxLines,
-                        overflow: TextOverflow.ellipsis,
-                        style: FeedXpressoTheme.titleStyle,
-                      ),
-                      if (hasSummary) ...[
-                        const SizedBox(height: 5),
-                        Text(
-                          summary!.trim(),
-                          maxLines: summaryMaxLines.clamp(1, 2),
-                          overflow: TextOverflow.ellipsis,
-                          style: FeedXpressoTheme.summaryStyle,
+                      Expanded(
+                        child: _MetaRow(
+                          fx: fx,
+                          metaLine: metaLine,
+                          sourceName: sourceName,
+                          timeLabel: timeLabel,
+                          showVerified: showVerified,
                         ),
-                      ],
-                      SizedBox(height: hasSummary ? 8 : 7),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              metaLine,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: FeedXpressoTheme.metaStyle,
-                            ),
-                          ),
-                          if (hasActions) ...[
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: FeedXpressoTheme.actionRowWidth,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: actions,
-                              ),
-                            ),
-                          ] else if (trailing != null) ...[
-                            const SizedBox(width: 8),
-                            trailing!,
-                          ],
-                        ],
                       ),
+                      if (hasActions)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: actions,
+                        )
+                      else if (trailing != null)
+                        trailing!,
                     ],
                   ),
-                ),
-                if (showDivider)
-                  const Divider(
-                    height: 1,
-                    thickness: 0.5,
-                    color: FeedXpressoTheme.divider,
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-        ),
-      ),
+        if (showDivider)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Divider(height: 1, thickness: 1, color: fx.divider),
+          ),
+      ],
+    );
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  final FeedXpressoPalette fx;
+  final String metaLine;
+  final String? sourceName;
+  final String? timeLabel;
+  final bool showVerified;
+
+  const _MetaRow({
+    required this.fx,
+    required this.metaLine,
+    this.sourceName,
+    this.timeLabel,
+    required this.showVerified,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final src = sourceName?.trim();
+    final time = timeLabel?.trim();
+    if (src != null && src.isNotEmpty) {
+      return Row(
+        children: [
+          Flexible(
+            child: Text(
+              src,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: fx.sourceStyle,
+            ),
+          ),
+          if (showVerified) ...[
+            const SizedBox(width: 3),
+            Icon(
+              Icons.verified,
+              size: 14,
+              color: fx.verifiedBadge,
+            ),
+          ],
+          if (time != null && time.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              child: Text(
+                '·',
+                style: fx.metaStyle.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Flexible(
+              child: Text(
+                time,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: fx.metaStyle,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+    return Text(
+      metaLine,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: fx.metaStyle,
     );
   }
 }
 
 class _HeroImage extends StatefulWidget {
+  final FeedXpressoPalette fx;
   final String url;
   final int memCacheWidth;
   final VoidCallback? onUnavailable;
 
   const _HeroImage({
+    required this.fx,
     required this.url,
     required this.memCacheWidth,
     this.onUnavailable,
@@ -192,78 +250,190 @@ class _HeroImageState extends State<_HeroImage> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final url = widget.url.trim();
     if (url.isEmpty || _failed) {
-      return const SizedBox.shrink();
+      return _imageFrame(
+        fx: widget.fx,
+        child: AspectRatio(
+          aspectRatio: FeedXpressoTheme.imageAspectRatio,
+          child: ColoredBox(color: fx.imagePlaceholder),
+        ),
+      );
     }
 
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: FeedXpressoTheme.imageFit,
-      alignment: FeedXpressoTheme.imageAlignment,
-      memCacheWidth: kIsWeb ? null : widget.memCacheWidth,
-      fadeInDuration: const Duration(milliseconds: 160),
-      fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => const SizedBox.shrink(),
-      errorWidget: (_, __, ___) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _reportUnavailable());
-        return const SizedBox.shrink();
-      },
-      imageBuilder: (context, imageProvider) {
-        return AspectRatio(
+    return _imageFrame(
+      fx: widget.fx,
+      child: CachedNetworkImage(
+        imageUrl: url,
+        fit: FeedXpressoTheme.imageFit,
+        alignment: FeedXpressoTheme.imageAlignment,
+        memCacheWidth: kIsWeb ? null : widget.memCacheWidth,
+        fadeInDuration: const Duration(milliseconds: 160),
+        fadeOutDuration: Duration.zero,
+        placeholder: (_, __) => AspectRatio(
           aspectRatio: FeedXpressoTheme.imageAspectRatio,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image(
-                image: imageProvider,
-                fit: FeedXpressoTheme.imageFit,
-                alignment: FeedXpressoTheme.imageAlignment,
-                width: double.infinity,
-                height: double.infinity,
-              ),
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: [0.55, 1.0],
-                    colors: [Colors.transparent, Color(0x66000000)],
+          child: ColoredBox(color: fx.imagePlaceholder),
+        ),
+        errorWidget: (_, __, ___) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _reportUnavailable());
+          return AspectRatio(
+            aspectRatio: FeedXpressoTheme.imageAspectRatio,
+            child: ColoredBox(color: fx.imagePlaceholder),
+          );
+        },
+        imageBuilder: (context, imageProvider) {
+          return AspectRatio(
+            aspectRatio: FeedXpressoTheme.imageAspectRatio,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image(
+                  image: imageProvider,
+                  fit: FeedXpressoTheme.imageFit,
+                  alignment: FeedXpressoTheme.imageAlignment,
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.55, 1.0],
+                      colors: [
+                        Colors.transparent,
+                        widget.fx.background.computeLuminance() < 0.2
+                            ? const Color(0x40000000)
+                            : const Color(0x26000000),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-/// Secondary action — fixed slot in the meta row.
+Widget _imageFrame({required FeedXpressoPalette fx, required Widget child}) {
+  final isDark = fx.background.computeLuminance() < 0.2;
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: FeedXpressoTheme.imageBorderRadius,
+      border: isDark
+          ? null
+          : Border.all(
+              color: fx.divider.withValues(alpha: 0.9),
+              width: 0.5,
+            ),
+      boxShadow: isDark
+          ? [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ]
+          : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+              BoxShadow(
+                color: fx.accent.withValues(alpha: 0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+    ),
+    child: ClipRRect(
+      borderRadius: FeedXpressoTheme.imageBorderRadius,
+      child: child,
+    ),
+  );
+}
+
+/// Engagement action — icon with optional count (Dailyhunt comment / share style).
 class CompactFeedAction extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
+  final String? count;
 
   const CompactFeedAction({
     super.key,
     required this.icon,
     required this.color,
     this.onTap,
+    this.count,
   });
 
-  static const Color muted = FeedXpressoTheme.actionMuted;
-  static const Color active = FeedXpressoTheme.actionActive;
+  static Color muted(BuildContext context) =>
+      FeedXpressoTheme.fx(context).actionMuted;
+  static Color active(BuildContext context) =>
+      FeedXpressoTheme.fx(context).actionActive;
+  static Color shareAccent(BuildContext context) =>
+      FeedXpressoTheme.fx(context).shareAccent;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-        child: Icon(icon, size: 15, color: color),
+    final fx = FeedXpressoTheme.fx(context);
+    final label = count?.trim();
+    final showCount = label != null && label.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: fx.background.computeLuminance() < 0.2
+                  ? fx.iconSurface.withValues(alpha: 0.85)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: fx.divider.withValues(alpha: 0.85),
+                width: 0.5,
+              ),
+              boxShadow: fx.background.computeLuminance() < 0.2
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 17, color: color),
+                if (showCount) ...[
+                  const SizedBox(width: 5),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -14,6 +14,8 @@ class ThemeProvider extends ChangeNotifier {
     final v = prefs.getString(_key);
     if (v == 'light') {
       _mode = ThemeMode.light;
+    } else if (v == 'system') {
+      _mode = ThemeMode.system;
     } else if (v == 'dark') {
       _mode = ThemeMode.dark;
     } else {

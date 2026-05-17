@@ -37,7 +37,8 @@ class NewsCard extends StatelessWidget {
       title: post.title,
       summary: _snippet(post),
       imageUrl: imageUrl.isEmpty ? null : imageUrl,
-      metaLine: '$source · ${timeago.format(post.displayTime)}',
+      sourceName: source,
+      timeLabel: timeago.format(post.displayTime),
       onTap: onTap ?? () => context.push('/article/${post.id}'),
     );
   }

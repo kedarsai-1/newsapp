@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../providers/news_provider.dart';
 import '../../providers/shorts_provider.dart';
-import '../../theme/app_palette.dart';
 import 'shorts_feed_theme.dart';
 
 /// Language filter for Shorts — synced with feed preference (en / te / hi / all).
@@ -22,10 +21,10 @@ class ShortsLanguageBar extends StatelessWidget {
     final news = context.watch<NewsProvider>();
     final shorts = context.watch<ShortsProvider>();
     final selected = news.shortsLanguageBarCode;
-    final p = context.palette;
+    final st = ShortsFeedTheme.fx(context);
 
     return ColoredBox(
-      color: ShortsFeedTheme.background.withValues(alpha: 0.85),
+      color: st.background.withValues(alpha: 0.85),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 2, 10, 8),
         child: SingleChildScrollView(
@@ -42,17 +41,17 @@ class ShortsLanguageBar extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: active ? Colors.black : Colors.white70,
+                      color: active ? st.chipFgActive : st.chipFg,
                     ),
                   ),
                   selected: active,
                   showCheckmark: false,
                   visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 4),
-                  selectedColor: p.primary,
-                  backgroundColor: const Color(0xFF1A1A1A),
+                  selectedColor: st.accent,
+                  backgroundColor: st.chipBg,
                   side: BorderSide(
-                    color: active ? p.primary : const Color(0xFF333333),
+                    color: active ? st.accent : st.chipBorder,
                   ),
                   onSelected: shorts.refreshing
                       ? null

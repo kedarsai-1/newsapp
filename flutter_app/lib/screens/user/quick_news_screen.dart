@@ -142,7 +142,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
                     radius: 14,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    color: Colors.black.withValues(alpha: 0.24),
+                    color: p.textPrimary.withValues(alpha: 0.08),
                     boxShadow: const [],
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

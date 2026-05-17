@@ -3,7 +3,7 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../feed/compact_news_row.dart';
 
-/// Demo feed row — local interaction state.
+/// Demo feed row — Dailyhunt-style layout.
 class DailyhuntFeedCard extends StatefulWidget {
   final String imageUrl;
   final String headline;
@@ -11,6 +11,8 @@ class DailyhuntFeedCard extends StatefulWidget {
   final String sourceName;
   final DateTime publishedAt;
   final int likeCount;
+  final int commentCount;
+  final int shareCount;
   final bool liked;
   final bool bookmarked;
   final VoidCallback? onTap;
@@ -25,6 +27,8 @@ class DailyhuntFeedCard extends StatefulWidget {
     required this.sourceName,
     required this.publishedAt,
     this.likeCount = 0,
+    this.commentCount = 0,
+    this.shareCount = 0,
     this.liked = false,
     this.bookmarked = false,
     this.onTap,
@@ -53,32 +57,36 @@ class _DailyhuntFeedCardState extends State<DailyhuntFeedCard> {
     return s;
   }
 
+  String? _count(int n) => n > 0 ? '$n' : null;
+
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return CompactNewsRow(
       title: widget.headline,
       summary: _shortSummary,
+      showSummary: false,
       imageUrl: widget.imageUrl,
-      metaLine: '${widget.sourceName} · ${timeago.format(widget.publishedAt)}',
+      sourceName: widget.sourceName,
+      timeLabel: timeago.format(widget.publishedAt),
       onTap: widget.onTap,
       footerActions: [
         CompactFeedAction(
-          icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          color: _liked ? CompactFeedAction.active : CompactFeedAction.muted,
-          onTap: () => setState(() => _liked = !_liked),
+          icon: Icons.chat_bubble_outline_rounded,
+          color: fx.actionMuted,
+          count: _count(widget.commentCount),
+          onTap: widget.onTap,
         ),
         CompactFeedAction(
           icon: Icons.share_outlined,
-          color: CompactFeedAction.muted,
+          color: fx.shareAccent,
+          count: _count(widget.shareCount),
           onTap: widget.onShare,
         ),
         CompactFeedAction(
-          icon: _bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-          color: _bookmarked ? CompactFeedAction.active : CompactFeedAction.muted,
-          onTap: () {
-            setState(() => _bookmarked = !_bookmarked);
-            widget.onBookmark?.call();
-          },
+          icon: Icons.more_vert,
+          color: fx.actionMuted,
+          onTap: widget.onBookmark,
         ),
       ],
     );

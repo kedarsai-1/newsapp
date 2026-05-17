@@ -69,8 +69,35 @@ function politicsScopeMatchClause(scope, langParam) {
   if (ps === 'states' || ps === 'delhi') {
     return { politicsScope: ps };
   }
-  if (ps === 'andhra' || ps === 'telangana') {
-    return { politicsScope: ps };
+  if (ps === 'andhra') {
+    return {
+      $or: [
+        { politicsScope: 'andhra' },
+        {
+          politicsScope: { $in: ['all', null] },
+          $or: [
+            { sourceName: /andhra|amaravati|vijayawada|visakhapatnam|guntur|nellore|kurnool|eenadu|sakshi|tv9\s*telugu|andhra\s*jyothy|123telugu/i },
+            { title: /andhra|amaravati|ఆంధ్ర|విజయవాడ|విశాఖ/i },
+            { body: /andhra|amaravati|ఆంధ్ర/i },
+          ],
+        },
+      ],
+    };
+  }
+  if (ps === 'telangana') {
+    return {
+      $or: [
+        { politicsScope: 'telangana' },
+        {
+          politicsScope: { $in: ['all', null] },
+          $or: [
+            { sourceName: /telangana|hyderabad|warangal|karimnagar|nizamabad|mana\s*telangana|v6\s*velugu|ntv\s*telugu/i },
+            { title: /telangana|hyderabad|తెలంగాణ|హైదరాబాద్/i },
+            { body: /telangana|hyderabad|తెలంగాణ/i },
+          ],
+        },
+      ],
+    };
   }
   return null;
 }

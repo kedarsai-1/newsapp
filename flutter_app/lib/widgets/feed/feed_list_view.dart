@@ -50,12 +50,13 @@ class _FeedListViewState extends State<FeedListView>
     super.build(context);
     final itemCount = widget.posts.length + (widget.loadingMore ? 1 : 0);
 
+    final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: FeedXpressoTheme.background,
+      color: fx.background,
       child: FeedListTuning.clampingScroll(
         child: RefreshIndicator(
-          color: FeedXpressoTheme.iconFg,
-          backgroundColor: FeedXpressoTheme.background,
+          color: fx.iconFg,
+          backgroundColor: fx.background,
           onRefresh: widget.onRefresh,
           child: ListView.builder(
           controller: widget.scrollController,

@@ -39,18 +39,18 @@ class OnboardingInterestsScreen extends StatelessWidget {
             label: Text(item.label),
             selected: selected,
             showCheckmark: false,
-            selectedColor: OnboardingDesign.accent.withValues(alpha: 0.14),
+            selectedColor: OnboardingDesign.accent(context).withValues(alpha: 0.14),
             backgroundColor: const Color(0xFFF9FAFB),
             side: BorderSide(
               color:
-                  selected ? OnboardingDesign.accent : OnboardingDesign.outline,
+                  selected ? OnboardingDesign.accent(context) : OnboardingDesign.outline(context),
               width: selected ? 1.6 : 1,
             ),
-            labelStyle: OnboardingDesign.languageNative().copyWith(
+            labelStyle: OnboardingDesign.languageNative(context).copyWith(
               fontSize: 14,
               color: selected
-                  ? OnboardingDesign.accentDark
-                  : OnboardingDesign.titleColor,
+                  ? OnboardingDesign.accentDark(context)
+                  : OnboardingDesign.titleColor(context),
               fontWeight: FontWeight.w700,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),

@@ -17,13 +17,14 @@ class XpressoSideMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final screenW = MediaQuery.sizeOf(context).width;
     final width = (screenW * _widthFactor).clamp(_minWidth, _maxWidth);
 
     return Drawer(
       width: width,
       elevation: 0,
-      backgroundColor: FeedXpressoTheme.background,
+      backgroundColor: fx.background,
       shape: const RoundedRectangleBorder(),
       child: SafeArea(
         child: Column(
@@ -33,10 +34,10 @@ class XpressoSideMenu extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
               child: Text(
                 AppConstants.appName,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: FeedXpressoTheme.iconFgMuted,
+                  color: fx.iconFgMuted,
                   letterSpacing: 0.2,
                 ),
               ),
@@ -117,29 +118,33 @@ class _XpressoMenuTile extends StatelessWidget {
     required this.onTap,
   });
 
-  static const _labelStyle = TextStyle(
-    fontSize: 20,
-    height: 1.15,
-    fontWeight: FontWeight.w800,
-    letterSpacing: -0.35,
-    color: FeedXpressoTheme.title,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: Colors.white10,
-        highlightColor: Colors.white10,
+        splashColor: fx.accent.withValues(alpha: 0.08),
+        highlightColor: fx.accent.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 13, 20, 13),
           child: Row(
             children: [
-              Icon(icon, size: 24, color: FeedXpressoTheme.iconFg),
+              Icon(icon, size: 24, color: fx.iconFg),
               const SizedBox(width: 18),
-              Expanded(child: Text(label, style: _labelStyle)),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 20,
+                    height: 1.15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.35,
+                    color: fx.title,
+                  ),
+                ),
+              ),
             ],
           ),
         ),

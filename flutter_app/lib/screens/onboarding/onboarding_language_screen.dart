@@ -57,14 +57,14 @@ class OnboardingLanguageScreen extends StatelessWidget {
                           vertical: 18, horizontal: 12),
                       decoration: BoxDecoration(
                         color: selected
-                            ? OnboardingDesign.accent.withValues(alpha: 0.1)
+                            ? OnboardingDesign.accent(context).withValues(alpha: 0.1)
                             : const Color(0xFFF9FAFB),
                         borderRadius:
                             BorderRadius.circular(OnboardingDesign.radiusCard),
                         border: Border.all(
                           color: selected
-                              ? OnboardingDesign.accent
-                              : OnboardingDesign.outline,
+                              ? OnboardingDesign.accent(context)
+                              : OnboardingDesign.outline(context),
                           width: selected ? 1.8 : 1,
                         ),
                       ),
@@ -72,9 +72,9 @@ class OnboardingLanguageScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(l.native,
-                              style: OnboardingDesign.languageNative()),
+                              style: OnboardingDesign.languageNative(context)),
                           const SizedBox(height: 4),
-                          Text(l.english, style: OnboardingDesign.languageEn()),
+                          Text(l.english, style: OnboardingDesign.languageEn(context)),
                         ],
                       ),
                     ),

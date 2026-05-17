@@ -9,7 +9,7 @@ import '../../utils/i18n.dart';
 import '../../widgets/categories/dailyhunt_category_card.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 
-/// Discovery grid — dense Xpresso dark layout.
+/// Discovery grid — theme-aware Xpresso layout.
 class CategoriesScreen extends StatelessWidget {
   const CategoriesScreen({super.key});
 
@@ -25,8 +25,8 @@ class CategoriesScreen extends StatelessWidget {
     _DiscoveryCategory('education', 'cat_education', Icons.school_rounded),
   ];
 
-  static const double _gridSpacing = 6;
-  static const double _screenPadH = 8;
+  static const double _gridSpacing = 8;
+  static const double _screenPadH = 14;
 
   static String? _matchCategoryId(String slug, List<Category> api) {
     final s = slug.toLowerCase().trim();
@@ -95,50 +95,56 @@ class CategoriesScreen extends StatelessWidget {
     return 3;
   }
 
-  /// Wide shallow cells for horizontal icon+title tiles.
   double _childAspectRatio(double width, int columns) {
     final innerW = width - _screenPadH * 2 - _gridSpacing * (columns - 1);
     final cellW = innerW / columns;
-    const cellH = 42.0;
+    const cellH = 46.0;
     return cellW / cellH;
   }
 
   @override
   Widget build(BuildContext context) {
     context.watch<NewsProvider>();
+    final fx = FeedXpressoTheme.fx(context);
 
     final w = MediaQuery.sizeOf(context).width;
     final columns = _crossAxisCount(w);
     final aspect = _childAspectRatio(w, columns);
 
     return Scaffold(
-      backgroundColor: FeedXpressoTheme.background,
+      backgroundColor: fx.background,
       body: CustomScrollView(
         physics: const ClampingScrollPhysics(),
         slivers: [
           SliverAppBar(
             pinned: true,
             toolbarHeight: 46,
-            backgroundColor: FeedXpressoTheme.background,
+            backgroundColor: fx.background,
             surfaceTintColor: Colors.transparent,
             elevation: 0,
+            foregroundColor: fx.title,
+            iconTheme: IconThemeData(color: fx.iconFg),
             title: Text(
               I18n.t(context, 'feed_categories'),
-              style: FeedXpressoTheme.screenTitleStyle.copyWith(fontSize: 18),
+              style: fx.screenTitleStyle.copyWith(fontSize: 18),
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Divider(height: 1, thickness: 1, color: fx.divider),
             ),
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(_screenPadH, 0, _screenPadH, 6),
+              padding: const EdgeInsets.fromLTRB(_screenPadH, 8, _screenPadH, 10),
               child: Text(
                 I18n.t(context, 'categories_subtitle'),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  height: 1.2,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.3,
                   fontWeight: FontWeight.w500,
-                  color: FeedXpressoTheme.summary,
+                  color: fx.summary,
                 ),
               ),
             ),

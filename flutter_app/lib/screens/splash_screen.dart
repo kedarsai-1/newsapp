@@ -65,10 +65,10 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.auto_awesome_rounded,
                     size: 42,
-                    color: Colors.black,
+                    color: p.scaffoldBackground,
                   ),
                 ),
               ),

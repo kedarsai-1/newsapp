@@ -18,34 +18,35 @@ class ShortsFeedProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final st = ShortsFeedTheme.fx(context);
     final t = total <= 0 ? 0.0 : (index + 1).clamp(1, total) / total;
     return ClipRRect(
       borderRadius: BorderRadius.circular(3),
       child: LinearProgressIndicator(
         value: t,
         minHeight: 3,
-        backgroundColor: Colors.white.withValues(alpha: 0.15),
-        color: p.primary,
+        backgroundColor: st.onVideo.withValues(alpha: 0.15),
+        color: st.accent,
       ),
     );
   }
 }
 
-/// Shorts header — minimal Dailyhunt-style chrome.
+/// Shorts header — theme-aware chrome over video.
 class DailyhuntShortsTopBar extends StatelessWidget {
   const DailyhuntShortsTopBar({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final st = ShortsFeedTheme.fx(context);
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            ShortsFeedTheme.background.withValues(alpha: 0.95),
-            ShortsFeedTheme.background.withValues(alpha: 0.72),
+            st.background.withValues(alpha: 0.95),
+            st.background.withValues(alpha: 0.72),
             Colors.transparent,
           ],
         ),
@@ -60,6 +61,7 @@ class DailyhuntShortsTopBar extends StatelessWidget {
                 icon: Icons.menu_rounded,
                 tooltip: 'Menu',
                 onTap: () => XpressoSideMenu.open(context),
+                st: st,
               ),
               Expanded(
                 child: Column(
@@ -68,7 +70,7 @@ class DailyhuntShortsTopBar extends StatelessWidget {
                     Text(
                       'Shorts',
                       style: GoogleFonts.notoSans(
-                        color: Colors.white.withValues(alpha: 0.95),
+                        color: st.chromeFg,
                         fontWeight: FontWeight.w800,
                         fontSize: 17,
                         letterSpacing: -0.3,
@@ -79,7 +81,7 @@ class DailyhuntShortsTopBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.notoSans(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: st.chromeFgMuted,
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -90,6 +92,7 @@ class DailyhuntShortsTopBar extends StatelessWidget {
               _TopIconButton(
                 icon: Icons.search_rounded,
                 tooltip: 'Search',
+                st: st,
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -113,17 +116,19 @@ class _TopIconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
+  final ShortsFeedPalette st;
 
   const _TopIconButton({
     required this.icon,
     required this.onTap,
+    required this.st,
     this.tooltip,
   });
 
   @override
   Widget build(BuildContext context) {
     final child = Material(
-      color: ShortsFeedTheme.surfaceMuted,
+      color: st.surfaceMuted,
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
@@ -131,7 +136,7 @@ class _TopIconButton extends StatelessWidget {
         child: SizedBox(
           width: 40,
           height: 40,
-          child: Icon(icon, color: Colors.white, size: 22),
+          child: Icon(icon, color: st.iconOnChrome, size: 22),
         ),
       ),
     );

@@ -140,32 +140,32 @@ class AuthOtpInputState extends State<AuthOtpInput> {
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   maxLength: 1,
-                  cursorColor: OnboardingDesign.accent,
+                  cursorColor: OnboardingDesign.accent(context),
                   style: GoogleFonts.notoSans(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: OnboardingDesign.titleColor,
+                    color: OnboardingDesign.titleColor(context),
                   ),
                   decoration: InputDecoration(
                     counterText: '',
                     filled: true,
                     fillColor: filled
-                        ? OnboardingDesign.accent.withValues(alpha: 0.06)
+                        ? OnboardingDesign.accent(context).withValues(alpha: 0.06)
                         : const Color(0xFFF9FAFB),
                     contentPadding: EdgeInsets.zero,
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(
                         color: filled
-                            ? OnboardingDesign.accent
-                            : OnboardingDesign.outline,
+                            ? OnboardingDesign.accent(context)
+                            : OnboardingDesign.outline(context),
                         width: filled ? 1.4 : 1,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: OnboardingDesign.accent,
+                      borderSide: BorderSide(
+                        color: OnboardingDesign.accent(context),
                         width: 1.6,
                       ),
                     ),

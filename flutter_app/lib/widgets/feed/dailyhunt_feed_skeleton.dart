@@ -18,6 +18,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final bottom = FeedXpressoTheme.feedBottomInset(context);
     final listPadding = EdgeInsets.only(
       top: 6,
@@ -26,7 +27,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
 
     if (!showChrome) {
       return ColoredBox(
-        color: FeedXpressoTheme.background,
+        color: fx.background,
         child: NewsShimmerLoader(
           count: rowCount,
           padding: listPadding,
@@ -35,12 +36,12 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
     }
 
     return ColoredBox(
-      color: FeedXpressoTheme.background,
+      color: fx.background,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _skeletonAppBar(),
-          _skeletonChipStrip(),
+          _skeletonAppBar(context),
+          _skeletonChipStrip(context),
           Expanded(
             child: NewsShimmerLoader(
               count: rowCount,
@@ -52,9 +53,10 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
     );
   }
 
-  Widget _skeletonAppBar() {
+  Widget _skeletonAppBar(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: FeedXpressoTheme.background,
+      color: fx.background,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
@@ -63,13 +65,13 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Row(
               children: [
-                NewsShimmerLoader.greyBox(width: 32, height: 32, radius: 16),
+                NewsShimmerLoader.greyBox(context, width: 32, height: 32, radius: 16),
                 Expanded(
                   child: Center(
-                    child: NewsShimmerLoader.greyBox(width: 100, height: 14, radius: 3),
+                    child: NewsShimmerLoader.greyBox(context, width: 100, height: 14, radius: 3),
                   ),
                 ),
-                NewsShimmerLoader.greyBox(width: 32, height: 32, radius: 16),
+                NewsShimmerLoader.greyBox(context, width: 32, height: 32, radius: 16),
               ],
             ),
           ),
@@ -78,9 +80,10 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
     );
   }
 
-  Widget _skeletonChipStrip() {
+  Widget _skeletonChipStrip(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: FeedXpressoTheme.background,
+      color: fx.background,
       child: SizedBox(
         height: 32,
         child: ListView.separated(
@@ -92,7 +95,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
           itemBuilder: (_, i) {
             final w = 44.0 + (i % 3) * 14.0;
             return Center(
-              child: NewsShimmerLoader.greyBox(width: w, height: 12, radius: 2),
+              child: NewsShimmerLoader.greyBox(context, width: w, height: 12, radius: 2),
             );
           },
         ),

@@ -14,28 +14,40 @@ export 'theme/app_components.dart';
 export 'design_system/dailyhunt/dailyhunt.dart';
 
 class AppConstants {
+  /// Default local API port — macOS Monterey+ reserves 5000 for AirPlay Receiver.
+  static const int defaultApiPort = 5001;
+
   /// Base API URL including `/api` suffix, e.g. `https://host.com/api` or `http://127.0.0.1:5001/api`.
   static String get baseUrl {
     final v = dotenv.env['API_BASE_URL']?.trim();
     if (v != null && v.isNotEmpty) return v;
-    if (kIsWeb) return 'http://127.0.0.1:5000/api';
+    final port = int.tryParse(dotenv.env['API_PORT'] ?? '') ?? defaultApiPort;
+    final host = dotenv.env['API_HOST']?.trim().isNotEmpty == true
+        ? dotenv.env['API_HOST']!.trim()
+        : '127.0.0.1';
+    final base = 'http://$host:$port/api';
+    if (kIsWeb) return base;
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:5000/api';
+        return 'http://10.0.2.2:$port/api';
       default:
-        return 'http://127.0.0.1:5000/api';
+        return base;
     }
   }
 
   static String get socketUrl {
     final v = dotenv.env['SOCKET_URL']?.trim();
     if (v != null && v.isNotEmpty) return v;
-    if (kIsWeb) return 'http://127.0.0.1:5000';
+    final port = int.tryParse(dotenv.env['API_PORT'] ?? '') ?? defaultApiPort;
+    final host = dotenv.env['API_HOST']?.trim().isNotEmpty == true
+        ? dotenv.env['API_HOST']!.trim()
+        : '127.0.0.1';
+    if (kIsWeb) return 'http://$host:$port';
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:5000';
+        return 'http://10.0.2.2:$port';
       default:
-        return 'http://127.0.0.1:5000';
+        return 'http://$host:$port';
     }
   }
 

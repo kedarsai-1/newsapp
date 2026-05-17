@@ -17,15 +17,32 @@ class XpressoBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: FeedXpressoTheme.navBackground,
+    final fx = FeedXpressoTheme.fx(context);
+    final isDark = fx.background.computeLuminance() < 0.2;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: fx.navBackground,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+            blurRadius: isDark ? 12 : 16,
+            offset: const Offset(0, -4),
+          ),
+          if (!isDark)
+            BoxShadow(
+              color: fx.accent.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+        ],
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Divider(
+          Divider(
             height: 1,
             thickness: 0.5,
-            color: FeedXpressoTheme.divider,
+            color: fx.divider,
           ),
           SafeArea(
             top: false,
@@ -36,6 +53,7 @@ class XpressoBottomNavBar extends StatelessWidget {
                   for (var i = 0; i < destinations.length; i++)
                     Expanded(
                       child: _XpressoNavItem(
+                        fx: fx,
                         destination: destinations[i],
                         selected: i == selectedIndex,
                         onTap: () => onSelected(i),
@@ -64,11 +82,13 @@ class XpressoNavDestination {
 }
 
 class _XpressoNavItem extends StatelessWidget {
+  final FeedXpressoPalette fx;
   final XpressoNavDestination destination;
   final bool selected;
   final VoidCallback onTap;
 
   const _XpressoNavItem({
+    required this.fx,
     required this.destination,
     required this.selected,
     required this.onTap,
@@ -76,74 +96,55 @@ class _XpressoNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = selected
-        ? FeedXpressoTheme.navActiveIcon
-        : FeedXpressoTheme.navInactiveIcon;
-    final labelColor = selected
-        ? FeedXpressoTheme.navActiveLabel
-        : FeedXpressoTheme.navInactiveLabel;
+    final iconColor =
+        selected ? fx.navActiveIcon : fx.navInactiveIcon;
+    final labelColor =
+        selected ? fx.navActiveLabel : fx.navInactiveLabel;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: Colors.white10,
-        highlightColor: Colors.white10,
-        child: Stack(
-          alignment: Alignment.topCenter,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (selected)
-              const Positioned(
-                top: 0,
-                child: _NavActiveIndicator(),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    selected ? destination.selectedIcon : destination.icon,
-                    size: FeedXpressoTheme.navIconSize,
-                    color: iconColor,
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: FeedXpressoTheme.navLabelSize,
-                      height: 1.0,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      color: labelColor,
-                      letterSpacing: 0.05,
+              Container(
+                width: FeedXpressoTheme.navIndicatorWidth,
+                height: FeedXpressoTheme.navIndicatorHeight,
+                margin: const EdgeInsets.only(bottom: 3),
+                decoration: BoxDecoration(
+                  color: fx.navActiveIndicator,
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: fx.accent.withValues(alpha: 0.35),
+                      blurRadius: 6,
                     ),
-                  ),
-                ],
+                  ],
+                ),
+              )
+            else
+              const SizedBox(height: 5),
+            Icon(
+              selected ? destination.selectedIcon : destination.icon,
+              size: FeedXpressoTheme.navIconSize,
+              color: iconColor,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              destination.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: FeedXpressoTheme.navLabelSize,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: labelColor,
+                height: 1,
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Thin top mark for the active tab — not a Material pill.
-class _NavActiveIndicator extends StatelessWidget {
-  const _NavActiveIndicator();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: FeedXpressoTheme.navIndicatorWidth,
-      height: FeedXpressoTheme.navIndicatorHeight,
-      decoration: BoxDecoration(
-        color: FeedXpressoTheme.navActiveIndicator,
-        borderRadius: BorderRadius.circular(1),
       ),
     );
   }

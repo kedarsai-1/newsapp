@@ -2,15 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../widgets/feed/feed_xpresso_theme.dart';
 
-/// Dailyhunt / Xpresso theme entry points (legacy imports).
+/// Dailyhunt / Xpresso theme helpers (legacy imports).
 class DailyhuntTheme {
   DailyhuntTheme._();
 
-  static const Color accentGreen = FeedXpressoTheme.iconFg;
-  static const Color accentGreenDark = FeedXpressoTheme.iconFgMuted;
+  static Color accent(BuildContext context) =>
+      FeedXpressoTheme.fx(context).accent;
 
-  static ColorScheme colorScheme() => FeedXpressoTheme.theme().colorScheme;
+  static Color accentGreen(BuildContext context) =>
+      FeedXpressoTheme.fx(context).accent;
 
-  /// Xpresso dark overlay for embedded screens.
-  static ThemeData overlay(BuildContext context) => FeedXpressoTheme.theme();
+  static Color accentGreenDark(BuildContext context) =>
+      FeedXpressoTheme.fx(context).accent;
+
+  static ColorScheme colorScheme(BuildContext context) =>
+      Theme.of(context).colorScheme;
+
+  static ThemeData overlay(BuildContext context) => Theme.of(context);
 }

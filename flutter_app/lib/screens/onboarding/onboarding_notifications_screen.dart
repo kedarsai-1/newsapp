@@ -39,7 +39,7 @@ class OnboardingNotificationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: OnboardingDesign.background,
+      backgroundColor: OnboardingDesign.background(context),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -47,18 +47,18 @@ class OnboardingNotificationsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 8),
-              Text('Stay updated', style: OnboardingDesign.titleStyle()),
+              Text('Stay updated', style: OnboardingDesign.titleStyle(context)),
               const SizedBox(height: 10),
               Text(
                 'Enable notifications for breaking news',
-                style: OnboardingDesign.subtitleStyle(),
+                style: OnboardingDesign.subtitleStyle(context),
               ),
               const Spacer(),
               Center(
                 child: Icon(
                   Icons.notifications_active_outlined,
                   size: 96,
-                  color: OnboardingDesign.accent.withValues(alpha: 0.85),
+                  color: OnboardingDesign.accent(context).withValues(alpha: 0.85),
                 ),
               ),
               const Spacer(),

@@ -127,12 +127,12 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final items = _itemsForCategory(_categoryIndex);
     return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 DailyhuntHomeAppBar(
-                  dark: true,
                   onProfileTap: () => XpressoSideMenu.open(context),
                   onNotificationTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -145,23 +145,22 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
                     );
                   },
                 ),
-                const Divider(
+                Divider(
                   height: 1,
                   thickness: 0.5,
-                  color: FeedXpressoTheme.divider,
+                  color: fx.divider,
                 ),
                 DailyhuntCategoryTabBar(
                   categories: DailyhuntHomeScreen.categories,
                   selectedIndex: _categoryIndex,
-                  dark: true,
                   onSelected: _onCategoryChanged,
                 ),
                 Expanded(
                   child: ColoredBox(
-                    color: FeedXpressoTheme.background,
+                    color: fx.background,
                     child: RefreshIndicator(
-                    color: FeedXpressoTheme.iconFg,
-                    backgroundColor: FeedXpressoTheme.background,
+                    color: fx.accent,
+                    backgroundColor: fx.background,
                     edgeOffset: 4,
                     onRefresh: _onRefresh,
                     child: _loading

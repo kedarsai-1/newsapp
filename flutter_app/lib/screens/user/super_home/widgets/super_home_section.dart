@@ -27,7 +27,7 @@ class SuperHomeSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final accent = accentColor ?? DailyhuntTheme.accentGreen;
+    final accent = accentColor ?? DailyhuntTheme.accentGreen(context);
     return Padding(
       padding: padding,
       child: Row(
@@ -164,7 +164,7 @@ class SuperHomeMoreButton extends StatelessWidget {
           icon: Icon(icon, size: 16),
           label: Text(label),
           style: TextButton.styleFrom(
-            foregroundColor: DailyhuntTheme.accentGreen,
+            foregroundColor: DailyhuntTheme.accentGreen(context),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -209,7 +209,7 @@ class SuperHomeNewsCard extends StatelessWidget {
     return SizedBox(
       width: width,
       child: Material(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -236,7 +236,7 @@ class SuperHomeNewsCard extends StatelessWidget {
                         left: 8,
                         child: _BadgePill(
                           label: badge!,
-                          color: badgeColor ?? DailyhuntTheme.accentGreen,
+                          color: badgeColor ?? DailyhuntTheme.accentGreen(context),
                         ),
                       ),
                   ],
@@ -330,7 +330,7 @@ class SuperHomeNewsStrip extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
-                    color: DailyhuntTheme.accentGreen.withValues(alpha: 0.85),
+                    color: DailyhuntTheme.accentGreen(context).withValues(alpha: 0.85),
                     letterSpacing: -0.6,
                   ),
                 ),
@@ -391,6 +391,7 @@ class _Thumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final url = imageUrl?.trim();
     if (url == null || url.isEmpty) {
       return _ThumbFallback();
@@ -404,14 +405,14 @@ class _Thumb extends StatelessWidget {
       loadingBuilder: (context, child, progress) {
         if (progress == null) return child;
         return Container(
-          color: const Color(0xFFF1F1F1),
+          color: cs.surfaceContainerHighest,
           alignment: Alignment.center,
           child: SizedBox(
             width: 22,
             height: 22,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: DailyhuntTheme.accentGreen.withValues(alpha: 0.6),
+              color: DailyhuntTheme.accentGreen(context).withValues(alpha: 0.6),
             ),
           ),
         );
@@ -423,13 +424,14 @@ class _Thumb extends StatelessWidget {
 class _ThumbFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
-      color: const Color(0xFFF1F1F1),
+      color: cs.surfaceContainerHighest,
       alignment: Alignment.center,
       child: Icon(
         Icons.image_outlined,
         size: 26,
-        color: Colors.black.withValues(alpha: 0.25),
+        color: cs.onSurface.withValues(alpha: 0.25),
       ),
     );
   }

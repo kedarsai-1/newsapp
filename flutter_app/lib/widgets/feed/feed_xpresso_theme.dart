@@ -1,40 +1,57 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_palette.dart';
+import 'feed_xpresso_palette.dart';
 
-/// Dailyhunt Xpresso design tokens + global Material theme.
+export 'feed_xpresso_palette.dart';
+
+/// Dailyhunt Xpresso design tokens + global Material theme (light & dark).
 abstract final class FeedXpressoTheme {
-  static const Color background = Color(0xFF000000);
-  static const Color chrome = Color(0xFF000000);
-  static const Color surface = Color(0xFF0A0A0A);
-  static const Color surfaceElevated = Color(0xFF141414);
-  static const Color sheet = Color(0xFF0D0D0D);
-  static const Color divider = Color(0xFF1E1E1E);
-  static const Color imagePlaceholder = Color(0xFF0A0A0A);
-  static const Color iconSurface = Color(0xFF1A1A1A);
-  static const Color iconFg = Color(0xFF8A8A8A);
-  static const Color iconFgMuted = Color(0xFF5A5A5A);
+  static const FeedXpressoPalette _dark = FeedXpressoPalette.dark;
 
-  static const Color title = Color(0xFFFFFFFF);
-  static const Color summary = Color(0xFF6B6B6B);
-  static const Color meta = Color(0xFF505050);
+  /// Resolved palette for the current [Theme] — prefer over static getters.
+  static FeedXpressoPalette fx(BuildContext context) {
+    return Theme.of(context).extension<FeedXpressoPalette>() ??
+        (Theme.of(context).brightness == Brightness.dark
+            ? FeedXpressoPalette.dark
+            : FeedXpressoPalette.light);
+  }
 
-  static const Color cardSurface = Color(0xFF0C0C0C);
-  static const Color actionMuted = Color(0xFF5C5C5C);
-  static const Color actionActive = Color(0xFF9E9E9E);
+  static bool isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
 
-  static const Color chipInactive = Color(0xFF5C5C5C);
-  static const Color chipActive = Color(0xFFFFFFFF);
-
-  static const Color scopePillIdle = Color(0xFF121212);
-  static const Color scopePillActive = Color(0xFFF2F2F2);
-  static const Color scopePillBorderIdle = Color(0xFF2A2A2A);
-  static const Color scopePillBorderActive = Color(0xFFF2F2F2);
-  static const Color scopePillTextIdle = Color(0xFF9A9A9A);
-  static const Color scopePillTextActive = Color(0xFF0A0A0A);
-
-  static const Color shimmerBase = Color(0xFF141414);
-  static const Color shimmerHighlight = Color(0xFF1E1E1E);
+  static Color get background => _dark.background;
+  static Color get chrome => _dark.chrome;
+  static Color get surface => _dark.surface;
+  static Color get surfaceElevated => _dark.surfaceElevated;
+  static Color get sheet => _dark.sheet;
+  static Color get divider => _dark.divider;
+  static Color get imagePlaceholder => _dark.imagePlaceholder;
+  static Color get iconSurface => _dark.iconSurface;
+  static Color get iconFg => _dark.iconFg;
+  static Color get iconFgMuted => _dark.iconFgMuted;
+  static Color get title => _dark.title;
+  static Color get summary => _dark.summary;
+  static Color get meta => _dark.meta;
+  static Color get cardSurface => _dark.cardSurface;
+  static Color get actionMuted => _dark.actionMuted;
+  static Color get actionActive => _dark.actionActive;
+  static Color get chipInactive => _dark.chipInactive;
+  static Color get chipActive => _dark.chipActive;
+  static Color get chipInactiveBg => _dark.chipInactiveBg;
+  static Color get chipInactiveBorder => _dark.chipInactiveBorder;
+  static Color get scopePillIdle => _dark.scopePillIdle;
+  static Color get scopePillActive => _dark.scopePillActive;
+  static Color get scopePillBorderIdle => _dark.scopePillBorderIdle;
+  static Color get scopePillBorderActive => _dark.scopePillBorderActive;
+  static Color get scopePillTextIdle => _dark.scopePillTextIdle;
+  static Color get scopePillTextActive => _dark.scopePillTextActive;
+  static Color get shimmerBase => _dark.shimmerBase;
+  static Color get shimmerHighlight => _dark.shimmerHighlight;
+  static Color get verifiedBadge => _dark.verifiedBadge;
+  static Color get shareAccent => _dark.shareAccent;
+  static Color get accent => _dark.accent;
+  static Color get sourceLabel => _dark.sourceLabel;
 
   /// Cinematic landscape frame — 16:9 (width ÷ height).
   static const double imageAspectRatio = 16 / 9;
@@ -49,236 +66,237 @@ abstract final class FeedXpressoTheme {
   static const int titleMaxLines = 3;
   static const int summaryMaxLines = 1;
 
-  static const double cardRadius = 12;
+  static const double cardRadius = 10;
   static const BorderRadius cardBorderRadius = BorderRadius.all(Radius.circular(cardRadius));
+  static const BorderRadius imageBorderRadius = BorderRadius.all(Radius.circular(cardRadius));
   static const Color cardBorder = Color(0xFF1C1C1C);
 
-  /// Outer gutter + vertical rhythm between cards.
-  static const EdgeInsets cardMargin = EdgeInsets.fromLTRB(12, 0, 12, 14);
+  /// Horizontal gutter; divider separates cards.
+  static const EdgeInsets cardMargin = EdgeInsets.fromLTRB(14, 12, 14, 12);
+
+  static const double imageToTitleGap = 12;
 
   /// Copy block below the image.
-  static const EdgeInsets rowContentPadding = EdgeInsets.fromLTRB(14, 12, 14, 13);
+  static const EdgeInsets rowContentPadding = EdgeInsets.fromLTRB(12, 10, 12, 10);
 
   static const EdgeInsets overlayContentPadding = rowContentPadding;
 
   /// Reserved width for like / share / bookmark so meta never overlaps.
   static const double actionRowWidth = 52;
 
-  static const TextStyle titleStyle = TextStyle(
-    fontWeight: FontWeight.w800,
-    fontSize: 17,
-    height: 1.32,
-    letterSpacing: -0.35,
-    color: title,
-  );
+  static TextStyle get titleStyle => _dark.titleStyle;
+  static TextStyle get sourceStyle => _dark.sourceStyle;
+  static TextStyle get summaryStyle => _dark.summaryStyle;
+  static TextStyle get metaStyle => _dark.metaStyle;
+  static TextStyle get chipStyle => _dark.chipStyle;
+  static TextStyle get screenTitleStyle => _dark.screenTitleStyle;
 
-  static const TextStyle summaryStyle = TextStyle(
-    fontSize: 12,
-    height: 1.3,
-    fontWeight: FontWeight.w400,
-    color: summary,
-  );
-
-  static const TextStyle metaStyle = TextStyle(
-    fontSize: 11,
-    height: 1.2,
-    fontWeight: FontWeight.w500,
-    color: meta,
-    letterSpacing: 0.02,
-  );
-
-  static const TextStyle chipStyle = TextStyle(
-    fontSize: 11.5,
-    height: 1.05,
-    letterSpacing: -0.05,
-  );
-
-  static const TextStyle screenTitleStyle = TextStyle(
-    fontWeight: FontWeight.w900,
-    fontSize: 20,
-    letterSpacing: -0.5,
-    color: title,
-  );
-
-  // Bottom navigation — matte bar, no pill indicator.
-  static const Color navBackground = Color(0xFF0C0C0C);
-  static const Color navActiveIcon = Color(0xFFB8B8B8);
-  static const Color navActiveLabel = Color(0xFF9A9A9A);
-  static const Color navInactiveIcon = Color(0xFF424242);
-  static const Color navInactiveLabel = Color(0xFF383838);
-  static const Color navActiveIndicator = Color(0xFF8A8A8A);
-  static const double navBarHeight = 42;
-  static const double navIconSize = 18;
-  static const double navLabelSize = 8;
-  static const double navIndicatorWidth = 18;
-  static const double navIndicatorHeight = 2;
+  static Color get navBackground => _dark.navBackground;
+  static Color get navActiveIcon => _dark.navActiveIcon;
+  static Color get navActiveLabel => _dark.navActiveLabel;
+  static Color get navInactiveIcon => _dark.navInactiveIcon;
+  static Color get navInactiveLabel => _dark.navInactiveLabel;
+  static Color get navActiveIndicator => _dark.navActiveIndicator;
+  static const double navBarHeight = 46;
+  static const double navIconSize = 20;
+  static const double navLabelSize = 9;
+  static const double navIndicatorWidth = 22;
+  static const double navIndicatorHeight = 2.5;
 
   static double feedBottomInset(BuildContext context) =>
       MediaQuery.paddingOf(context).bottom + navBarHeight;
 
-  static ThemeData theme() {
-    const scheme = ColorScheme.dark(
-      brightness: Brightness.dark,
-      primary: iconFg,
-      onPrimary: title,
-      secondary: iconFgMuted,
-      onSecondary: title,
-      surface: background,
-      onSurface: title,
-      onSurfaceVariant: summary,
-      surfaceContainerHighest: surfaceElevated,
-      surfaceContainerHigh: surface,
-      surfaceContainer: surface,
-      outline: divider,
-      outlineVariant: divider,
-      error: Color(0xFF9E9E9E),
-      onError: title,
-    );
+  static ThemeData theme() => darkTheme();
+
+  static ThemeData darkTheme() =>
+      buildTheme(palette: FeedXpressoPalette.dark, appPalette: AppPalette.xpresso);
+
+  static ThemeData lightTheme() =>
+      buildTheme(palette: FeedXpressoPalette.light, appPalette: AppPalette.light);
+
+  static ThemeData buildTheme({
+    required FeedXpressoPalette palette,
+    required AppPalette appPalette,
+  }) {
+    final isLight = palette == FeedXpressoPalette.light;
+    final scheme = isLight
+        ? ColorScheme.light(
+            brightness: Brightness.light,
+            primary: palette.chipActive,
+            onPrimary: Colors.white,
+            secondary: palette.iconFgMuted,
+            onSecondary: palette.title,
+            surface: palette.background,
+            onSurface: palette.title,
+            onSurfaceVariant: palette.summary,
+            surfaceContainerHighest: palette.surfaceElevated,
+            outline: palette.divider,
+            outlineVariant: palette.divider,
+            error: const Color(0xFFDC2626),
+            onError: Colors.white,
+          )
+        : ColorScheme.dark(
+            brightness: Brightness.dark,
+            primary: palette.iconFg,
+            onPrimary: palette.title,
+            secondary: palette.iconFgMuted,
+            onSecondary: palette.title,
+            surface: palette.background,
+            onSurface: palette.title,
+            onSurfaceVariant: palette.summary,
+            surfaceContainerHighest: palette.surfaceElevated,
+            surfaceContainerHigh: palette.surface,
+            surfaceContainer: palette.surface,
+            outline: palette.divider,
+            outlineVariant: palette.divider,
+            error: const Color(0xFF9E9E9E),
+            onError: palette.title,
+          );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
-      extensions: const <ThemeExtension<dynamic>>[AppPalette.xpresso],
-      scaffoldBackgroundColor: background,
-      canvasColor: background,
-      cardColor: surfaceElevated,
-      dividerColor: divider,
-      disabledColor: iconFgMuted,
-      hintColor: meta,
+      brightness: isLight ? Brightness.light : Brightness.dark,
+      extensions: <ThemeExtension<dynamic>>[palette, appPalette],
+      scaffoldBackgroundColor: palette.background,
+      canvasColor: palette.background,
+      cardColor: palette.surfaceElevated,
+      dividerColor: palette.divider,
+      disabledColor: palette.iconFgMuted,
+      hintColor: palette.meta,
       colorScheme: scheme,
-      iconTheme: const IconThemeData(color: iconFg),
-      primaryIconTheme: const IconThemeData(color: iconFg),
-      textTheme: const TextTheme(
-        displaySmall: screenTitleStyle,
+      iconTheme: IconThemeData(color: palette.iconFg),
+      primaryIconTheme: IconThemeData(color: palette.iconFg),
+      textTheme: TextTheme(
+        displaySmall: palette.screenTitleStyle,
         titleLarge: TextStyle(
           fontWeight: FontWeight.w800,
           fontSize: 17,
-          color: title,
+          color: palette.title,
         ),
-        titleMedium: titleStyle,
+        titleMedium: palette.titleStyle,
         titleSmall: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 14,
-          color: title,
+          color: palette.title,
         ),
-        bodyLarge: TextStyle(color: title, fontSize: 15),
-        bodyMedium: TextStyle(color: summary, fontSize: 14),
-        bodySmall: TextStyle(color: meta, fontSize: 12),
+        bodyLarge: TextStyle(color: palette.title, fontSize: 15),
+        bodyMedium: TextStyle(color: palette.summary, fontSize: 14),
+        bodySmall: TextStyle(color: palette.meta, fontSize: 12),
         labelMedium: TextStyle(
-          color: meta,
+          color: palette.meta,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
         ),
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: background,
-        foregroundColor: title,
+      appBarTheme: AppBarTheme(
+        backgroundColor: palette.background,
+        foregroundColor: palette.title,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: screenTitleStyle,
-        iconTheme: IconThemeData(color: iconFg),
+        titleTextStyle: palette.screenTitleStyle,
+        iconTheme: IconThemeData(color: palette.iconFg),
       ),
       cardTheme: CardThemeData(
-        color: surfaceElevated,
+        color: palette.surfaceElevated,
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: divider, width: 0.5),
+          side: BorderSide(color: palette.divider, width: 0.5),
         ),
       ),
-      dividerTheme: const DividerThemeData(
-        color: divider,
+      dividerTheme: DividerThemeData(
+        color: palette.divider,
         thickness: 0.5,
         space: 1,
       ),
-      listTileTheme: const ListTileThemeData(
-        iconColor: iconFg,
-        textColor: title,
+      listTileTheme: ListTileThemeData(
+        iconColor: palette.iconFg,
+        textColor: palette.title,
         titleTextStyle: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 16,
-          color: title,
+          color: palette.title,
         ),
-        subtitleTextStyle: TextStyle(color: summary, fontSize: 13),
+        subtitleTextStyle: TextStyle(color: palette.summary, fontSize: 13),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: surface,
-        labelStyle: const TextStyle(color: meta),
-        hintStyle: const TextStyle(color: iconFgMuted),
+        fillColor: palette.surface,
+        labelStyle: TextStyle(color: palette.meta),
+        hintStyle: TextStyle(color: palette.iconFgMuted),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: divider),
+          borderSide: BorderSide(color: palette.divider),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: divider, width: 0.5),
+          borderSide: BorderSide(color: palette.divider, width: 0.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: iconFg, width: 1),
+          borderSide: BorderSide(color: palette.iconFg, width: 1),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: surface,
-        selectedColor: iconSurface,
-        disabledColor: surface,
-        labelStyle: const TextStyle(
+        backgroundColor: palette.surface,
+        selectedColor: palette.iconSurface,
+        disabledColor: palette.surface,
+        labelStyle: TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 12,
-          color: summary,
+          color: palette.summary,
         ),
-        secondaryLabelStyle: const TextStyle(
+        secondaryLabelStyle: TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 12,
-          color: title,
+          color: palette.title,
         ),
-        side: const BorderSide(color: divider, width: 0.5),
+        side: BorderSide(color: palette.divider, width: 0.5),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return iconSurface;
-            return surface;
+            if (states.contains(WidgetState.selected)) return palette.iconSurface;
+            return palette.surface;
           }),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) return title;
-            return summary;
+            if (states.contains(WidgetState.selected)) return palette.title;
+            return palette.summary;
           }),
           side: WidgetStateProperty.all(
-            const BorderSide(color: divider, width: 0.5),
+            BorderSide(color: palette.divider, width: 0.5),
           ),
         ),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return title;
-          return iconFgMuted;
+          if (states.contains(WidgetState.selected)) return palette.title;
+          return palette.iconFgMuted;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return iconSurface;
-          return surfaceElevated;
+          if (states.contains(WidgetState.selected)) return palette.iconSurface;
+          return palette.surfaceElevated;
         }),
       ),
       checkboxTheme: CheckboxThemeData(
         fillColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return iconFg;
+          if (states.contains(WidgetState.selected)) return palette.iconFg;
           return Colors.transparent;
         }),
-        checkColor: WidgetStateProperty.all(background),
-        side: const BorderSide(color: divider, width: 1),
+        checkColor: WidgetStateProperty.all(palette.background),
+        side: BorderSide(color: palette.divider, width: 1),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: iconSurface,
-          foregroundColor: title,
+          backgroundColor: palette.iconSurface,
+          foregroundColor: palette.title,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -287,8 +305,8 @@ abstract final class FeedXpressoTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: iconSurface,
-          foregroundColor: title,
+          backgroundColor: palette.iconSurface,
+          foregroundColor: palette.title,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -296,18 +314,18 @@ abstract final class FeedXpressoTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: iconFg),
+        style: TextButton.styleFrom(foregroundColor: palette.iconFg),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: navBackground,
-        selectedItemColor: navActiveIcon,
-        unselectedItemColor: navInactiveIcon,
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: palette.navBackground,
+        selectedItemColor: palette.navActiveIcon,
+        unselectedItemColor: palette.navInactiveIcon,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
       navigationBarTheme: NavigationBarThemeData(
         elevation: 0,
-        backgroundColor: navBackground,
+        backgroundColor: palette.navBackground,
         indicatorColor: Colors.transparent,
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         height: navBarHeight,
@@ -315,7 +333,7 @@ abstract final class FeedXpressoTheme {
           final selected = states.contains(WidgetState.selected);
           return IconThemeData(
             size: navIconSize,
-            color: selected ? navActiveIcon : navInactiveIcon,
+            color: selected ? palette.navActiveIcon : palette.navInactiveIcon,
           );
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -323,64 +341,64 @@ abstract final class FeedXpressoTheme {
           return TextStyle(
             fontSize: navLabelSize,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            color: selected ? navActiveLabel : navInactiveLabel,
+            color: selected ? palette.navActiveLabel : palette.navInactiveLabel,
           );
         }),
       ),
-      drawerTheme: const DrawerThemeData(
+      drawerTheme: DrawerThemeData(
         elevation: 0,
-        backgroundColor: background,
-        scrimColor: Color(0x99000000),
+        backgroundColor: palette.background,
+        scrimColor: palette.drawerScrim,
         surfaceTintColor: Colors.transparent,
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: sheet,
+        backgroundColor: palette.sheet,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: divider, width: 0.5),
+          side: BorderSide(color: palette.divider, width: 0.5),
         ),
-        titleTextStyle: screenTitleStyle,
-        contentTextStyle: const TextStyle(color: summary, fontSize: 14),
+        titleTextStyle: palette.screenTitleStyle,
+        contentTextStyle: TextStyle(color: palette.summary, fontSize: 14),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: sheet,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: palette.sheet,
         elevation: 0,
         modalElevation: 0,
         surfaceTintColor: Colors.transparent,
-        dragHandleColor: iconFgMuted,
-        dragHandleSize: Size(36, 4),
+        dragHandleColor: palette.iconFgMuted,
+        dragHandleSize: const Size(36, 4),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-          side: BorderSide(color: divider, width: 0.5),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          side: BorderSide(color: palette.divider, width: 0.5),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: surfaceElevated,
-        contentTextStyle: const TextStyle(color: title, fontSize: 14),
+        backgroundColor: palette.surfaceElevated,
+        contentTextStyle: TextStyle(color: palette.title, fontSize: 14),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: divider, width: 0.5),
+          side: BorderSide(color: palette.divider, width: 0.5),
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: sheet,
+        color: palette.sheet,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: divider, width: 0.5),
+          side: BorderSide(color: palette.divider, width: 0.5),
         ),
-        textStyle: const TextStyle(color: title, fontSize: 14),
+        textStyle: TextStyle(color: palette.title, fontSize: 14),
       ),
-      dropdownMenuTheme: const DropdownMenuThemeData(
-        textStyle: TextStyle(color: title),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        textStyle: TextStyle(color: palette.title),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: iconFg,
-        linearTrackColor: surfaceElevated,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: palette.iconFg,
+        linearTrackColor: palette.surfaceElevated,
       ),
     );
   }

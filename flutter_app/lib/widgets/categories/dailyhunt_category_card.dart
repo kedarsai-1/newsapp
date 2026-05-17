@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/feed/feed_xpresso_theme.dart';
+import '../feed/feed_xpresso_theme.dart';
 
-/// Dense Xpresso category cell — icon + label, minimal chrome.
+/// Discovery category cell — accent icon, theme-aware surfaces.
 class DailyhuntCategoryCard extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -17,43 +17,55 @@ class DailyhuntCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Material(
-      color: FeedXpressoTheme.surface,
+      color: fx.surfaceElevated,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: FeedXpressoTheme.divider, width: 0.5),
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: fx.divider, width: 0.5),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: Colors.white10,
-        highlightColor: Colors.white10,
+        splashColor: fx.accent.withValues(alpha: 0.08),
+        highlightColor: fx.accent.withValues(alpha: 0.04),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
-                  color: FeedXpressoTheme.iconSurface,
-                  borderRadius: BorderRadius.circular(6),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      fx.accent.withValues(alpha: 0.2),
+                      fx.iconSurface,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: fx.accent.withValues(alpha: 0.35),
+                    width: 0.5,
+                  ),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, color: FeedXpressoTheme.iconFg, size: 15),
+                child: Icon(icon, color: fx.accent, size: 16),
               ),
-              const SizedBox(width: 7),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 11.5,
+                    fontSize: 12,
                     height: 1.12,
                     letterSpacing: -0.15,
-                    color: FeedXpressoTheme.title,
+                    color: fx.title,
                   ),
                 ),
               ),

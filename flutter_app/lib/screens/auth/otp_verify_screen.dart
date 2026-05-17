@@ -151,14 +151,14 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
     final bottom = MediaQuery.paddingOf(context).bottom;
 
     return Scaffold(
-      backgroundColor: OnboardingDesign.background,
+      backgroundColor: OnboardingDesign.background(context),
       appBar: AppBar(
-        backgroundColor: OnboardingDesign.background,
+        backgroundColor: OnboardingDesign.background(context),
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: OnboardingDesign.titleColor, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded,
+              color: OnboardingDesign.titleColor(context), size: 20),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
@@ -178,12 +178,12 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'Verify your number',
-                          style: OnboardingDesign.titleStyle(),
+                          style: OnboardingDesign.titleStyle(context),
                         ),
                         const SizedBox(height: 10),
                         RichText(
                           text: TextSpan(
-                            style: OnboardingDesign.subtitleStyle(),
+                            style: OnboardingDesign.subtitleStyle(context),
                             children: [
                               const TextSpan(
                                   text: 'Enter the 6-digit OTP sent to '),
@@ -192,7 +192,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                                 style: GoogleFonts.notoSans(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
-                                  color: OnboardingDesign.titleColor,
+                                  color: OnboardingDesign.titleColor(context),
                                   height: 1.45,
                                 ),
                               ),
@@ -233,7 +233,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                               "Didn't get the code? ",
                               style: GoogleFonts.notoSans(
                                 fontSize: 13,
-                                color: OnboardingDesign.subtitleColor,
+                                color: OnboardingDesign.subtitleColor(context),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -250,8 +250,8 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700,
                                   color: _secondsLeft == 0
-                                      ? OnboardingDesign.accent
-                                      : OnboardingDesign.subtitleColor,
+                                      ? OnboardingDesign.accent(context)
+                                      : OnboardingDesign.subtitleColor(context),
                                 ),
                               ),
                             ),
@@ -268,9 +268,9 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                     child: FilledButton(
                       onPressed: canVerify ? _verify : null,
                       style: FilledButton.styleFrom(
-                        backgroundColor: OnboardingDesign.accent,
+                        backgroundColor: OnboardingDesign.accent(context),
                         disabledBackgroundColor:
-                            OnboardingDesign.accent.withValues(alpha: 0.55),
+                            OnboardingDesign.accent(context).withValues(alpha: 0.55),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
@@ -288,7 +288,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                               ),
                             )
                           : Text('Verify OTP',
-                              style: OnboardingDesign.buttonLabel()),
+                              style: OnboardingDesign.buttonLabel(context)),
                     ),
                   ),
                 ),
@@ -312,9 +312,9 @@ class _StatusBanner extends StatelessWidget {
     final border =
         isError ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0);
     final iconColor =
-        isError ? Colors.red.shade600 : OnboardingDesign.accentDark;
+        isError ? Colors.red.shade600 : OnboardingDesign.accentDark(context);
     final textColor =
-        isError ? Colors.red.shade700 : OnboardingDesign.accentDark;
+        isError ? Colors.red.shade700 : OnboardingDesign.accentDark(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(

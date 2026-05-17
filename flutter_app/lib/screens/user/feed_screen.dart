@@ -322,13 +322,21 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         children: [
           const RepaintBoundary(child: _DailyhuntFeedAppBar()),
             RepaintBoundary(
-              child: Selector<NewsProvider, int>(
-                selector: (_, news) => _chipIndexForProvider(news),
-                builder: (_, chipIndex, __) => DailyhuntCategoryTabBar(
-                  categories: _kFeedTabLabels,
-                  selectedIndex: chipIndex,
-                  dark: true,
-                  onSelected: _selectCategoryChip,
+              child: Selector<NewsProvider, (int, String?)>(
+                selector: (_, news) =>
+                    (_chipIndexForProvider(news), news.categoriesError),
+                builder: (_, data, __) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (data.$2 != null)
+                      _CategoriesLoadBanner(message: data.$2!),
+                    DailyhuntCategoryTabBar(
+                      categories: _kFeedTabLabels,
+                      selectedIndex: data.$1,
+                      dark: FeedXpressoTheme.isDark(context),
+                      onSelected: _selectCategoryChip,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -371,7 +379,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   if (snap.error != null) {
                     return ErrorState(
                       message: snap.error!,
-                      dark: true,
+                      dark: FeedXpressoTheme.isDark(context),
                       onRetry: context.read<NewsProvider>().refresh,
                     );
                   }
@@ -383,11 +391,36 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                     );
                   }
                   if (snap.posts.isEmpty) {
-                    return const EmptyState(
+                    final news = context.read<NewsProvider>();
+                    final onLocal = news.shouldShowLocalScopeDropdown;
+                    final scope = onLocal
+                        ? news.selectedLocalScope
+                        : news.selectedPoliticsScope;
+                    String? scopeLabel;
+                    if (scope != 'all') {
+                      final opts = onLocal
+                          ? news.localScopeOptions
+                          : news.politicsScopeOptions;
+                      for (final o in opts) {
+                        if (o.$2 == scope) {
+                          scopeLabel = o.$1;
+                          break;
+                        }
+                      }
+                    }
+                    return EmptyState(
                       icon: Icons.article_outlined,
-                      title: 'No stories yet',
-                      subtitle: 'Pull down to refresh or pick another category.',
-                      dark: true,
+                      title: scopeLabel != null
+                          ? 'No $scopeLabel stories yet'
+                          : 'No stories yet',
+                      subtitle: news.categories.isEmpty
+                          ? 'Categories did not load — start the API server (port ${AppConstants.defaultApiPort}) and pull to refresh.'
+                          : 'Pull down to refresh, try Top News, or pick another category.',
+                      dark: FeedXpressoTheme.isDark(context),
+                      buttonLabel: news.categories.isEmpty ? 'Retry' : null,
+                      onButtonTap: news.categories.isEmpty
+                          ? () => news.refresh()
+                          : null,
                     );
                   }
                   scheduleFeedImagePrecache(
@@ -416,6 +449,49 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 }
 
+class _CategoriesLoadBanner extends StatelessWidget {
+  final String message;
+
+  const _CategoriesLoadBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
+    return Material(
+      color: fx.accent.withValues(alpha: 0.12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 18, color: fx.accent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: fx.title,
+                  height: 1.3,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.read<NewsProvider>().loadCategories(),
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                foregroundColor: fx.accent,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RegionChipBarData {
   final bool hidden;
   final String selectedScope;
@@ -438,90 +514,113 @@ class _RegionChipBarData {
 class _DailyhuntFeedAppBar extends StatelessWidget {
   const _DailyhuntFeedAppBar();
 
-  static const _titleStyle = TextStyle(
-    fontWeight: FontWeight.w900,
-    fontSize: 17,
-    letterSpacing: -0.4,
-    color: Colors.white,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: FeedXpressoTheme.background,
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(
-          height: kToolbarHeight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: 'Menu',
-                  onPressed: () => XpressoSideMenu.open(context),
-                  icon: const CircleAvatar(
-                    radius: 17,
-                    backgroundColor: FeedXpressoTheme.iconSurface,
-                    child: Icon(
-                      Icons.person_rounded,
-                      size: 19,
-                      color: FeedXpressoTheme.iconFg,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
+      color: fx.background,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: kToolbarHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Menu',
+                      onPressed: () => XpressoSideMenu.open(context),
+                      icon: Container(
                         decoration: BoxDecoration(
-                          color: FeedXpressoTheme.iconSurface,
-                          borderRadius: BorderRadius.circular(6),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: fx.divider.withValues(alpha: 0.8),
+                            width: 0.5,
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.article_rounded,
-                          color: FeedXpressoTheme.iconFg,
-                          size: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 7),
-                      Flexible(
-                        child: Text(
-                          AppConstants.appName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _titleStyle,
+                        child: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: fx.iconSurface,
+                          child: Icon(
+                            Icons.person_rounded,
+                            size: 19,
+                            color: fx.iconFg,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  fx.accent.withValues(alpha: 0.35),
+                                  fx.iconSurface,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: fx.accent.withValues(alpha: 0.45),
+                                width: 0.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.article_rounded,
+                              color: fx.accent,
+                              size: 17,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              AppConstants.appName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: fx.screenTitleStyle.copyWith(
+                                fontSize: 18,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('No new notifications'),
+                            duration: Duration(milliseconds: 1200),
+                            behavior: SnackBarBehavior.floating,
+                            width: 300,
+                          ),
+                        );
+                      },
+                      icon: Icon(
+                        Icons.notifications_none_rounded,
+                        color: fx.iconFg,
+                      ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  tooltip: 'Notifications',
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No new notifications'),
-                        duration: Duration(milliseconds: 1200),
-                        behavior: SnackBarBehavior.floating,
-                        width: 300,
-                      ),
-                    );
-                  },
-                  icon: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: FeedXpressoTheme.iconFg,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+          Divider(height: 1, thickness: 1, color: fx.divider),
+        ],
       ),
     );
   }

@@ -239,9 +239,11 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     final bottomPad = FeedXpressoTheme.feedBottomInset(context) + 28;
     final pageHeight = MediaQuery.sizeOf(context).height;
 
+    final st = ShortsFeedTheme.fx(context);
+
     if (shortsError != null && posts.isEmpty && !shortsRefreshing) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: st.background,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -251,7 +253,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                 Text(
                   shortsError,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
+                  style: TextStyle(color: st.body),
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
@@ -268,7 +270,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
 
     if (posts.isEmpty && shortsRefreshing) {
       return Scaffold(
-        backgroundColor: ShortsFeedTheme.background,
+        backgroundColor: st.background,
         body: Column(
           children: [
             const SafeArea(
@@ -289,7 +291,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
 
     if (posts.isEmpty) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: st.background,
         body: Column(
           children: [
             const SafeArea(
@@ -311,8 +313,8 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                     children: [
                       Text(
                         I18n.t(context, 'shorts_empty_title'),
-                        style: const TextStyle(
-                          color: Colors.white70,
+                        style: TextStyle(
+                          color: st.title,
                           fontSize: 16,
                         ),
                       ),
@@ -321,7 +323,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                         I18n.t(context, 'shorts_empty_subtitle'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55),
+                          color: st.meta,
                           fontSize: 13,
                         ),
                       ),
@@ -343,7 +345,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     }
 
     return Scaffold(
-      backgroundColor: ShortsFeedTheme.background,
+      backgroundColor: st.background,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -397,14 +399,14 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
               left: 0,
               right: 0,
               bottom: FeedXpressoTheme.feedBottomInset(context),
-              child: const SafeArea(
+              child: SafeArea(
                 child: Center(
                   child: SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white54,
+                      color: st.meta,
                     ),
                   ),
                 ),

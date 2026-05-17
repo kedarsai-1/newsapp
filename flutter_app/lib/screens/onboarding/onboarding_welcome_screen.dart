@@ -27,7 +27,7 @@ class OnboardingWelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: OnboardingDesign.background,
+      backgroundColor: OnboardingDesign.background(context),
       body: SafeArea(
         child: Padding(
           padding: EdgeInsets.fromLTRB(20, 24, 20, 16 + bottom),
@@ -36,19 +36,19 @@ class OnboardingWelcomeScreen extends StatelessWidget {
             children: [
               Text(
                 'Your news feed is ready',
-                style: OnboardingDesign.titleStyle(),
+                style: OnboardingDesign.titleStyle(context),
               ),
               const SizedBox(height: 10),
               Text(
                 'Swipe through the latest updates',
-                style: OnboardingDesign.subtitleStyle(),
+                style: OnboardingDesign.subtitleStyle(context),
               ),
               const Spacer(),
               Center(
                 child: Icon(
                   Icons.dynamic_feed_rounded,
                   size: 88,
-                  color: OnboardingDesign.accent.withValues(alpha: 0.8),
+                  color: OnboardingDesign.accent(context).withValues(alpha: 0.8),
                 ),
               ),
               const Spacer(),

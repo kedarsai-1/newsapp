@@ -13,6 +13,7 @@ import '../../services/auth_provider.dart';
 import '../../constants.dart';
 import '../../users/media_widgets.dart';
 import '../../widgets/location_label.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shimmer_widgets.dart';
 
 /// Media shown below the byline: videos, multi-asset posts, or extra items after the app-bar hero image.
@@ -304,13 +305,14 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   Widget _commentComposer(BuildContext context, dynamic p) {
+    final fx = FeedXpressoTheme.fx(context);
     return Material(
       elevation: 12,
       shadowColor: Colors.black.withValues(alpha: 0.18),
-      color: p.surface,
+      color: fx.sheet,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: p.glassBorder)),
+          border: Border(top: BorderSide(color: fx.divider)),
         ),
         child: SafeArea(
           top: false,
@@ -336,7 +338,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                       hintText: 'Write a comment…',
                       hintStyle: TextStyle(fontSize: 14, color: p.textHint),
                       filled: true,
-                      fillColor: p.inputFill,
+                      fillColor: fx.surfaceElevated,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.s16,
                         vertical: 12,
@@ -351,7 +353,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                 const SizedBox(width: AppSpacing.s4),
                 IconButton(
                   tooltip: 'Post comment',
-                  icon: Icon(Icons.send_rounded, color: p.primary),
+                  icon: Icon(Icons.send_rounded, color: fx.accent),
                   onPressed: _submitComment,
                 ),
               ],

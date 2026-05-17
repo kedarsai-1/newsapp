@@ -25,7 +25,7 @@ class OnboardingStepShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
-      backgroundColor: OnboardingDesign.background,
+      backgroundColor: OnboardingDesign.background(context),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -38,9 +38,9 @@ class OnboardingStepShell extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 12),
-                    Text(title, style: OnboardingDesign.titleStyle()),
+                    Text(title, style: OnboardingDesign.titleStyle(context)),
                     const SizedBox(height: 10),
-                    Text(subtitle, style: OnboardingDesign.subtitleStyle()),
+                    Text(subtitle, style: OnboardingDesign.subtitleStyle(context)),
                     const SizedBox(height: 28),
                     body,
                   ],
@@ -76,17 +76,17 @@ class OnboardingPrimaryButton extends StatelessWidget {
     return FilledButton(
       onPressed: onPressed,
       style: FilledButton.styleFrom(
-        backgroundColor: OnboardingDesign.accent,
+        backgroundColor: OnboardingDesign.accent(context),
         foregroundColor: Colors.white,
-        disabledBackgroundColor: OnboardingDesign.outline,
-        disabledForegroundColor: OnboardingDesign.subtitleColor,
+        disabledBackgroundColor: OnboardingDesign.outline(context),
+        disabledForegroundColor: OnboardingDesign.subtitleColor(context),
         padding: const EdgeInsets.symmetric(vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(OnboardingDesign.radiusButton),
         ),
         elevation: 0,
       ),
-      child: Text(label, style: OnboardingDesign.buttonLabel()),
+      child: Text(label, style: OnboardingDesign.buttonLabel(context)),
     );
   }
 }
@@ -106,14 +106,14 @@ class OnboardingSecondaryButton extends StatelessWidget {
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        foregroundColor: OnboardingDesign.subtitleColor,
+        foregroundColor: OnboardingDesign.subtitleColor(context),
         padding: const EdgeInsets.symmetric(vertical: 14),
       ),
       child: Text(
         label,
-        style: OnboardingDesign.buttonLabel().copyWith(
+        style: OnboardingDesign.buttonLabel(context).copyWith(
           fontWeight: FontWeight.w600,
-          color: OnboardingDesign.subtitleColor,
+          color: OnboardingDesign.subtitleColor(context),
         ),
       ),
     );

@@ -119,28 +119,28 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'Search city',
-              hintStyle: OnboardingDesign.languageEn(),
+              hintStyle: OnboardingDesign.languageEn(context),
               prefixIcon: Icon(
                 Icons.search_rounded,
-                color: OnboardingDesign.subtitleColor.withValues(alpha: 0.85),
+                color: OnboardingDesign.subtitleColor(context).withValues(alpha: 0.85),
               ),
               filled: true,
               fillColor: const Color(0xFFF9FAFB),
               border: OutlineInputBorder(
                 borderRadius:
                     BorderRadius.circular(OnboardingDesign.radiusCard),
-                borderSide: const BorderSide(color: OnboardingDesign.outline),
+                borderSide: BorderSide(color: OnboardingDesign.outline(context)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius:
                     BorderRadius.circular(OnboardingDesign.radiusCard),
-                borderSide: const BorderSide(color: OnboardingDesign.outline),
+                borderSide: BorderSide(color: OnboardingDesign.outline(context)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius:
                     BorderRadius.circular(OnboardingDesign.radiusCard),
-                borderSide: const BorderSide(
-                    color: OnboardingDesign.accent, width: 1.4),
+                borderSide: BorderSide(
+                    color: OnboardingDesign.accent(context), width: 1.4),
               ),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -158,14 +158,14 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                 decoration: BoxDecoration(
                   borderRadius:
                       BorderRadius.circular(OnboardingDesign.radiusCard),
-                  border: Border.all(color: OnboardingDesign.outline),
+                  border: Border.all(color: OnboardingDesign.outline(context)),
                   color: const Color(0xFFF9FAFB),
                 ),
                 child: Row(
                   children: [
                     Icon(
                       Icons.my_location_rounded,
-                      color: OnboardingDesign.accent,
+                      color: OnboardingDesign.accent(context),
                       size: 22,
                     ),
                     const SizedBox(width: 12),
@@ -174,7 +174,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                         _locLoading
                             ? 'Getting location…'
                             : 'Use current location',
-                        style: OnboardingDesign.languageNative()
+                        style: OnboardingDesign.languageNative(context)
                             .copyWith(fontSize: 15),
                       ),
                     ),
@@ -184,7 +184,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                         height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: OnboardingDesign.accent.withValues(alpha: 0.7),
+                          color: OnboardingDesign.accent(context).withValues(alpha: 0.7),
                         ),
                       ),
                   ],
@@ -196,7 +196,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
             const SizedBox(height: 8),
             Text(
               _geoError!,
-              style: OnboardingDesign.languageEn()
+              style: OnboardingDesign.languageEn(context)
                   .copyWith(color: Colors.red.shade700),
             ),
           ],
@@ -206,15 +206,15 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 'Selected: ${draft.cityLabel}',
-                style: OnboardingDesign.languageEn().copyWith(
-                  color: OnboardingDesign.accentDark,
+                style: OnboardingDesign.languageEn(context).copyWith(
+                  color: OnboardingDesign.accentDark(context),
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           Text(
             'Popular cities',
-            style: OnboardingDesign.languageNative().copyWith(fontSize: 14),
+            style: OnboardingDesign.languageNative(context).copyWith(fontSize: 14),
           ),
           const SizedBox(height: 8),
           ..._filtered().map((city) {
@@ -234,11 +234,11 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: picked
-                            ? OnboardingDesign.accent
-                            : OnboardingDesign.outline,
+                            ? OnboardingDesign.accent(context)
+                            : OnboardingDesign.outline(context),
                       ),
                       color: picked
-                          ? OnboardingDesign.accent.withValues(alpha: 0.06)
+                          ? OnboardingDesign.accent(context).withValues(alpha: 0.06)
                           : Colors.white,
                     ),
                     child: Row(
@@ -247,22 +247,22 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                           Icons.location_city_outlined,
                           size: 20,
                           color: picked
-                              ? OnboardingDesign.accent
-                              : OnboardingDesign.subtitleColor,
+                              ? OnboardingDesign.accent(context)
+                              : OnboardingDesign.subtitleColor(context),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             city,
-                            style: OnboardingDesign.languageNative().copyWith(
+                            style: OnboardingDesign.languageNative(context).copyWith(
                               fontSize: 15,
-                              color: OnboardingDesign.titleColor,
+                              color: OnboardingDesign.titleColor(context),
                             ),
                           ),
                         ),
                         if (picked)
                           Icon(Icons.check_circle_rounded,
-                              color: OnboardingDesign.accent, size: 22),
+                              color: OnboardingDesign.accent(context), size: 22),
                       ],
                     ),
                   ),

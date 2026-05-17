@@ -37,7 +37,11 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
         tooltip: 'Remove from saved',
         onPressed: onRemove,
-        icon: const Icon(Icons.close_rounded, size: 17, color: FeedXpressoTheme.iconFgMuted),
+        icon: Icon(
+          Icons.close_rounded,
+          size: 17,
+          color: FeedXpressoTheme.fx(context).iconFgMuted,
+        ),
       ),
     );
   }

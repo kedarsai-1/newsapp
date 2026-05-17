@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/news_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/auth_provider.dart';
 import '../../utils/app_utils.dart';
 import '../../utils/i18n.dart';
@@ -66,10 +67,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final news = context.watch<NewsProvider>();
+    final theme = context.watch<ThemeProvider>();
+    final fx = FeedXpressoTheme.fx(context);
     final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
     return Scaffold(
-      backgroundColor: FeedXpressoTheme.background,
+      backgroundColor: fx.background,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -79,20 +82,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SliverAppBar(
                 pinned: true,
                 toolbarHeight: 46,
-                backgroundColor: FeedXpressoTheme.background,
+                backgroundColor: fx.background,
                 surfaceTintColor: Colors.transparent,
                 elevation: 0,
+                foregroundColor: fx.title,
+                iconTheme: IconThemeData(color: fx.iconFg),
                 title: Text(
                   I18n.t(context, 'profile_title'),
-                  style: FeedXpressoTheme.screenTitleStyle.copyWith(fontSize: 18),
+                  style: fx.screenTitleStyle.copyWith(fontSize: 18),
+                ),
+                bottom: PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Divider(height: 1, thickness: 1, color: fx.divider),
                 ),
                 actions: [
                   IconButton(
                     tooltip: I18n.t(context, 'profile_privacy_tooltip'),
                     onPressed: () => context.push('/privacy-policy'),
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.policy_outlined,
-                      color: FeedXpressoTheme.iconFg,
+                      color: fx.iconFg,
                       size: 22,
                     ),
                     visualDensity: VisualDensity.compact,
@@ -117,21 +126,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         initialValue: news.selectedLanguage,
                         isDense: true,
                         isExpanded: true,
-                        dropdownColor: FeedXpressoTheme.sheet,
+                        dropdownColor: fx.sheet,
                         borderRadius: BorderRadius.circular(6),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: FeedXpressoTheme.title,
+                          color: fx.title,
                         ),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           isDense: true,
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 8,
                           ),
                           filled: true,
-                          fillColor: FeedXpressoTheme.surface,
+                          fillColor: fx.surface,
                         ),
                         items: _languageCodes
                             .map(
@@ -143,6 +152,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             .toList(),
                         onChanged: (value) {
                           if (value != null) news.selectLanguage(value);
+                        },
+                      ),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: 'Appearance',
+                      child: SegmentedButton<ThemeMode>(
+                        segments: const [
+                          ButtonSegment(
+                            value: ThemeMode.light,
+                            label: Text('Light'),
+                            icon: Icon(Icons.light_mode_outlined, size: 16),
+                          ),
+                          ButtonSegment(
+                            value: ThemeMode.dark,
+                            label: Text('Dark'),
+                            icon: Icon(Icons.dark_mode_outlined, size: 16),
+                          ),
+                          ButtonSegment(
+                            value: ThemeMode.system,
+                            label: Text('Auto'),
+                            icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                          ),
+                        ],
+                        selected: {theme.themeMode},
+                        onSelectionChanged: (modes) {
+                          context.read<ThemeProvider>().setThemeMode(modes.first);
                         },
                       ),
                     ),
@@ -161,9 +196,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 11,
-                                  color: selected
-                                      ? FeedXpressoTheme.title
-                                      : FeedXpressoTheme.summary,
+                                  color: selected ? fx.title : fx.summary,
                                 ),
                               ),
                               selected: selected,
@@ -180,10 +213,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 });
                               },
                               showCheckmark: false,
-                              selectedColor: FeedXpressoTheme.iconSurface,
-                              backgroundColor: FeedXpressoTheme.surface,
-                              side: const BorderSide(
-                                color: FeedXpressoTheme.divider,
+                              selectedColor: fx.iconSurface,
+                              backgroundColor: fx.surface,
+                              side: BorderSide(
+                                color: fx.divider,
                                 width: 0.5,
                               ),
                               shape: RoundedRectangleBorder(
@@ -266,16 +299,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             if (!context.mounted) return;
                             context.go('/login');
                           },
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.logout_rounded,
                             size: 18,
-                            color: FeedXpressoTheme.iconFg,
+                            color: fx.iconFg,
                           ),
                           label: Text(
                             I18n.t(context, 'action_signout'),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: FeedXpressoTheme.summary,
+                              color: fx.summary,
                               fontSize: 13,
                             ),
                           ),
@@ -310,17 +343,18 @@ class _UserIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor: FeedXpressoTheme.iconSurface,
+            backgroundColor: fx.iconSurface,
             child: Text(
               AppUtils.initials(userName),
-              style: const TextStyle(
-                color: FeedXpressoTheme.title,
+              style: TextStyle(
+                color: fx.title,
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
@@ -335,11 +369,11 @@ class _UserIdentity extends StatelessWidget {
                   userName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
                     height: 1.15,
-                    color: FeedXpressoTheme.title,
+                    color: fx.title,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -347,10 +381,10 @@ class _UserIdentity extends StatelessWidget {
                   userEmail,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     height: 1.2,
-                    color: FeedXpressoTheme.summary,
+                    color: fx.summary,
                   ),
                 ),
               ],
@@ -369,17 +403,18 @@ class _GuestIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          const CircleAvatar(
+          CircleAvatar(
             radius: 22,
-            backgroundColor: FeedXpressoTheme.iconSurface,
+            backgroundColor: fx.iconSurface,
             child: Icon(
               Icons.person_outline_rounded,
               size: 22,
-              color: FeedXpressoTheme.iconFg,
+              color: fx.iconFg,
             ),
           ),
           const SizedBox(width: 10),
@@ -389,19 +424,19 @@ class _GuestIdentity extends StatelessWidget {
               children: [
                 Text(
                   I18n.t(context, 'profile_guest_title'),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
-                    color: FeedXpressoTheme.title,
+                    color: fx.title,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   I18n.t(context, 'profile_guest_subtitle'),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     height: 1.25,
-                    color: FeedXpressoTheme.summary,
+                    color: fx.summary,
                   ),
                 ),
               ],
@@ -411,7 +446,7 @@ class _GuestIdentity extends StatelessWidget {
             onPressed: onSignIn,
             style: TextButton.styleFrom(
               visualDensity: VisualDensity.compact,
-              foregroundColor: FeedXpressoTheme.iconFg,
+              foregroundColor: fx.iconFg,
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
             child: Text(I18n.t(context, 'action_signin')),
@@ -435,6 +470,7 @@ class _CompactSwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -442,10 +478,10 @@ class _CompactSwitchRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: FeedXpressoTheme.title,
+                color: fx.title,
               ),
             ),
           ),
@@ -454,7 +490,7 @@ class _CompactSwitchRow extends StatelessWidget {
             child: Switch.adaptive(
               value: value,
               onChanged: onChanged,
-              activeThumbColor: FeedXpressoTheme.title,
+              activeThumbColor: fx.title,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),

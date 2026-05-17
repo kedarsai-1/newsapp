@@ -2,21 +2,23 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/models.dart';
 import '../models/sports_models.dart';
 import '../services/sports_api_service.dart';
 import '../services/sports_cache.dart';
+import '../services/sports_news_feed.dart';
 
 class SportsProvider extends ChangeNotifier {
   List<SportsMatch> _live = [];
   List<SportsMatch> _upcoming = [];
-  List<SportsNewsItem> _news = [];
-  List<SportsHighlight> _highlights = [];
+  List<NewsPost> _posts = [];
 
   bool _loadingLive = false;
   bool _loadingNews = false;
   bool _loadingMoreNews = false;
   String? _liveError;
   String? _newsError;
+  String _language = 'all';
   int _newsPage = 1;
   int _newsPages = 1;
   bool _polling = false;
@@ -24,14 +26,21 @@ class SportsProvider extends ChangeNotifier {
 
   List<SportsMatch> get live => _live;
   List<SportsMatch> get upcoming => _upcoming;
-  List<SportsNewsItem> get news => _news;
-  List<SportsHighlight> get highlights => _highlights;
+  List<NewsPost> get posts => _posts;
   bool get loadingLive => _loadingLive;
   bool get loadingNews => _loadingNews;
   bool get loadingMoreNews => _loadingMoreNews;
   String? get liveError => _liveError;
   String? get newsError => _newsError;
   bool get hasMoreNews => _newsPage < _newsPages;
+  String get language => _language;
+
+  void setLanguage(String code) {
+    final next = code.trim().toLowerCase();
+    if (next == _language) return;
+    _language = next.isEmpty ? 'all' : next;
+    refreshNews(reset: true);
+  }
 
   void startLivePolling() {
     if (_polling) return;
@@ -49,7 +58,8 @@ class SportsProvider extends ChangeNotifier {
     _pollTimer = null;
   }
 
-  Future<void> bootstrap() async {
+  Future<void> bootstrap({String language = 'all'}) async {
+    _language = language;
     final cached = await SportsCache.loadLive();
     if (cached != null) {
       _applyLivePayload(cached);
@@ -58,7 +68,6 @@ class SportsProvider extends ChangeNotifier {
     await Future.wait([
       refreshLive(silent: _live.isNotEmpty),
       refreshNews(reset: true),
-      refreshHighlights(),
     ]);
   }
 
@@ -66,7 +75,6 @@ class SportsProvider extends ChangeNotifier {
     await Future.wait([
       refreshLive(),
       refreshNews(reset: true),
-      refreshHighlights(),
     ]);
   }
 
@@ -80,7 +88,12 @@ class SportsProvider extends ChangeNotifier {
     if (res['success'] == true) {
       _applyLivePayload(res);
       await SportsCache.saveLive(res);
-      _liveError = res['message']?.toString();
+      _liveError = null;
+    } else if (res['code'] == SportsApiService.codeSportsApiMissing) {
+      _live = [];
+      _upcoming = [];
+      _liveError =
+          'Live scores need a backend redeploy on Railway (add CRICAPI_KEY in Railway variables, then redeploy).';
     } else {
       _liveError = res['message']?.toString() ?? 'Could not load live scores.';
     }
@@ -102,40 +115,30 @@ class SportsProvider extends ChangeNotifier {
         .toList();
   }
 
-  Future<void> refreshHighlights() async {
-    final res = await SportsApiService.getHighlights();
-    if (res['success'] == true && res['highlights'] is List) {
-      _highlights = (res['highlights'] as List)
-          .whereType<Map>()
-          .map((e) => SportsHighlight.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      notifyListeners();
-    }
-  }
-
   Future<void> refreshNews({bool reset = false}) async {
     if (reset) {
       _newsPage = 1;
       _newsPages = 1;
-      _news = [];
+      _posts = [];
     }
     _loadingNews = reset;
     _newsError = null;
     notifyListeners();
 
-    final res = await SportsApiService.getNews(page: _newsPage);
-    if (res['success'] == true && res['news'] is List) {
-      final items = (res['news'] as List)
-          .whereType<Map>()
-          .map((e) => SportsNewsItem.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
+    final lang = _language == 'all' ? null : _language;
+    final res = await SportsNewsFeed.fetchPostsPage(
+      page: _newsPage,
+      language: lang,
+    );
+
+    if (res['success'] == true && res['posts'] is List) {
+      final items = List<NewsPost>.from(res['posts'] as List);
       if (reset) {
-        _news = items;
+        _posts = items;
       } else {
-        _news = [..._news, ...items];
+        _posts = [..._posts, ...items];
       }
       _newsPages = int.tryParse('${res['pages']}') ?? 1;
-      await SportsCache.saveNewsPage(_newsPage, res);
     } else {
       _newsError = res['message']?.toString() ?? 'Could not load sports news.';
     }
@@ -149,13 +152,16 @@ class SportsProvider extends ChangeNotifier {
     _loadingMoreNews = true;
     _newsPage += 1;
     notifyListeners();
-    final res = await SportsApiService.getNews(page: _newsPage);
-    if (res['success'] == true && res['news'] is List) {
-      final items = (res['news'] as List)
-          .whereType<Map>()
-          .map((e) => SportsNewsItem.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      _news = [..._news, ...items];
+
+    final lang = _language == 'all' ? null : _language;
+    final res = await SportsNewsFeed.fetchPostsPage(
+      page: _newsPage,
+      language: lang,
+    );
+
+    if (res['success'] == true && res['posts'] is List) {
+      final items = List<NewsPost>.from(res['posts'] as List);
+      _posts = [..._posts, ...items];
       _newsPages = int.tryParse('${res['pages']}') ?? _newsPage;
     } else {
       _newsPage -= 1;

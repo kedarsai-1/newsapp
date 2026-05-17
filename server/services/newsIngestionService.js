@@ -180,6 +180,24 @@ function matchesExpectedFeedLanguage(rawItem, feedLang) {
   return scriptRatio(sample, /[\u0C00-\u0C7F]/g) >= 0.18;
 }
 
+/** Sports RSS: keep English feeds English-only; hi/te use script checks above. */
+function matchesSportsRssLanguage(rawItem, feedLang, categorySlug) {
+  if (String(categorySlug || '').toLowerCase() !== 'sports') {
+    return matchesExpectedFeedLanguage(rawItem, feedLang);
+  }
+  const fl = String(feedLang || 'en').toLowerCase();
+  const sample = stripMarkup(
+    `${rawItem?.title || ''} ${rawItem?.contentSnippet || rawItem?.content || rawItem?.summary || ''}`,
+  ).slice(0, 1000);
+  if (!sample) return true;
+  if (fl === 'en') {
+    if (scriptRatio(sample, /[\u0900-\u097F]/g) >= 0.22) return false;
+    if (scriptRatio(sample, /[\u0C00-\u0C7F]/g) >= 0.18) return false;
+    return true;
+  }
+  return matchesExpectedFeedLanguage(rawItem, feedLang);
+}
+
 function isTeluguPoliticalStory(postLike) {
   const text = stripMarkup(
     `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
@@ -694,7 +712,13 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                 continue;
               }
             }
-            if (!matchesExpectedFeedLanguage(raw, feed.language || '')) {
+            if (
+              !matchesSportsRssLanguage(
+                raw,
+                feed.language || '',
+                feed.categorySlug || '',
+              )
+            ) {
               stats.languageFiltered += 1;
               continue;
             }

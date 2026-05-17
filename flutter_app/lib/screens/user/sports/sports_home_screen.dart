@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../../../models/models.dart';
 import '../../../models/sports_models.dart';
+import '../../../services/auth_provider.dart';
+import '../../../providers/news_provider.dart';
 import '../../../providers/sports_provider.dart';
+import '../../../services/api_service.dart';
 import '../../../widgets/dailyhunt/xpresso_sliver_app_bar.dart';
+import '../../../widgets/feed/dailyhunt_feed_article_card.dart';
+import '../../../widgets/feed/feed_image_cache.dart';
+import '../../../widgets/feed/feed_list_tuning.dart';
 import '../../../widgets/feed/feed_xpresso_theme.dart';
-import '../../../widgets/sports/sports_highlight_tile.dart';
+import '../../../widgets/premium_news_ui.dart';
 import '../../../widgets/sports/sports_live_card.dart';
-import '../../../widgets/sports/sports_news_tile.dart';
-import '../../../widgets/sports/sports_youtube_sheet.dart';
 
-/// Cricket / sports hub — live scores, news, highlights (CricAPI via backend).
+/// Cricket / sports hub — live scores + sports feed (language-aware RSS).
 class SportsHomeScreen extends StatefulWidget {
   const SportsHomeScreen({super.key});
 
@@ -22,6 +28,9 @@ class SportsHomeScreen extends StatefulWidget {
 class _SportsHomeScreenState extends State<SportsHomeScreen> {
   final _scrollController = ScrollController();
   late final SportsProvider _sports;
+  final Map<String, bool> _likedByPostId = {};
+  final Map<String, bool> _bookmarkedByPostId = {};
+  String? _lastLanguage;
 
   @override
   void initState() {
@@ -29,9 +38,13 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
     _sports = context.read<SportsProvider>();
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final lang = context.read<NewsProvider>().selectedLanguage;
+      _lastLanguage = lang;
       _sports.startLivePolling();
-      if (_sports.live.isEmpty && _sports.news.isEmpty) {
-        _sports.bootstrap();
+      if (_sports.live.isEmpty && _sports.posts.isEmpty) {
+        _sports.bootstrap(language: lang);
+      } else if (_sports.language != lang) {
+        _sports.setLanguage(lang);
       }
     });
   }
@@ -56,8 +69,78 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
     context.push('/sports/match/${match.id}');
   }
 
+  Future<bool> _toggleLike(NewsPost post) async {
+    final id = post.id;
+    final prev = _likedByPostId[id] ?? false;
+    _likedByPostId[id] = !prev;
+    setState(() {});
+
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      final liked = await ApiService.toggleGuestLike(id);
+      if (!mounted) return false;
+      _likedByPostId[id] = liked;
+      return true;
+    }
+    final res = await ApiService.toggleLike(id);
+    if (!mounted) return false;
+    if (res['success'] != true) {
+      _likedByPostId[id] = prev;
+      setState(() {});
+      return false;
+    }
+    _likedByPostId[id] = res['liked'] == true;
+    setState(() {});
+    return true;
+  }
+
+  Future<bool> _toggleBookmark(NewsPost post) async {
+    final id = post.id;
+    final prev = _bookmarkedByPostId[id] ?? false;
+    _bookmarkedByPostId[id] = !prev;
+    setState(() {});
+
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      final saved = await ApiService.toggleGuestBookmark(post);
+      if (!mounted) return false;
+      _bookmarkedByPostId[id] = saved;
+      return true;
+    }
+    final res = await ApiService.toggleBookmark(id);
+    if (!mounted) return false;
+    if (res['success'] != true) {
+      _bookmarkedByPostId[id] = prev;
+      setState(() {});
+      return false;
+    }
+    _bookmarkedByPostId[id] = res['bookmarked'] == true;
+    setState(() {});
+    return true;
+  }
+
+  Future<void> _share(NewsPost post) async {
+    final text =
+        '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n${post.sourceUrl ?? ''}';
+    await Share.share(text, subject: post.title);
+  }
+
+  void _openArticle(NewsPost post) {
+    context.push('/article/${post.id}');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final news = context.watch<NewsProvider>();
+    final lang = news.selectedLanguage;
+    if (_lastLanguage != lang) {
+      _lastLanguage = lang;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<SportsProvider>().setLanguage(lang);
+      });
+    }
+
     final fx = FeedXpressoTheme.fx(context);
     final bottom = FeedXpressoTheme.feedBottomInset(context);
 
@@ -74,17 +157,24 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
           slivers: [
             const XpressoSliverAppBar(title: 'Cricket'),
             SliverToBoxAdapter(child: _LiveSection(onMatchTap: _openMatch)),
-            SliverToBoxAdapter(child: _HighlightsSection()),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 18, 14, 8),
                 child: Text(
-                  'Cricket news',
+                  'Sports news',
                   style: fx.screenTitleStyle.copyWith(fontSize: 16),
                 ),
               ),
             ),
-            _NewsSection(bottom: bottom),
+            _SportsPostsSection(
+              bottom: bottom,
+              likedByPostId: _likedByPostId,
+              bookmarkedByPostId: _bookmarkedByPostId,
+              onLike: _toggleLike,
+              onBookmark: _toggleBookmark,
+              onShare: _share,
+              onOpen: _openArticle,
+            ),
           ],
         ),
       ),
@@ -178,113 +268,109 @@ class _LiveSection extends StatelessWidget {
   }
 }
 
-class _HighlightsSection extends StatelessWidget {
+class _SportsPostsSection extends StatefulWidget {
+  final double bottom;
+  final Map<String, bool> likedByPostId;
+  final Map<String, bool> bookmarkedByPostId;
+  final Future<bool> Function(NewsPost) onLike;
+  final Future<bool> Function(NewsPost) onBookmark;
+  final void Function(NewsPost) onShare;
+  final void Function(NewsPost) onOpen;
+
+  const _SportsPostsSection({
+    required this.bottom,
+    required this.likedByPostId,
+    required this.bookmarkedByPostId,
+    required this.onLike,
+    required this.onBookmark,
+    required this.onShare,
+    required this.onOpen,
+  });
+
   @override
-  Widget build(BuildContext context) {
-    final fx = FeedXpressoTheme.fx(context);
-    return Selector<SportsProvider, List<SportsHighlight>>(
-      selector: (_, p) => p.highlights,
-      builder: (context, items, _) {
-        if (items.isEmpty) return const SizedBox.shrink();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
-              child: Text(
-                'Highlights',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: fx.title,
-                ),
-              ),
-            ),
-            SizedBox(
-              height: 168,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                scrollDirection: Axis.horizontal,
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (_, i) {
-                  final h = items[i];
-                  return SportsHighlightTile(
-                    item: h,
-                    onTap: () => SportsYoutubeSheet.open(
-                      context,
-                      title: h.title,
-                      youtubeUrl: h.youtubeUrl,
-                      youtubeVideoId: h.youtubeVideoId,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  State<_SportsPostsSection> createState() => _SportsPostsSectionState();
 }
 
-class _NewsSection extends StatelessWidget {
-  final double bottom;
-
-  const _NewsSection({required this.bottom});
-
+class _SportsPostsSectionState extends State<_SportsPostsSection> {
   @override
   Widget build(BuildContext context) {
-    return Selector<SportsProvider, (List<SportsNewsItem>, bool, String?)>(
-      selector: (_, p) => (p.news, p.loadingMoreNews, p.newsError),
+    return Selector<SportsProvider, (List<NewsPost>, bool, bool, String?)>(
+      selector: (_, p) =>
+          (p.posts, p.loadingNews, p.loadingMoreNews, p.newsError),
       builder: (context, data, _) {
-        final news = data.$1;
-        final loadingMore = data.$2;
-        final err = data.$3;
+        final posts = data.$1;
+        final loading = data.$2;
+        final loadingMore = data.$3;
+        final err = data.$4;
 
-        if (news.isEmpty && err != null) {
-          return SliverToBoxAdapter(
+        if (loading && posts.isEmpty) {
+          return const SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(err, style: TextStyle(color: FeedXpressoTheme.fx(context).meta)),
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
           );
         }
 
-        return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              if (index >= news.length) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
+        if (posts.isEmpty && err != null) {
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                err,
+                style: TextStyle(color: FeedXpressoTheme.fx(context).meta),
+              ),
+            ),
+          );
+        }
+
+        if (posts.isEmpty) {
+          return SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'No sports stories for your language yet. Pull to refresh.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: FeedXpressoTheme.fx(context).meta,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          );
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          final controller = PrimaryScrollController.maybeOf(context);
+          if (controller != null && controller.hasClients) {
+            FeedImagePrecache.onScroll(context, posts, controller.position);
+          }
+        });
+
+        final itemCount = posts.length + (loadingMore ? 1 : 0);
+        return SliverPadding(
+          padding: EdgeInsets.only(bottom: widget.bottom),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index >= posts.length) {
+                  return const FeedListLoadingFooter();
+                }
+                final post = posts[index];
+                return DailyhuntFeedArticleCard(
+                  key: ValueKey(post.id),
+                  post: post,
+                  liked: widget.likedByPostId[post.id] ?? false,
+                  saved: widget.bookmarkedByPostId[post.id] ?? false,
+                  onOpen: () => widget.onOpen(post),
+                  onLike: () => widget.onLike(post),
+                  onShare: () => widget.onShare(post),
+                  onBookmark: () => widget.onBookmark(post),
                 );
-              }
-              final item = news[index];
-              return SportsNewsTile(
-                item: item,
-                onTap: () {
-                  if (item.hasVideo &&
-                      (item.youtubeVideoId != null || item.youtubeUrl != null)) {
-                    SportsYoutubeSheet.open(
-                      context,
-                      title: item.title,
-                      youtubeUrl: item.youtubeUrl,
-                      youtubeVideoId: item.youtubeVideoId,
-                    );
-                  } else {
-                    context.push('/article/${item.id}');
-                  }
-                },
-              );
-            },
-            childCount: news.length + (loadingMore ? 1 : 0),
+              },
+              childCount: itemCount,
+            ),
           ),
         );
       },

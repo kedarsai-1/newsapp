@@ -51,6 +51,17 @@ class AppConstants {
     }
   }
 
+  /// Human-readable API target for error messages (uses [baseUrl], not hardcoded port).
+  static String get apiConnectionHint {
+    final explicit = dotenv.env['API_BASE_URL']?.trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    final port = int.tryParse(dotenv.env['API_PORT'] ?? '') ?? defaultApiPort;
+    final host = dotenv.env['API_HOST']?.trim().isNotEmpty == true
+        ? dotenv.env['API_HOST']!.trim()
+        : '127.0.0.1';
+    return 'http://$host:$port/api';
+  }
+
   static String get appName => dotenv.env['APP_NAME'] ?? 'NewsNow';
   static int get pageSize =>
       int.tryParse(dotenv.env['PAGE_SIZE'] ?? '20') ?? 20;

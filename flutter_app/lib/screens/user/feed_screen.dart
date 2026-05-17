@@ -418,7 +418,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                           ? 'No $scopeLabel stories yet'
                           : 'No stories yet',
                       subtitle: news.categories.isEmpty
-                          ? 'Categories did not load — start the API server (port ${AppConstants.defaultApiPort}) and pull to refresh.'
+                          ? 'Categories did not load — check API at ${AppConstants.apiConnectionHint} and pull to refresh.'
                           : 'Pull down to refresh, try Top News, or pick another category.',
                       dark: FeedXpressoTheme.isDark(context),
                       buttonLabel: news.categories.isEmpty ? 'Retry' : null,

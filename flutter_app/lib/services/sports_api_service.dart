@@ -8,6 +8,9 @@ import '../constants.dart';
 abstract final class SportsApiService {
   static const _timeout = Duration(seconds: 25);
 
+  /// Server deployed without `/api/sports/*` routes (needs Railway redeploy).
+  static const String codeSportsApiMissing = 'SPORTS_API_MISSING';
+
   static Future<Map<String, dynamic>> _get(String path,
       [Map<String, String>? query]) async {
     final uri = Uri.parse('${AppConstants.baseUrl}$path').replace(
@@ -16,24 +19,58 @@ abstract final class SportsApiService {
     try {
       final res = await http.get(uri).timeout(_timeout);
       final body = res.body.trim();
-      if (body.isEmpty) {
-        return {'success': false, 'message': 'Empty response from server.'};
+
+      if (res.statusCode == 404) {
+        return {
+          'success': false,
+          'code': codeSportsApiMissing,
+          'statusCode': 404,
+          'message':
+              'Sports API is not on the server yet. Redeploy your Railway service with the latest backend code (includes /api/sports routes).',
+        };
       }
+
+      if (body.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Empty response from server (${res.statusCode}).',
+        };
+      }
+
+      if (body.startsWith('<!') || body.startsWith('<html')) {
+        return {
+          'success': false,
+          'code': res.statusCode == 404 ? codeSportsApiMissing : null,
+          'statusCode': res.statusCode,
+          'message': res.statusCode == 404
+              ? 'Sports API not found. Redeploy Railway with the latest server code.'
+              : 'Server returned an error page instead of JSON.',
+        };
+      }
+
       final decoded = jsonDecode(body);
       if (decoded is Map<String, dynamic>) {
         if (res.statusCode >= 400) {
           return {
             'success': false,
+            'statusCode': res.statusCode,
             'message': decoded['message']?.toString() ?? 'Request failed',
           };
         }
         return decoded;
       }
       return {'success': false, 'message': 'Unexpected response format.'};
+    } on FormatException {
+      return {
+        'success': false,
+        'message':
+            'Invalid response from ${AppConstants.apiConnectionHint}. Redeploy the backend if you only see this on Cricket.',
+      };
     } catch (e) {
       return {
         'success': false,
-        'message': 'Network error. Check server is running on port ${AppConstants.defaultApiPort}.',
+        'message':
+            'Cannot reach ${AppConstants.apiConnectionHint}. Check Railway is running and assets/.env has API_BASE_URL=https://your-app.up.railway.app/api',
       };
     }
   }
@@ -46,12 +83,13 @@ abstract final class SportsApiService {
   static Future<Map<String, dynamic>> getNews({
     int page = 1,
     int limit = 15,
+    String? language,
   }) =>
       _get('/sports/news', {
         'page': '$page',
         'limit': '$limit',
+        if (language != null && language.isNotEmpty && language != 'all')
+          'language': language,
       });
 
-  static Future<Map<String, dynamic>> getHighlights({int limit = 8}) =>
-      _get('/sports/highlights', {'limit': '$limit'});
 }

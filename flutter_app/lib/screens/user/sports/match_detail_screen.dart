@@ -2,11 +2,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/sports_models.dart' show SportsHighlight, SportsMatch, SportsTeam;
+import '../../../models/sports_models.dart' show SportsMatch, SportsTeam;
 import '../../../providers/sports_provider.dart';
 import '../../../widgets/feed/feed_xpresso_theme.dart';
-import '../../../widgets/sports/sports_highlight_tile.dart';
-import '../../../widgets/sports/sports_youtube_sheet.dart';
 
 class MatchDetailScreen extends StatefulWidget {
   final String matchId;
@@ -105,43 +103,6 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             const SizedBox(height: 12),
             Text(m.result!, style: TextStyle(fontSize: 13, color: fx.summary)),
           ],
-          const SizedBox(height: 20),
-          Text(
-            'Highlights',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fx.title),
-          ),
-          const SizedBox(height: 8),
-          Selector<SportsProvider, List<SportsHighlight>>(
-            selector: (_, p) => p.highlights,
-            builder: (context, highlights, _) {
-              if (highlights.isEmpty) {
-                return Text(
-                  'No highlight videos yet.',
-                  style: TextStyle(fontSize: 13, color: fx.meta),
-                );
-              }
-              return SizedBox(
-                height: 168,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: highlights.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
-                  itemBuilder: (_, i) {
-                    final h = highlights[i];
-                    return SportsHighlightTile(
-                      item: h,
-                      onTap: () => SportsYoutubeSheet.open(
-                        context,
-                        title: h.title,
-                        youtubeUrl: h.youtubeUrl,
-                        youtubeVideoId: h.youtubeVideoId,
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
         ],
       ),
     );

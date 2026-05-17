@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Category = require('../models/Category');
 const NewsPost = require('../models/NewsPost');
 const memoryCache = require('../utils/memoryCache');
+const { applyLanguageFilter } = require('../utils/feedLanguageFilter');
 const cricApi = require('../services/cricApiService');
 
 const TTL_NEWS_MS = 10 * 60 * 1000;
@@ -97,19 +98,26 @@ const getMatch = async (req, res) => {
   }
 };
 
+function parseFeedLanguage(req) {
+  const raw = req.query.language;
+  if (!raw || String(raw).toLowerCase() === 'all') return null;
+  return String(raw).toLowerCase();
+}
+
 /** GET /api/sports/news — cricket/sports posts from existing news DB. */
 const getNews = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(30, Math.max(5, parseInt(req.query.limit, 10) || 15));
-    const cacheKey = `sports:news:${page}:${limit}`;
+    const langParam = parseFeedLanguage(req);
+    const cacheKey = `sports:news:${langParam || 'all'}:${page}:${limit}`;
     const cached = memoryCache.get(cacheKey);
     if (cached) {
       return res.json({ ...cached, cached: true });
     }
 
     const categoryId = await resolveSportsCategoryId();
-    const query = { status: 'approved' };
+    let query = { status: 'approved' };
     if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
       query.category = new mongoose.Types.ObjectId(categoryId);
     } else {
@@ -118,6 +126,7 @@ const getNews = async (req, res) => {
         { title: /cricket|ipl|wpl|t20|odi/i },
       ];
     }
+    query = applyLanguageFilter(query, langParam);
 
     const skip = (page - 1) * limit;
     const [posts, total] = await Promise.all([
@@ -151,48 +160,4 @@ const getNews = async (req, res) => {
   }
 };
 
-/** GET /api/sports/highlights — sports videos for YouTube thumbnails. */
-const getHighlights = async (req, res) => {
-  try {
-    const limit = Math.min(12, parseInt(req.query.limit, 10) || 8);
-    const cacheKey = `sports:highlights:${limit}`;
-    const cached = memoryCache.get(cacheKey);
-    if (cached) return res.json({ ...cached, cached: true });
-
-    const categoryId = await resolveSportsCategoryId();
-    const query = {
-      status: 'approved',
-      $or: [
-        { 'youtube.videoId': { $exists: true, $ne: null } },
-        { media: { $elemMatch: { type: 'video' } } },
-      ],
-    };
-    if (categoryId) query.category = new mongoose.Types.ObjectId(categoryId);
-
-    const posts = await NewsPost.find(query)
-      .sort({ sourcePublishedAt: -1, createdAt: -1 })
-      .limit(limit)
-      .lean();
-
-    const highlights = posts.map((p) => {
-      const n = normalizeNewsPost(p);
-      return {
-        id: n.id,
-        title: n.title,
-        thumbnail: n.thumbnail,
-        youtubeUrl: n.youtubeUrl,
-        youtubeVideoId: n.youtubeVideoId,
-        time: n.time,
-      };
-    });
-
-    const payload = { success: true, highlights, cached: false };
-    memoryCache.set(cacheKey, payload, TTL_NEWS_MS);
-    return res.json(payload);
-  } catch (e) {
-    console.error('[sports] highlights', e.message);
-    return res.status(500).json({ success: false, message: 'Could not load highlights.' });
-  }
-};
-
-module.exports = { getLive, getMatch, getNews, getHighlights };
+module.exports = { getLive, getMatch, getNews };

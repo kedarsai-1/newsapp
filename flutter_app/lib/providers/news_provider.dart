@@ -14,6 +14,7 @@ class NewsProvider extends ChangeNotifier {
   String _selectedLanguage = 'all';
   String _selectedConstituency = 'all';
   String _selectedPoliticsScope = 'all';
+  String _selectedLocalScope = 'all';
   String? _searchQuery;
   int _page = 1;
   bool _hasMore = true;
@@ -58,6 +59,9 @@ class NewsProvider extends ChangeNotifier {
       (_selectedPoliticsScope as dynamic) == null
           ? 'all'
           : _selectedPoliticsScope;
+
+  String get selectedLocalScope =>
+      (_selectedLocalScope as dynamic) == null ? 'all' : _selectedLocalScope;
   bool get loading => _loading;
   bool get refreshing => _refreshing;
   bool get hasMore => _hasMore;
@@ -215,8 +219,9 @@ class NewsProvider extends ChangeNotifier {
         if (c.slug.toLowerCase() == s) {
           _selectedCategoryId = c.id;
           _searchQuery = null;
-          if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
-          if (!isPoliticsMode) _selectedConstituency = 'all';
+          if (!isPoliticsMode) _selectedPoliticsScope = 'all';
+          if (!isLocalMode) _selectedLocalScope = 'all';
+          if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
           notifyListeners();
           return;
         }
@@ -310,11 +315,33 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _resetPoliticsScopeForLanguage(String languageCode) {
+    final lang = languageCode.toLowerCase();
+    if (lang == 'te' || lang == 'hi' || lang == 'en') {
+      if (!['india', 'international', 'all'].contains(_selectedPoliticsScope)) {
+        _selectedPoliticsScope = 'all';
+      }
+    } else {
+      _selectedPoliticsScope = 'all';
+    }
+    if (lang == 'te') {
+      if (!['andhra', 'telangana', 'all'].contains(_selectedLocalScope)) {
+        _selectedLocalScope = 'all';
+      }
+    } else {
+      _selectedLocalScope = 'all';
+    }
+  }
+
   Future<void> selectCategory(String? categoryId) async {
     _selectedCategoryId = categoryId;
     _searchQuery = null;
-    if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
-    if (!isPoliticsMode) _selectedConstituency = 'all';
+    _selectedPoliticsScope = 'all';
+    _selectedLocalScope = 'all';
+    if (isPoliticsMode || isLocalMode) {
+      _resetPoliticsScopeForLanguage(selectedLanguage);
+    }
+    if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
     await refresh();
   }
 
@@ -335,7 +362,7 @@ class NewsProvider extends ChangeNotifier {
       _onboardingUiLanguage = languageCode;
       await prefs.setString(_onboardingUiLangKey, languageCode);
     }
-    if (!isTeluguPoliticsMode) _selectedPoliticsScope = 'all';
+    _resetPoliticsScopeForLanguage(languageCode);
     if (!isPoliticsMode) _selectedConstituency = 'all';
     notifyListeners();
     await refresh();
@@ -350,25 +377,29 @@ class NewsProvider extends ChangeNotifier {
   Future<void> selectPoliticsScope(String scope) async {
     final s = scope.trim().toLowerCase();
     _selectedPoliticsScope =
-        ['andhra', 'telangana', 'india', 'international'].contains(s)
-            ? s
-            : 'all';
+        ['india', 'international', 'all'].contains(s) ? s : 'all';
+    await refresh();
+  }
+
+  Future<void> selectLocalScope(String scope) async {
+    final s = scope.trim().toLowerCase();
+    _selectedLocalScope =
+        ['andhra', 'telangana', 'all'].contains(s) ? s : 'all';
     if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
     await refresh();
   }
 
-  bool get isTeluguPoliticsMode {
-    if (selectedLanguage != 'te') return false;
+  bool get isLocalMode {
     if (_selectedCategoryId == null) return false;
-    Category? cat;
     for (final c in _categories) {
       if (c.id == _selectedCategoryId) {
-        cat = c;
-        break;
+        return c.slug.toLowerCase() == 'local';
       }
     }
-    return (cat?.slug.toLowerCase() ?? '') == 'politics';
+    return false;
   }
+
+  bool get isTeluguLocalMode => selectedLanguage == 'te' && isLocalMode;
 
   bool get isPoliticsMode {
     if (_selectedCategoryId == null) return false;
@@ -386,6 +417,10 @@ class NewsProvider extends ChangeNotifier {
         selectedLanguage == 'en';
   }
 
+  bool get shouldShowLocalScopeDropdown {
+    return isTeluguLocalMode;
+  }
+
   List<String> get availablePoliticalConstituencies {
     final set = <String>{};
     for (final p in _posts) {
@@ -399,7 +434,47 @@ class NewsProvider extends ChangeNotifier {
   }
 
   bool get shouldShowAndhraConstituencyFilter {
-    return isTeluguPoliticsMode && selectedPoliticsScope == 'andhra';
+    return isTeluguLocalMode && _selectedLocalScope == 'andhra';
+  }
+
+  /// National + world politics (Politics tab).
+  List<(String label, String scope)> get politicsScopeOptions {
+    return const [
+      ('All', 'all'),
+      ('India', 'india'),
+      ('International', 'international'),
+    ];
+  }
+
+  /// State / regional news (Local tab — Telugu).
+  List<(String label, String scope)> get localScopeOptions {
+    return const [
+      ('All', 'all'),
+      ('Andhra', 'andhra'),
+      ('Telangana', 'telangana'),
+    ];
+  }
+
+  String get politicsScopeForApi {
+    if (!isPoliticsMode || selectedPoliticsScope == 'all') return 'all';
+    if (selectedPoliticsScope == 'india' || selectedPoliticsScope == 'international') {
+      return selectedPoliticsScope;
+    }
+    return 'all';
+  }
+
+  String get localScopeForApi {
+    if (!isTeluguLocalMode || _selectedLocalScope == 'all') return 'all';
+    if (_selectedLocalScope == 'andhra' || _selectedLocalScope == 'telangana') {
+      return _selectedLocalScope;
+    }
+    return 'all';
+  }
+
+  String get regionScopeForApi {
+    if (isPoliticsMode) return politicsScopeForApi;
+    if (isLocalMode) return localScopeForApi;
+    return 'all';
   }
 
   Future<void> _fetchPosts({required bool reset}) async {
@@ -410,7 +485,7 @@ class NewsProvider extends ChangeNotifier {
         language: selectedLanguage,
         constituency:
             shouldShowAndhraConstituencyFilter ? selectedConstituency : 'all',
-        politicsScope: selectedPoliticsScope,
+        politicsScope: regionScopeForApi,
         city: _cityForFeedQuery(),
         search: _searchQuery,
         // Keep the feed fresh by default (Way2News behavior).

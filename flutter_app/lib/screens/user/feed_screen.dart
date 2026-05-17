@@ -331,6 +331,38 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            Selector<NewsProvider, _RegionChipBarData>(
+              selector: (_, news) {
+                if (news.shouldShowPoliticalScopeDropdown) {
+                  return _RegionChipBarData(
+                    selectedScope: news.selectedPoliticsScope,
+                    options: news.politicsScopeOptions,
+                    onSelectPolitics: true,
+                  );
+                }
+                if (news.shouldShowLocalScopeDropdown) {
+                  return _RegionChipBarData(
+                    selectedScope: news.selectedLocalScope,
+                    options: news.localScopeOptions,
+                    onSelectPolitics: false,
+                  );
+                }
+                return const _RegionChipBarData.hidden();
+              },
+              builder: (_, data, __) {
+                if (data.hidden) return const SizedBox.shrink();
+                final news = context.read<NewsProvider>();
+                return RepaintBoundary(
+                  child: _PoliticsScopeChips(
+                    selectedScope: data.selectedScope,
+                    options: data.options,
+                    onSelected: data.onSelectPolitics
+                        ? news.selectPoliticsScope
+                        : news.selectLocalScope,
+                  ),
+                );
+              },
+            ),
             Expanded(
               child: Selector<NewsProvider, FeedListSnapshot>(
                 selector: (_, news) => readFeedListSnapshot(news),
@@ -379,6 +411,71 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               ),
             ),
           ],
+    );
+  }
+}
+
+class _RegionChipBarData {
+  final bool hidden;
+  final String selectedScope;
+  final List<(String label, String scope)> options;
+  final bool onSelectPolitics;
+
+  const _RegionChipBarData({
+    required this.selectedScope,
+    required this.options,
+    required this.onSelectPolitics,
+  }) : hidden = false;
+
+  const _RegionChipBarData.hidden()
+      : hidden = true,
+        selectedScope = 'all',
+        options = const [],
+        onSelectPolitics = true;
+}
+
+class _PoliticsScopeChips extends StatelessWidget {
+  final String selectedScope;
+  final List<(String label, String scope)> options;
+  final Future<void> Function(String scope) onSelected;
+
+  const _PoliticsScopeChips({
+    required this.selectedScope,
+    required this.options,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        itemCount: options.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final opt = options[i];
+          final selected = selectedScope == opt.$2;
+          return FilterChip(
+            label: Text(
+              opt.$1,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.black : FeedXpressoTheme.iconFg,
+              ),
+            ),
+            selected: selected,
+            onSelected: (_) => onSelected(opt.$2),
+            backgroundColor: FeedXpressoTheme.iconSurface,
+            selectedColor: FeedXpressoTheme.iconFg,
+            showCheckmark: false,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            visualDensity: VisualDensity.compact,
+          );
+        },
+      ),
     );
   }
 }

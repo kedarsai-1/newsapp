@@ -126,15 +126,21 @@ const getFeed = async (req, res) => {
     if (constituency && String(constituency).trim().toLowerCase() !== 'all') {
       query.constituency = new RegExp(`^${String(constituency).trim()}$`, 'i');
     }
-    const ps = String(politicsScope || '').toLowerCase().trim();
-    if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international'].includes(ps)) {
-      query.politicsScope = ps;
-    }
-
     const langParam =
       language && String(language).toLowerCase() !== 'all'
         ? String(language).toLowerCase()
         : null;
+
+    const ps = String(politicsScope || '').toLowerCase().trim();
+    if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international'].includes(ps)) {
+      const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
+      const enHiScopes = new Set(['india', 'international']);
+      const scopeOk = !langParam
+        || (langParam === 'te' && teScopes.has(ps))
+        || ((langParam === 'en' || langParam === 'hi') && enHiScopes.has(ps))
+        || (langParam !== 'te' && langParam !== 'en' && langParam !== 'hi');
+      if (scopeOk) query.politicsScope = ps;
+    }
 
     if (breaking === 'true') query.isBreaking = true;
     if (featured === 'true') query.isFeatured = true;
@@ -193,7 +199,7 @@ const getFeed = async (req, res) => {
             { language: 'te' },
             { originalLanguage: 'tel' },
             // Legacy rows: Telugu publishers tagged before language field was set.
-            { sourceName: /eenadu|sakshi|tv9\s*telugu|tv9telugu|123telugu|mana\s*telangana|andhra\s*jyothy/i },
+            { sourceName: /eenadu|sakshi|tv9\s*telugu|tv9telugu|123telugu|mana\s*telangana|andhra\s*jyothy|v6\s*velugu|10tv|ntv\s*telugu|ntvtelugu/i },
           ],
         };
       }

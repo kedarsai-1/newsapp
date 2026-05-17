@@ -78,6 +78,7 @@ const defaultRssFeeds = [
   // ═══════════════════════════════════════════════════════════════════════════
   { name: 'BBC Hindi', url: 'https://feeds.bbci.co.uk/hindi/rss.xml', categorySlug: 'general', language: 'hi' },
   { name: 'BBC Hindi - India', url: 'https://feeds.bbci.co.uk/hindi/india/rss.xml', categorySlug: 'politics', language: 'hi', politicsScope: 'india' },
+  { name: 'BBC Hindi - World', url: 'https://feeds.bbci.co.uk/hindi/world/rss.xml', categorySlug: 'politics', language: 'hi', politicsScope: 'international' },
   { name: 'NDTV Khabar', url: 'https://feeds.feedburner.com/ndtvkhabar-latest', categorySlug: 'general', language: 'hi', ogImageFallback: true },
   { name: 'Prabhat Khabar', url: 'https://www.prabhatkhabar.com/feed', categorySlug: 'general', language: 'hi', ogImageFallback: true },
   // Dainik Bhaskar (only categories with confirmed-working RSS endpoints)
@@ -100,13 +101,20 @@ const defaultRssFeeds = [
   { name: 'Amar Ujala - Lifestyle', url: 'https://www.amarujala.com/rss/lifestyle.xml', categorySlug: 'health', language: 'hi', ogImageFallback: true },
   { name: 'ABP News - Education', url: 'https://news.abplive.com/education/feed', categorySlug: 'education', language: 'hi' },
   { name: 'Amar Ujala - Delhi', url: 'https://www.amarujala.com/rss/delhi.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true },
+  { name: 'ABP News - States', url: 'https://news.abplive.com/news/states/feed', categorySlug: 'local', language: 'hi', ogImageFallback: true },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TELUGU - Working feeds with images
   // ═══════════════════════════════════════════════════════════════════════════
   { name: 'TV9 Telugu', url: 'https://www.tv9telugu.com/feed', categorySlug: 'general', language: 'te' },
-  { name: 'TV9 Telugu - Andhra Pradesh', url: 'https://www.tv9telugu.com/category/andhra-pradesh/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'andhra' },
-  { name: 'TV9 Telugu - Telangana', url: 'https://www.tv9telugu.com/category/telangana/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'telangana' },
+  { name: 'TV9 Telugu - Politics', url: 'https://www.tv9telugu.com/category/politics/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'india' },
+  { name: 'TV9 Telugu - International', url: 'https://www.tv9telugu.com/category/international/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'international' },
+  { name: 'TV9 Telugu - World', url: 'https://www.tv9telugu.com/category/world/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'international' },
+  { name: 'NTV Telugu - World', url: 'https://www.ntvtelugu.com/category/world-news/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'international' },
+  { name: 'TV9 Telugu - Andhra Pradesh', url: 'https://www.tv9telugu.com/category/andhra-pradesh/feed', categorySlug: 'local', language: 'te', ogImageFallback: true, politicsScope: 'andhra' },
+  { name: 'TV9 Telugu - Telangana', url: 'https://www.tv9telugu.com/category/telangana/feed', categorySlug: 'local', language: 'te', ogImageFallback: true, politicsScope: 'telangana' },
+  { name: '10TV Telugu', url: 'https://10tv.in/feed', categorySlug: 'general', language: 'te', ogImageFallback: true },
+  { name: 'NTV Telugu', url: 'https://www.ntvtelugu.com/feed', categorySlug: 'general', language: 'te', ogImageFallback: true },
   // TV9 category feeds (WordPress style)
   { name: 'TV9 Telugu - Sports', url: 'https://www.tv9telugu.com/category/sports/feed', categorySlug: 'sports', language: 'te', ogImageFallback: true },
   { name: 'TV9 Telugu - Business', url: 'https://www.tv9telugu.com/category/business/feed', categorySlug: 'business', language: 'te', ogImageFallback: true },

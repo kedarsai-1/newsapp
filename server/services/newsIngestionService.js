@@ -644,7 +644,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               : null;
             if (publishedAt && !Number.isNaN(publishedAt.getTime())) {
               const maxAgeDays = String(feed.categorySlug || '').toLowerCase() === 'politics'
-                ? 12
+                ? (String(feed.language || '').toLowerCase() === 'te' ? 21 : 12)
                 : 28;
               if (Date.now() - publishedAt.getTime() > maxAgeDays * 24 * 60 * 60 * 1000) {
                 stats.staleFiltered = (stats.staleFiltered || 0) + 1;

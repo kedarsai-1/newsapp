@@ -235,8 +235,81 @@ function isTeluguPoliticalStory(postLike) {
   if (institutional.some((re) => re.test(text))) score += 1;
   if (apTgContext.some((re) => re.test(text))) score += 1;
 
-  // Need strong confidence to keep category clean.
-  return score >= 2;
+  return score >= 1;
+}
+
+function isHindiPoliticalStory(postLike) {
+  const text = stripMarkup(
+    `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
+  );
+  if (!text) return false;
+
+  const noisePatterns = [
+    /राशिफल|कुंडली|ज्योतिष|वास्तु|धर्म|मंदिर|पूजा/,
+    /फिल्म|मूवी|ट्रेलर|बॉक्स ऑफिस|बॉलीवुड|सेलिब्रिटी|सिनेमा/,
+    /क्रिकेट|आईपीएल|फुटबॉल|मैच|स्कोर|खेल/,
+    /रेसिपी|ब्यूटी|स्किनकेयर|डाइट|हेल्थ टिप्स/,
+    /सोना चोरी|गोल्ड थेफ्ट|आम की कीमत|मैंगो/i,
+  ];
+  for (const re of noisePatterns) {
+    if (re.test(text)) return false;
+  }
+
+  const partyOrLeader = [
+    /\b(bjp|congress|aap|sp\b|bsp|jdu|rjd|tdp|ysrcp)\b/i,
+    /\b(modi|rahul|yogi|kejriwal|akhilesh|nitish|tejashwi|shah|nadda)\b/i,
+    /मोदी|राहुल|योगी|केजरीवाल|शाह|गांधी|भाजपा|कांग्रेस/,
+  ];
+  const institutional = [
+    /\b(election|poll|vote|assembly|parliament|cabinet|minister|mla|mp|party|manifesto|politics?)\b/i,
+    /चुनाव|मंत्री|सरकार|विधानसभा|लोकसभा|राज्यसभा|पार्टी|राजनीति|कैबिनेट/,
+  ];
+  const northContext = [
+    /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|यू\.पी\./,
+    /\b(uttar pradesh|punjab|haryana|rajasthan|bihar|delhi|lucknow|chandigarh)\b/i,
+  ];
+
+  let score = 0;
+  if (partyOrLeader.some((re) => re.test(text))) score += 1;
+  if (institutional.some((re) => re.test(text))) score += 1;
+  if (northContext.some((re) => re.test(text))) score += 1;
+  return score >= 1;
+}
+
+/** Infer india vs international vs AP/TG from story text when feed scope is broad. */
+function inferPoliticsScopeFromStory(postLike, feedScope) {
+  const fromFeed = String(feedScope || '').toLowerCase();
+  if (['andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(fromFeed)) {
+    return fromFeed;
+  }
+  const text = stripMarkup(
+    `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
+  );
+  if (/(ఆంధ్ర|andhra\s*pradesh|amaravati|vijayawada|visakhapatnam|guntur|nellore)/i.test(text)) {
+    return 'andhra';
+  }
+  if (/(తెలంగాణ|telangana|hyderabad|warangal|karimnagar|secunderabad)/i.test(text)) {
+    return 'telangana';
+  }
+  if (
+    /(उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी)/.test(text)
+    || /\b(uttar pradesh|punjab|haryana|rajasthan|bihar|lucknow|chandigarh|noida|ghaziabad)\b/i.test(text)
+  ) {
+    return 'north';
+  }
+  if (/\b(trump|biden|putin|ukraine|gaza|united nations|white house|nato|european union)\b/i.test(text)
+    || /(ट्रंप|बाइडेन|अमेरिका|पाकिस्तान|चीन|यूक्रेन|गाजा|विदेश|अंतर्राष्ट्रीय)/.test(text)
+    || /(అమెరికా|అమెరిక|బైడెన్|ట్రంప్|పాకిస్తాన్|చైనా|రష్యా|యుద్ధం|విదేశ)/i.test(text)) {
+    return 'international';
+  }
+  if (
+    /\b(modi|rahul|parliament|lok sabha|rajya sabha|bjp|congress|delhi|centre|central government)\b/i.test(text)
+    || /(మోదీ|రాహుల్|కేంద్ర|లోక్‌సభ|రాజ్యసభ|ఢిల్లీ|జాతీయ)/i.test(text)
+    || /(मोदी|राहुल|संसद|लोकसभा|राज्यसभा|केंद्र|दिल्ली|जातीय)/.test(text)
+  ) {
+    return 'india';
+  }
+  return 'india';
 }
 
 function isCloudinaryUrl(url) {
@@ -360,20 +433,24 @@ async function getCategoryBySlug(slug) {
 
 async function isDuplicate(item) {
   const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const lang = String(item.language || 'en').toLowerCase();
+  const langClause = lang && lang !== 'all' ? { language: lang } : {};
+
   const canonical = canonicalizeUrl(item.sourceUrl);
   if (canonical) {
     const sourceUrlHash = hashUrl(canonical);
-    if (await NewsPost.exists({ sourceUrlHash })) return true;
+    if (await NewsPost.exists({ sourceUrlHash, ...langClause })) return true;
   }
 
   const fp = titleFingerprint(item.title);
-  if (fp && await NewsPost.exists({ titleFingerprint: fp })) return true;
+  if (fp && await NewsPost.exists({ titleFingerprint: fp, ...langClause })) return true;
 
   const titleNorm = normalizeTitle(item.title);
-  if (titleNorm.length >= 12) {
+  if (titleNorm.length >= 8) {
     if (await NewsPost.exists({
       titleNormalized: titleNorm,
       createdAt: { $gte: windowStart },
+      ...langClause,
     })) {
       return true;
     }
@@ -382,6 +459,7 @@ async function isDuplicate(item) {
   const existsByExactTitle = await NewsPost.exists({
     title: item.title,
     createdAt: { $gte: windowStart },
+    ...langClause,
   });
   return !!existsByExactTitle;
 }
@@ -722,13 +800,21 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               stats.languageFiltered += 1;
               continue;
             }
-            // Telugu politics feeds can contain lifestyle/astrology/clickbait.
-            // Keep only party/government/election-related stories in Politics.
+            // Telugu politics feeds: drop crime/lifestyle/entertainment that section RSS mislabels.
+            const feedLang = String(feed.language || '').toLowerCase();
+            const feedCat = String(feed.categorySlug || '').toLowerCase();
             if (
-              process.env.INGEST_STRICT_POLITICS_FILTER === 'true'
-              && String(feed.language || '').toLowerCase() === 'te'
-              && String(feed.categorySlug || '').toLowerCase() === 'politics'
+              feedLang === 'te'
+              && feedCat === 'politics'
               && !isTeluguPoliticalStory(item)
+            ) {
+              stats.politicsFiltered += 1;
+              continue;
+            }
+            if (
+              feedLang === 'hi'
+              && feedCat === 'politics'
+              && !isHindiPoliticalStory(item)
             ) {
               stats.politicsFiltered += 1;
               continue;
@@ -793,13 +879,17 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                   ? s
                   : null;
                 const cat = String(feed.categorySlug || '').toLowerCase();
-                if (cat === 'politics') return valid || 'all';
+                if (cat === 'politics') {
+                  if (valid && valid !== 'all') return valid;
+                  return inferPoliticsScopeFromStory(item, feed.politicsScope);
+                }
                 if (cat === 'local' && ['andhra', 'telangana', 'north', 'states', 'delhi'].includes(s)) return s;
+                if (cat === 'local' && (feedLang === 'te' || feedLang === 'hi')) {
+                  return inferPoliticsScopeFromStory(item, s);
+                }
                 return null;
               })(),
             };
-            const feedLang = String(feed.language || '').toLowerCase();
-            const feedCat = String(feed.categorySlug || '').toLowerCase();
             if (feedLang === 'te' && (feedCat === 'local' || feedCat === 'politics')) {
               const constituencyResult = await classifyArticleConstituency(raw);
               postFields = {
@@ -844,7 +934,6 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             // and the global `RSS_OG_FALLBACK=false` env still disables it everywhere.
             if (
               !postFields.mediaUrl
-              && !budgetTight
               && feed.ogImageFallback !== false
               && process.env.RSS_OG_FALLBACK !== 'false'
               && postFields.sourceUrl

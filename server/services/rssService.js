@@ -426,17 +426,30 @@ function pickImageFromItem(item) {
   // Handle itunes:image
   const itunesImg = it.itunes?.image || it['itunes:image']?.href || it['itunes:image']?.url || it['itunes:image']?.$?.href;
   
+  // rss-parser top-level image (BBC and others)
+  const topImage =
+    (typeof it.image === 'string' ? it.image : null)
+    || it.image?.url
+    || it.image?.$?.url;
+
   // Extract from HTML content
-  const html = it['content:encoded'] || it.content || '';
+  const html = it['content:encoded'] || it.content || it.summary || '';
   const htmlImg = (() => {
     const s = String(html || '');
-    const m =
-      s.match(/<img[^>]+src\s*=\s*["']([^"']+)["']/i)
-      || s.match(/<img[^>]+data-src\s*=\s*["']([^"']+)["']/i);
-    return m && m[1] ? m[1].trim() : null;
+    const patterns = [
+      /<img[^>]+src\s*=\s*["']([^"']+)["']/i,
+      /<img[^>]+data-src\s*=\s*["']([^"']+)["']/i,
+      /<img[^>]+data-original\s*=\s*["']([^"']+)["']/i,
+      /<img[^>]+data-lazy-src\s*=\s*["']([^"']+)["']/i,
+    ];
+    for (const re of patterns) {
+      const m = s.match(re);
+      if (m?.[1]) return m[1].trim();
+    }
+    return null;
   })();
 
-  const candidates = [enclosure, mediaContent, mediaThumbnail, itunesImg, htmlImg].filter(Boolean);
+  const candidates = [enclosure, mediaContent, mediaThumbnail, itunesImg, topImage, htmlImg].filter(Boolean);
   for (const c of candidates) {
     const u = normalizeMediaUrl(c);
     if (u && !isUnusableFeedImageUrl(u)) return u;

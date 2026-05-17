@@ -1,8 +1,21 @@
 import '../models/models.dart';
 
 String _normalizeTitle(String title) {
-  return title
-      .toLowerCase()
+  final s = title.toLowerCase().trim();
+  if (s.isEmpty) return '';
+  if (RegExp(r'[\u0900-\u097F]').hasMatch(s)) {
+    return s
+        .replaceAll(RegExp(r'[^\u0900-\u097F0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+  if (RegExp(r'[\u0C00-\u0C7F]').hasMatch(s)) {
+    return s
+        .replaceAll(RegExp(r'[^\u0C00-\u0C7F0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+  return s
       .replaceAll(RegExp(r'[\u0300-\u036f]'), '')
       .replaceAll(RegExp(r"[''`]"), "'")
       .replaceAll(RegExp(r'[^\w\s]'), ' ')
@@ -37,7 +50,7 @@ List<NewsPost> dedupeNewsPosts(Iterable<NewsPost> posts) {
   for (final p in posts) {
     final keys = <String>{
       if (_urlKey(p.sourceUrl) != null) _urlKey(p.sourceUrl)!,
-      if (_normalizeTitle(p.title).length >= 12) _normalizeTitle(p.title),
+      if (_normalizeTitle(p.title).length >= 8) _normalizeTitle(p.title),
     };
     if (keys.isNotEmpty && keys.any(seen.contains)) continue;
     seen.addAll(keys);

@@ -317,7 +317,16 @@ class NewsProvider extends ChangeNotifier {
 
   void _resetPoliticsScopeForLanguage(String languageCode) {
     final lang = languageCode.toLowerCase();
-    if (lang == 'te' || lang == 'hi' || lang == 'en') {
+    if (lang == 'te') {
+      if (!['andhra', 'telangana', 'india', 'international', 'all']
+          .contains(_selectedPoliticsScope)) {
+        _selectedPoliticsScope = 'all';
+      }
+    } else if (lang == 'hi') {
+      if (!['north', 'india', 'international', 'all'].contains(_selectedPoliticsScope)) {
+        _selectedPoliticsScope = 'all';
+      }
+    } else if (lang == 'en') {
       if (!['india', 'international', 'all'].contains(_selectedPoliticsScope)) {
         _selectedPoliticsScope = 'all';
       }
@@ -384,8 +393,12 @@ class NewsProvider extends ChangeNotifier {
 
   Future<void> selectPoliticsScope(String scope) async {
     final s = scope.trim().toLowerCase();
-    _selectedPoliticsScope =
-        ['india', 'international', 'all'].contains(s) ? s : 'all';
+    final allowed = selectedLanguage == 'te'
+        ? ['andhra', 'telangana', 'india', 'international', 'all']
+        : selectedLanguage == 'hi'
+            ? ['north', 'india', 'international', 'all']
+            : ['india', 'international', 'all'];
+    _selectedPoliticsScope = allowed.contains(s) ? s : 'all';
     _posts = [];
     _refreshing = true;
     _error = null;
@@ -457,8 +470,25 @@ class NewsProvider extends ChangeNotifier {
     return isTeluguLocalMode && _selectedLocalScope == 'andhra';
   }
 
-  /// National + world politics (Politics tab).
+  /// National + world + AP/TG politics (Politics tab).
   List<(String label, String scope)> get politicsScopeOptions {
+    if (selectedLanguage == 'te') {
+      return const [
+        ('All', 'all'),
+        ('Andhra', 'andhra'),
+        ('Telangana', 'telangana'),
+        ('India', 'india'),
+        ('International', 'international'),
+      ];
+    }
+    if (selectedLanguage == 'hi') {
+      return const [
+        ('All', 'all'),
+        ('North', 'north'),
+        ('India', 'india'),
+        ('International', 'international'),
+      ];
+    }
     return const [
       ('All', 'all'),
       ('India', 'india'),
@@ -483,7 +513,12 @@ class NewsProvider extends ChangeNotifier {
 
   String get politicsScopeForApi {
     if (!isPoliticsMode || selectedPoliticsScope == 'all') return 'all';
-    if (selectedPoliticsScope == 'india' || selectedPoliticsScope == 'international') {
+    final allowed = selectedLanguage == 'hi'
+        ? {'india', 'international', 'north'}
+        : selectedLanguage == 'te'
+            ? {'india', 'international', 'andhra', 'telangana'}
+            : {'india', 'international'};
+    if (allowed.contains(selectedPoliticsScope)) {
       return selectedPoliticsScope;
     }
     return 'all';

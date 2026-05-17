@@ -8,14 +8,16 @@ bool isUnusableFeedImageUrl(String? url) {
   if (u.isEmpty) return true;
   if (u.contains('clearbit.com')) return true;
   if (u.contains('/s2/favicons')) return true;
-  if (u.contains('logo') ||
-      u.contains('favicon') ||
-      u.contains('icon') ||
+  if (u.contains('favicon') ||
+      u.contains('/logo') ||
+      u.contains('/logos/') ||
       u.contains('sprite') ||
+      RegExp(r'[/_.-]icon\.(jpg|jpeg|png|webp|gif)').hasMatch(u) ||
+      u.contains('/icons/') ||
       u.contains('placeholder') ||
-      u.contains('default') ||
+      RegExp(r'/default[/-]').hasMatch(u) ||
       u.contains('avatar') ||
-      u.contains('profile') ||
+      u.contains('/profile/') ||
       u.contains('1x1') ||
       u.contains('pixel') ||
       u.endsWith('.svg') ||

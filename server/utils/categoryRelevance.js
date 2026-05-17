@@ -18,9 +18,10 @@ const EXCLUDE_BY_CATEGORY = {
   ],
   politics: [
     /\b(cricket|ipl\b|football score|box office|movie review|horoscope|zodiac)\b/i,
-    /\b(recipe|diet tips|skincare|beauty tips)\b/i,
-    /(క్రికెట్|ఐపీఎల్|సినిమా|రాశి|జాతకం)/,
-    /(क्रिकेट|फिल्म|राशिफल)/,
+    /\b(recipe|diet tips|skincare|beauty tips|gold theft|jewellery theft|mango price|costco)\b/i,
+    /\b(lover|affair|dating|wedding photos?|viral video|tiktok|instagram reel)\b/i,
+    /(క్రికెట్|ఐపీఎల్|సినిమా|రాశి|జాతకం|నగలు|దొంగతనం|మామిడి|ప్రేమ|లవర్|వైరల్)/,
+    /(क्रिकेट|फिल्म|राशिफल|चोरी|आम|प्रेम)/,
   ],
   technology: [
     /\b(cricket|ipl\b|election rally|box office)\b/i,
@@ -98,6 +99,10 @@ function passesIngestCategoryGate(item, categorySlug, { feedUrl } = {}) {
   const slug = String(categorySlug || 'general').toLowerCase();
   if (slug === 'general') return true;
   if (!passesCategoryExclusions(item, slug)) return false;
+  // Politics/local: always require on-topic keywords (RSS section feeds still leak crime/lifestyle).
+  if (slug === 'politics' || slug === 'local') {
+    return matchesFeedCategory(item, categorySlug, { feedUrl });
+  }
   if (process.env.INGEST_STRICT_CATEGORY_FILTER === 'true') {
     return matchesFeedCategory(item, categorySlug, { feedUrl });
   }
@@ -122,7 +127,7 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
     sports:
       /\b(sport|cricket|football|tennis|hockey|match|tournament|league|ipl|goal|wicket|olympic|athlete|coach|stadium)\b|(క్రికెట్|ఐపీఎల్|క్రీడ|మ్యాచ్|फुटबॉल|क्रिकेट|खेल|मैच)/i,
     politics:
-      /\b(politics|election|government|minister|parliament|assembly|party|vote|poll|cabinet|policy|bjp|congress|modi|mla|mp)\b|(రాజకీయ|ఎన్నిక|మంత్రి|పార్టీ|శాసనసభ|राजनीति|चुनाव|मंत्री|सरकार)/i,
+      /\b(politics|election|government|minister|parliament|assembly|party|vote|poll|cabinet|policy|bjp|congress|modi|mla|mp|cm\b|chief minister|bjp|tdp|ysrcp|jagan|revanth|kcr|rahul)\b|(రాజకీయ|ఎన్నిక|మంత్రి|పార్టీ|శాసనసభ|ముఖ్యమంత్రి|సీఎం|ఎమ్మెల్యే|ఎంపీ|లోక్‌సభ|రాజ్యసభ|రేవంత్|జగన్|చంద్రబాబు|కేసిఆర్|राजनीति|चुनाव|मंत्री|सरकार)/i,
     technology:
       /\b(tech|technology|smartphone|android|ios|ai\b|artificial intelligence|software|hardware|gadget|cyber|semiconductor|chip)\b|(టెక్నాలజీ|స్మార్ట్|टेक्नोलॉजी|स्मार्टफोन)/i,
     entertainment:
@@ -132,7 +137,7 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
     education:
       /\b(education|school|college|university|exam|student|teacher|admission|scholarship|degree|campus|neet|jee|upsc)\b|(విద్య|పరీక్ష|शिक्षा|परीक्षा|विद्यार्थी)/i,
     local:
-      /\b(city|local|traffic|metro|municipal|hyderabad|delhi|mumbai|chennai|bangalore|amaravati|vijayawada|warangal)\b|(హైదరాబాద్|అమరావతి|విజయవాడ|हैदराबाद|दिल्ली|मुंबई)/i,
+      /\b(city|local|traffic|metro|municipal|hyderabad|delhi|mumbai|chennai|bangalore|amaravati|vijayawada|warangal|andhra|telangana|guntur|visakhapatnam|lucknow|chandigarh|noida|patna|jaipur)\b|(హైదరాబాద్|అమరావతి|విజయవాడ|ఆంధ్ర|తెలంగాణ|वाराणसी|लखनऊ|पंजाब|हरियाणा|राजस्थान|बिहार|उत्तर प्रदेश|दिल्ली|हैदराबाद)/i,
   };
 
   const inc = INCLUDE_BY_CATEGORY[slug];
@@ -167,9 +172,23 @@ function filterPostsForCategory(posts, categorySlug) {
     if (String(p?.sourceType || '').toLowerCase() === 'youtube') return true;
 
     const postSlug = String(p?.category?.slug || '').toLowerCase();
-    // Ingestion already assigns category from section RSS / API plan — trust it on read.
     if (postSlug === slug) {
-      return !isLegacyMiscategorized(p, slug);
+      if (isLegacyMiscategorized(p, slug)) return false;
+      // Politics/local: re-check keywords so old miscategorized rows drop out of the tab.
+      if (slug === 'politics' || slug === 'local') {
+        return matchesFeedCategory(
+          {
+            title: p.title,
+            summary: p.summary,
+            body: p.body,
+            sourceUrl: p.sourceUrl,
+            sourceName: p.sourceName,
+          },
+          slug,
+          {},
+        );
+      }
+      return true;
     }
 
     if (isLegacyMiscategorized(p, slug)) return false;

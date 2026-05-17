@@ -30,10 +30,29 @@ function hashUrl(url) {
   return crypto.createHash('sha256').update(url).digest('hex');
 }
 
-/** Stable title key — catches same story with punctuation/case differences. */
+/** Stable title key — catches same story with punctuation/case differences (en/te/hi). */
 function normalizeTitle(title) {
-  return String(title || '')
-    .toLowerCase()
+  const raw = String(title || '').toLowerCase().trim();
+  if (!raw) return '';
+
+  if (/[\u0900-\u097F]/.test(raw)) {
+    return raw
+      .normalize('NFC')
+      .replace(/[^\u0900-\u097F0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+  }
+  if (/[\u0C00-\u0C7F]/.test(raw)) {
+    return raw
+      .normalize('NFC')
+      .replace(/[^\u0C00-\u0C7F0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+  }
+
+  return raw
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[''`]/g, "'")
@@ -45,7 +64,7 @@ function normalizeTitle(title) {
 
 function titleFingerprint(title) {
   const norm = normalizeTitle(title);
-  if (norm.length < 12) return null;
+  if (norm.length < 8) return null;
   return hashUrl(norm);
 }
 

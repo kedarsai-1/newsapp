@@ -69,6 +69,13 @@ function preferredHostFromSourceName(sourceName) {
   if (src.includes('eenadu')) return 'eenadu.net';
   if (src.includes('aaj tak')) return 'aajtak.in';
   if (src.includes('amar ujala')) return 'amarujala.com';
+  if (src.includes('abp')) return 'abplive.com';
+  if (src.includes('bhaskar')) return 'bhaskar.com';
+  if (src.includes('jagran')) return 'jagran.com';
+  if (src.includes('prabhat khabar')) return 'prabhatkhabar.com';
+  if (src.includes('ndtv')) return 'ndtv.com';
+  if (src.includes('bbc hindi') || src.includes('bbc')) return 'bbc.com';
+  if (src.includes('the print')) return 'theprint.in';
   return null;
 }
 
@@ -80,21 +87,24 @@ async function main() {
     String(process.env.REPLACE_BAD_THUMBNAILS || '').toLowerCase(),
   );
   const limit = Math.min(1500, Math.max(1, Number(process.env.BACKFILL_LIMIT || 600)));
-  const posts = await NewsPost.find(
-    replaceBad
-      ? {
-          status: 'approved',
-          sourceType: { $in: ['rss', 'api'] },
-          sourceUrl: { $exists: true, $ne: null, $ne: '' },
-          'media.0': { $exists: true },
-        }
-      : {
-          status: 'approved',
-          sourceType: { $in: ['rss', 'api'] },
-          sourceUrl: { $exists: true, $ne: null, $ne: '' },
-          $or: [{ media: { $exists: false } }, { media: { $size: 0 } }],
-        },
-  )
+  const langFilter = String(process.env.BACKFILL_LANGUAGE || '').trim().toLowerCase();
+  const baseQuery = replaceBad
+    ? {
+        status: 'approved',
+        sourceType: { $in: ['rss', 'api'] },
+        sourceUrl: { $exists: true, $ne: null, $ne: '' },
+        'media.0': { $exists: true },
+      }
+    : {
+        status: 'approved',
+        sourceType: { $in: ['rss', 'api'] },
+        sourceUrl: { $exists: true, $ne: null, $ne: '' },
+        $or: [{ media: { $exists: false } }, { media: { $size: 0 } }],
+      };
+  if (langFilter && langFilter !== 'all') {
+    baseQuery.language = langFilter;
+  }
+  const posts = await NewsPost.find(baseQuery)
     .select('_id sourceUrl sourceName sourceUrlHash media')
     .sort({ createdAt: -1 })
     .limit(limit);

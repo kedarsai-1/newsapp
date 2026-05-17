@@ -7,6 +7,7 @@ const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTrunca
 const { canonicalizeUrl, hashUrl, normalizeTitle, titleFingerprint } = require('../utils/storyDedupe');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
+const { filterPostsForCategory } = require('../utils/categoryRelevance');
 
 function cleanTextForClient(input) {
   return String(input || '')
@@ -47,15 +48,14 @@ function politicsScopeMatchClause(scope, langParam) {
   const regional = ['andhra', 'telangana', 'north', 'states', 'delhi'];
   if (ps === 'india') {
     return {
-      $and: [
-        { politicsScope: { $nin: [...regional, 'international'] } },
+      $or: [
+        { politicsScope: 'india' },
+        { politicsScope: 'all' },
+        { politicsScope: null },
+        { politicsScope: { $exists: false } },
         {
-          $or: [
-            { politicsScope: 'india' },
-            { politicsScope: 'all' },
-            { politicsScope: null },
-            { politicsScope: { $exists: false } },
-          ],
+          politicsScope: { $nin: [...regional, 'international'] },
+          title: /మోదీ|రాహుల్|కేంద్ర|లోక్‌సభ|రాజ్యసభ|ఢిల్లీ|జాతీయ|రేవంత్|జగన్|చంద్రబాబు|मोदी|राहुल|संसद|लोकसभा|चुनाव|मंत्री|modi|rahul|parliament|lok sabha|election|minister/i,
         },
       ],
     };
@@ -64,7 +64,20 @@ function politicsScopeMatchClause(scope, langParam) {
     return { politicsScope: 'international' };
   }
   if (ps === 'north') {
-    return { politicsScope: { $in: ['north', 'states', 'delhi'] } };
+    return {
+      $or: [
+        { politicsScope: { $in: ['north', 'states', 'delhi'] } },
+        {
+          politicsScope: { $in: ['all', null] },
+          $or: [
+            { sourceName: /amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar|jagran|abp|prabhat\s*khabar|ndtv\s*khabar/i },
+            { title: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|uttar pradesh|punjab|haryana|rajasthan|bihar|lucknow/i },
+            { body: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|uttar pradesh|punjab/i },
+          ],
+        },
+        { politicsScope: { $exists: false } },
+      ],
+    };
   }
   if (ps === 'states' || ps === 'delhi') {
     return { politicsScope: ps };
@@ -168,6 +181,8 @@ const getFeed = async (req, res) => {
 
     const query = { status: 'approved' };
     let categorySlugFilter = null;
+    let politicsCategoryId = null;
+    let localCategoryId = null;
 
     // Shorts / video feeds: only posts that include at least one video asset.
     if (String(hasVideo || '').toLowerCase() === 'true') {
@@ -181,8 +196,15 @@ const getFeed = async (req, res) => {
     if (category) {
       query.category = category;
       if (mongoose.Types.ObjectId.isValid(String(category))) {
+        politicsCategoryId = new mongoose.Types.ObjectId(String(category));
         const catDoc = await Category.findById(category).select('slug').lean();
         categorySlugFilter = catDoc?.slug ? String(catDoc.slug).toLowerCase() : null;
+        if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
+          const localCat = await Category.findOne({ slug: 'local', isActive: true })
+            .select('_id')
+            .lean();
+          if (localCat?._id) localCategoryId = localCat._id;
+        }
       }
     }
     if (city) query['location.city'] = new RegExp(city, 'i');
@@ -273,6 +295,7 @@ const getFeed = async (req, res) => {
     if (searchOr) filterAnd.push({ $or: searchOr });
     if (languageClause) filterAnd.push(languageClause);
     const ps = politicsScopeParam;
+    const regionalPolitics = ps === 'andhra' || ps === 'telangana' || ps === 'north';
     if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(ps)) {
       const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
       const hiScopes = new Set(['india', 'international', 'north', 'states', 'delhi']);
@@ -284,7 +307,27 @@ const getFeed = async (req, res) => {
         || (langParam !== 'te' && langParam !== 'en' && langParam !== 'hi');
       if (scopeOk) {
         const scopeClause = politicsScopeMatchClause(ps, langParam);
-        if (scopeClause) filterAnd.push(scopeClause);
+        if (
+          regionalPolitics
+          && categorySlugFilter === 'politics'
+          && politicsCategoryId
+          && localCategoryId
+        ) {
+          delete query.category;
+          const localBranch =
+            ps === 'north'
+              ? { category: localCategoryId, politicsScope: { $in: ['north', 'states', 'delhi'] } }
+              : { category: localCategoryId, politicsScope: ps };
+          const orBranches = [
+            scopeClause
+              ? { $and: [{ category: politicsCategoryId }, scopeClause] }
+              : { category: politicsCategoryId },
+            localBranch,
+          ];
+          filterAnd.push({ $or: orBranches });
+        } else if (scopeClause) {
+          filterAnd.push(scopeClause);
+        }
       }
     }
     if (filterAnd.length) query.$and = filterAnd;
@@ -365,8 +408,9 @@ const getFeed = async (req, res) => {
     ]);
 
     let posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
-    // Category is already set at ingest from section RSS/API — trust the DB assignment on read.
-    // Keyword re-filtering hid valid stories and made category tabs look empty.
+    if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
+      posts = filterPostsForCategory(posts, categorySlugFilter);
+    }
 
     res.json({
       success: true,
@@ -577,6 +621,14 @@ const getProxyImage = async (req, res) => {
   if (host === 'thgimgs.com' || host.endsWith('.thgimgs.com')) {
     referer = 'https://www.thehindu.com/';
   }
+  if (host.includes('abplive.com')) referer = 'https://www.abplive.com/';
+  if (host.includes('amarujala.com')) referer = 'https://www.amarujala.com/';
+  if (host.includes('bhaskar.com')) referer = 'https://www.bhaskar.com/';
+  if (host.includes('jagran.com')) referer = 'https://www.jagran.com/';
+  if (host.includes('prabhatkhabar.com')) referer = 'https://www.prabhatkhabar.com/';
+  if (host.includes('ndtv.com')) referer = 'https://www.ndtv.com/';
+  if (host.includes('theprint.in')) referer = 'https://hindi.theprint.in/';
+  if (host.includes('bbc.co.uk') || host.includes('bbci.co.uk')) referer = 'https://www.bbc.com/hindi';
 
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 15000);

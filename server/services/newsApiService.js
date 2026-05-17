@@ -119,10 +119,13 @@ function looksLikeDecorativeImage(url) {
   if (!u) return true;
   if (u.includes('clearbit.com')) return true;
   if (u.includes('/s2/favicons')) return true;
-  if (u.includes('logo') || u.includes('favicon') || u.includes('sprite') || u.includes('icon')) return true;
+  if (u.includes('favicon') || u.includes('/logo') || u.includes('/logos/') || u.includes('sprite')) return true;
+  // Avoid bare `icon` — it false-positives on paths like `article-icon-xyz.jpg` on Hindi CDNs.
+  if (/\/icons?\//.test(u) || /[_-]icon\.(jpg|jpeg|png|webp|gif)/.test(u)) return true;
   if (u.includes('og-image') || u.includes('/theme/images/')) return true;
-  if (u.includes('1x1') || u.includes('pixel') || u.includes('placeholder') || u.includes('default')) return true;
-  if (u.includes('avatar') || u.includes('profile') || u.includes('thumbnail-default')) return true;
+  if (u.includes('1x1') || u.includes('pixel') || u.includes('placeholder')) return true;
+  if (/\/default[/-]/.test(u) || u.includes('thumbnail-default')) return true;
+  if (u.includes('avatar') || u.includes('/profile/')) return true;
   if (u.endsWith('.svg') || u.includes('.svg?') || u.endsWith('.ico') || u.includes('.ico?')) return true;
   // Check for small dimension indicators in URL (e.g., 180x180, 64x64)
   const sizeMatch = u.match(/[/_-](\d{2,3})x(\d{2,3})[/_.-]/);
@@ -182,6 +185,25 @@ function parseFirstContentImageFromHtml(html, pageUrl) {
  * When NewsAPI does not provide urlToImage, load the article HTML and read og:image.
  * Set NEWSAPI_OG_FALLBACK=false to skip (saves latency on ingest).
  */
+function refererForImageFetch(pageUrl) {
+  if (!pageUrl) return null;
+  try {
+    const parsed = new URL(pageUrl.trim());
+    const host = parsed.hostname.toLowerCase();
+    if (host.includes('abplive.com')) return 'https://www.abplive.com/';
+    if (host.includes('amarujala.com')) return 'https://www.amarujala.com/';
+    if (host.includes('bhaskar.com')) return 'https://www.bhaskar.com/';
+    if (host.includes('jagran.com')) return 'https://www.jagran.com/';
+    if (host.includes('prabhatkhabar.com')) return 'https://www.prabhatkhabar.com/';
+    if (host.includes('ndtv.com')) return 'https://www.ndtv.com/';
+    if (host.includes('theprint.in')) return 'https://hindi.theprint.in/';
+    if (host.includes('bbc.co.uk') || host.includes('bbci.co.uk')) return 'https://www.bbc.com/hindi';
+    return `${parsed.protocol}//${parsed.host}/`;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchOgImageFallback(pageUrl) {
   if (process.env.NEWSAPI_OG_FALLBACK === 'false') return null;
   if (!pageUrl || typeof pageUrl !== 'string') return null;
@@ -194,6 +216,7 @@ async function fetchOgImageFallback(pageUrl) {
   if (!['http:', 'https:'].includes(parsed.protocol)) return null;
   if (isBlockedFetchHost(parsed.hostname)) return null;
 
+  const referer = refererForImageFetch(parsed.href);
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 12000);
   try {
@@ -204,6 +227,8 @@ async function fetchOgImageFallback(pageUrl) {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'hi-IN,hi;q=0.9,en-US,en;q=0.8',
+        ...(referer ? { Referer: referer } : {}),
       },
     });
     clearTimeout(to);
@@ -248,6 +273,7 @@ async function fetchBestImageFallback(pageUrl) {
   if (!['http:', 'https:'].includes(parsed.protocol)) return null;
   if (isBlockedFetchHost(parsed.hostname)) return null;
 
+  const referer = refererForImageFetch(parsed.href);
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 12000);
   try {
@@ -258,14 +284,19 @@ async function fetchBestImageFallback(pageUrl) {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'hi-IN,hi;q=0.9,en-US,en;q=0.8',
+        ...(referer ? { Referer: referer } : {}),
       },
     });
     clearTimeout(to);
     if (!upstream.ok) return null;
     const buf = Buffer.from(await upstream.arrayBuffer());
-    const max = parsed.hostname.toLowerCase().includes('news.google.com')
+    const host = parsed.hostname.toLowerCase();
+    const max = host.includes('news.google.com')
       ? 1400 * 1024
-      : 700 * 1024;
+      : host.includes('abplive.com') || host.includes('amarujala.com') || host.includes('bhaskar.com')
+        ? 900 * 1024
+        : 700 * 1024;
     const slice = buf.length > max ? buf.subarray(0, max) : buf;
     const html = slice.toString('utf8');
     return parseFirstContentImageFromHtml(html, parsed.href);

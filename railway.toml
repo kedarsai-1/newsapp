@@ -1,0 +1,9 @@
+# If Railway service root is the repo root (not /server), use these commands.
+# Prefer setting service Root Directory to `server` in Railway → Settings.
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd server && npm ci --omit=dev"
+
+[deploy]
+startCommand = "cd server && npm start"
+restartPolicyType = "ON_FAILURE"

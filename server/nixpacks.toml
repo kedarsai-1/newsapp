@@ -1,0 +1,6 @@
+# Railway / Nixpacks — install from lock file only (must match package.json).
+[phases.install]
+cmds = ["npm ci --omit=dev"]
+
+[start]
+cmd = "npm start"

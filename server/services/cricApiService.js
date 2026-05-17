@@ -280,13 +280,37 @@ function normalizeBowlingRow(row) {
 
 function normalizeScorecardInnings(raw) {
   const innings = Array.isArray(raw?.scorecard) ? raw.scorecard : [];
-  return innings.map((inn) => ({
+  const normalized = innings.map((inn) => ({
     label: String(inn.inning || inn.team || 'Innings').trim(),
     extras: inn.extras != null ? String(inn.extras) : null,
     totals: inn.totals != null ? String(inn.totals) : null,
     batting: (inn.batting || []).map(normalizeBattingRow).filter((b) => b.name),
     bowling: (inn.bowling || []).map(normalizeBowlingRow).filter((b) => b.name),
   }));
+  if (normalized.length) return normalized;
+  return buildBasicScorecardFromRaw(raw);
+}
+
+/** Team totals when full scorecard API is unavailable or rate-limited. */
+function buildBasicScorecardFromRaw(raw) {
+  const scores = Array.isArray(raw?.score) ? raw.score : [];
+  if (!scores.length) return [];
+  return scores.map((s) => {
+    const runs = s.r ?? s.runs;
+    const wkts = s.w ?? s.wickets;
+    const overs = formatOvers(s.o ?? s.overs);
+    const totals =
+      runs != null
+        ? `${runs}/${wkts ?? 0}${overs ? ` in ${overs} overs` : ''}`
+        : null;
+    return {
+      label: String(s.inning || s.innings || 'Innings').trim(),
+      extras: null,
+      totals,
+      batting: [],
+      bowling: [],
+    };
+  });
 }
 
 function mergeRawMatches(lists) {
@@ -391,6 +415,19 @@ function loadIplFallbackMatches() {
   }
 }
 
+function findFallbackMatchById(id) {
+  return loadIplFallbackMatches().find((m) => String(m.id) === String(id)) || null;
+}
+
+function isIplMatchNormalized(m) {
+  return (
+    isIplOrMajorLeague({ series: m.tournament, name: m.tournament })
+    || /super kings|knight riders|royal challengers|mumbai indians|sunrisers|delhi capitals|punjab kings|rajasthan royal|gujarat titans|lucknow super/i.test(
+      `${m.tournament} ${m.teams.map((t) => t.name).join(' ')}`,
+    )
+  );
+}
+
 function buildLivePayload(rawList) {
   rawList = sortMatchesForDisplay(rawList);
   const normalized = rawList.map(normalizeMatchSummary).filter((m) => m.id);
@@ -402,14 +439,11 @@ function buildLivePayload(rawList) {
   });
   const finished = normalized.filter((m) => m.status === 'finished');
 
+  const liveIds = new Set(live.map((m) => m.id));
+  const upcomingIds = new Set(upcoming.map((m) => m.id));
+
   const ipl = normalized
-    .filter(
-      (m) =>
-        isIplOrMajorLeague(m)
-        || /super kings|knight riders|royal challengers|mumbai indians|sunrisers|delhi capitals|punjab kings|rajasthan royal|gujarat titans|lucknow super/i.test(
-          `${m.tournament} ${m.teams.map((t) => t.name).join(' ')}`,
-        ),
-    )
+    .filter((m) => isIplMatchNormalized(m) && !liveIds.has(m.id) && !upcomingIds.has(m.id))
     .slice(0, 12);
 
   return { live, upcoming, finished, ipl, fetchedAt: new Date().toISOString() };
@@ -423,38 +457,51 @@ async function fetchCurrentMatches() {
 
   try {
     let rawList = [];
+    let rateLimited = false;
+    let warning = null;
 
-    // IPL/WPL via series_info (cached 6h) — one call, works when currentMatches is rate-limited.
+    // 1) International + live (primary — one API call per refresh)
     try {
-      const leagueRows = leagueMatchesForFeed(await fetchLeagueSeriesMatches()).map((m) => ({
+      const body = await cricGet('/currentMatches', { offset: 0 });
+      rawList = Array.isArray(body.data) ? body.data : [];
+    } catch (e) {
+      rateLimited = e.code === 'CRICAPI_RATE_LIMIT';
+      console.warn('[cricapi] currentMatches skipped:', e.message);
+      if (!rateLimited) throw e;
+    }
+
+    // 2) IPL supplement — use 6h cache only when rate-limited; otherwise refresh cache quietly
+    const leagueCacheKey = 'sports:leagueSeriesMatches';
+    let leagueRaw = memoryCache.get(leagueCacheKey);
+    if (!leagueRaw && !rateLimited) {
+      try {
+        leagueRaw = await fetchLeagueSeriesMatches();
+      } catch (e) {
+        console.warn('[cricapi] IPL/WPL series merge skipped:', e.message);
+      }
+    }
+    if (Array.isArray(leagueRaw) && leagueRaw.length) {
+      const leagueRows = leagueMatchesForFeed(leagueRaw).map((m) => ({
         ...m,
         series: m.series || 'Indian Premier League',
       }));
       rawList = mergeRawMatches([rawList, leagueRows]);
-    } catch (e) {
-      console.warn('[cricapi] IPL/WPL series merge skipped:', e.message);
     }
 
-    try {
-      const body = await cricGet('/currentMatches', { offset: 0 });
-      rawList = mergeRawMatches([rawList, Array.isArray(body.data) ? body.data : []]);
-    } catch (e) {
-      console.warn('[cricapi] currentMatches skipped:', e.message);
-      if (!rawList.length && e.code !== 'CRICAPI_RATE_LIMIT') throw e;
-    }
-
-    let warning = null;
+    // 3) Offline IPL snapshot only when API returned nothing at all
     if (!rawList.length) {
       const fallback = loadIplFallbackMatches();
       if (fallback.length) {
         rawList = fallback;
         warning =
-          'Showing saved IPL 2025 results. Live scores resume when the cricket API quota resets.';
+          'Live API limit reached — showing saved IPL results. International & live scores return when quota resets.';
       } else {
         const err = new Error('No cricket matches returned from CricAPI');
         err.code = 'CRICAPI_EMPTY';
         throw err;
       }
+    } else if (rateLimited && rawList.length) {
+      warning = 'Some score updates may be delayed (API limit). Pull to refresh shortly.';
     }
 
     const payload = { ...buildLivePayload(rawList), ...(warning ? { warning } : {}) };
@@ -483,21 +530,28 @@ async function fetchMatchById(id) {
   if (cached) return cached;
 
   let raw = null;
-  let scorecardInnings = [];
+  try {
+    const body = await cricGet('/match_info', { id });
+    raw = body.data || body;
+  } catch (e) {
+    raw = findFallbackMatchById(id);
+    if (!raw) throw e;
+  }
+
+  let scorecardInnings = buildBasicScorecardFromRaw(raw);
 
   try {
     const scBody = await cricGet('/match_scorecard', { id });
-    raw = scBody.data || scBody;
-    scorecardInnings = normalizeScorecardInnings(raw);
+    const fullRaw = scBody.data || scBody;
+    if (fullRaw?.teams?.length) raw = fullRaw;
+    const fullCard = normalizeScorecardInnings(fullRaw);
+    if (fullCard.some((inn) => inn.batting.length > 0)) {
+      scorecardInnings = fullCard;
+    }
   } catch (e) {
     console.warn(`[cricapi] match_scorecard ${id}:`, e.message);
-  }
-
-  if (!raw?.teams?.length) {
-    const body = await cricGet('/match_info', { id });
-    raw = body.data || body;
     if (!scorecardInnings.length) {
-      scorecardInnings = normalizeScorecardInnings(raw);
+      scorecardInnings = buildBasicScorecardFromRaw(raw);
     }
   }
 

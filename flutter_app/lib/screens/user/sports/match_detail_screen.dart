@@ -124,6 +124,14 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
           ),
           const SizedBox(height: 8),
           if (hasScorecard) ...[
+            if (m.scorecard.every((inn) => inn.batting.isEmpty && inn.totals != null))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Full player scorecard loads when the cricket API quota is available. Innings totals below.',
+                  style: TextStyle(fontSize: 12, color: fx.meta, height: 1.35),
+                ),
+              ),
             if (_inningsTab != null) ...[
               TabBar(
                 controller: _inningsTab,
@@ -321,11 +329,20 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(inn.extras!, style: TextStyle(fontSize: 12, color: fx.meta)),
           ),
-        _sectionTitle(fx, 'Batting'),
-        _battingTable(fx, inn.batting),
-        const SizedBox(height: 12),
-        _sectionTitle(fx, 'Bowling'),
-        _bowlingTable(fx, inn.bowling),
+        if (inn.batting.isNotEmpty) ...[
+          _sectionTitle(fx, 'Batting'),
+          _battingTable(fx, inn.batting),
+          const SizedBox(height: 12),
+        ],
+        if (inn.bowling.isNotEmpty) ...[
+          _sectionTitle(fx, 'Bowling'),
+          _bowlingTable(fx, inn.bowling),
+        ],
+        if (inn.batting.isEmpty && inn.bowling.isEmpty && inn.totals != null)
+          Text(
+            'Innings total: ${inn.totals}',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: fx.title),
+          ),
       ],
     );
   }

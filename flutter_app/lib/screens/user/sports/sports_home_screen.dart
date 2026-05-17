@@ -273,10 +273,6 @@ class _LiveSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ipl.isNotEmpty) ...[
-              _sectionHeader(fx, title: 'IPL', badge: '${ipl.length} matches'),
-              _matchRow(ipl, height: 118),
-            ],
             if (live.isNotEmpty) ...[
               _sectionHeader(
                 fx,
@@ -293,6 +289,10 @@ class _LiveSection extends StatelessWidget {
                 badge: upcoming.length > 1 ? '${upcoming.length} matches' : null,
               ),
               _matchRow(upcoming, height: 108),
+            ],
+            if (ipl.isNotEmpty) ...[
+              _sectionHeader(fx, title: 'IPL', badge: '${ipl.length} matches'),
+              _matchRow(ipl, height: 118),
             ],
           ],
         );

@@ -49,7 +49,7 @@ class SportsProvider extends ChangeNotifier {
     _polling = true;
     refreshLive(silent: _live.isNotEmpty);
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       refreshLive(silent: true);
     });
   }

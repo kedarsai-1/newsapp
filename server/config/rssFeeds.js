@@ -100,8 +100,13 @@ const defaultRssFeeds = [
   { name: 'ABP News - Entertainment', url: 'https://news.abplive.com/entertainment/feed', categorySlug: 'entertainment', language: 'hi' },
   { name: 'Amar Ujala - Lifestyle', url: 'https://www.amarujala.com/rss/lifestyle.xml', categorySlug: 'health', language: 'hi', ogImageFallback: true },
   { name: 'ABP News - Education', url: 'https://news.abplive.com/education/feed', categorySlug: 'education', language: 'hi' },
-  { name: 'Amar Ujala - Delhi', url: 'https://www.amarujala.com/rss/delhi.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true },
-  { name: 'ABP News - States', url: 'https://news.abplive.com/news/states/feed', categorySlug: 'local', language: 'hi', ogImageFallback: true },
+  { name: 'ABP News - States', url: 'https://news.abplive.com/news/states/feed', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
+  { name: 'Amar Ujala - Uttar Pradesh', url: 'https://www.amarujala.com/rss/uttar-pradesh.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
+  { name: 'Amar Ujala - Punjab', url: 'https://www.amarujala.com/rss/punjab.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
+  { name: 'Amar Ujala - Haryana', url: 'https://www.amarujala.com/rss/haryana.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
+  { name: 'Amar Ujala - Rajasthan', url: 'https://www.amarujala.com/rss/rajasthan.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
+  { name: 'Amar Ujala - Bihar', url: 'https://www.amarujala.com/rss/bihar.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
+  { name: 'Amar Ujala - Delhi', url: 'https://www.amarujala.com/rss/delhi.xml', categorySlug: 'local', language: 'hi', ogImageFallback: true, politicsScope: 'north' },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TELUGU - Working feeds with images
@@ -149,7 +154,7 @@ function getRssFeedsFromEnv() {
         ogImageFallback: x.ogImageFallback === false ? false : true,
         resolvePublisherUrl: Boolean(x.resolvePublisherUrl),
         preferredHost: x.preferredHost ? String(x.preferredHost).trim() : undefined,
-        politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(x.politicsScope || '').toLowerCase())
+        politicsScope: ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(String(x.politicsScope || '').toLowerCase())
           ? String(x.politicsScope).toLowerCase()
           : undefined,
       }))

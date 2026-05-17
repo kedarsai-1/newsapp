@@ -9,7 +9,7 @@ import '../../models/models.dart';
 import '../../providers/shorts_playback_controller.dart';
 import 'youtube_shorts_player_shared.dart';
 
-/// Web: YouTube Iframe API platform view + IntersectionObserver for visibility.
+/// Web: YouTube nocookie embed via platform view; Flutter controls play/pause/mute.
 class YoutubeShortsPlayerBody extends StatefulWidget {
   final NewsPost post;
   final bool isActive;
@@ -62,7 +62,9 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   @override
   void dispose() {
     context.read<ShortsPlaybackController>().removeListener(_onPlaybackChanged);
-    _runJs(_pauseScript());
+    if (_registeredViews.contains(_viewType)) {
+      _runJs(_pauseScript());
+    }
     super.dispose();
   }
 
@@ -107,6 +109,7 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
 
   void _applyPlaybackCommands() {
     if (_videoId == null) return;
+    if (!_registeredViews.contains(_viewType)) return;
     if (_shouldEmbed) {
       _runJs(_playScript());
       _runJs(_muteScript(context.read<ShortsPlaybackController>().muted));
@@ -165,10 +168,15 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
     + '?enablejsapi=1&autoplay=1&mute=1&playsinline=1&controls=0&rel=0&modestbranding=1&fs=0&iv_load_policy=3'
     + '&origin=$origin';
   host.appendChild(iframe);
+  var ready = false;
+  iframe.addEventListener('load', function() { ready = true; });
   function ytCmd(func) {
-    iframe.contentWindow.postMessage(JSON.stringify({
-      event: 'command', func: func, args: ''
-    }), '*');
+    try {
+      if (!ready || !iframe.contentWindow) return;
+      iframe.contentWindow.postMessage(JSON.stringify({
+        event: 'command', func: func, args: ''
+      }), '*');
+    } catch (e) {}
   }
   window.__shortsYT['$safeId'] = {
     playVideo: function() { ytCmd('playVideo'); },
@@ -176,17 +184,6 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
     mute: function() { ytCmd('mute'); },
     unMute: function() { ytCmd('unMute'); }
   };
-  var wrapEl = document.getElementById('wrap-${widget.post.id}');
-  if (wrapEl && 'IntersectionObserver' in window) {
-    new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        var p = window.__shortsYT['$safeId'];
-        if (!p) return;
-        if (entry.intersectionRatio >= 0.55) p.playVideo();
-        else p.pauseVideo();
-      });
-    }, { threshold: [0, 0.55, 1] }).observe(wrapEl);
-  }
 })();
 ''';
       wrap.appendChild(initScript);

@@ -763,13 +763,16 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               title: displayTitle,
               summary: summaryPrimary || fallbackSummary || item.summary,
               originalLanguage: originalLang,
-              politicsScope: feed.categorySlug === 'politics'
-                ? (
-                  ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(feed.politicsScope || '').toLowerCase())
-                    ? String(feed.politicsScope).toLowerCase()
-                    : 'all'
-                )
-                : null,
+              politicsScope: (() => {
+                const s = String(feed.politicsScope || '').toLowerCase();
+                const valid = ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(s)
+                  ? s
+                  : null;
+                const cat = String(feed.categorySlug || '').toLowerCase();
+                if (cat === 'politics') return valid || 'all';
+                if (cat === 'local' && ['andhra', 'telangana', 'north', 'states', 'delhi'].includes(s)) return s;
+                return null;
+              })(),
             };
             const feedLang = String(feed.language || '').toLowerCase();
             const feedCat = String(feed.categorySlug || '').toLowerCase();

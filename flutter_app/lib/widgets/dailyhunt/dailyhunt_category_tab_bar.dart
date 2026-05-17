@@ -19,7 +19,7 @@ class DailyhuntCategoryTabBar extends StatelessWidget {
   });
 
   static const double stripHeight = 32;
-  static const double stripHeightDark = 28;
+  static const double stripHeightDark = 36;
 
   @override
   Widget build(BuildContext context) {

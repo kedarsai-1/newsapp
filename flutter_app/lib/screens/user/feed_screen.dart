@@ -17,6 +17,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/feed/dailyhunt_feed_skeleton.dart';
 import '../../widgets/feed/feed_image_cache.dart';
 import '../../widgets/feed/feed_list_view.dart';
+import '../../widgets/feed/feed_scope_chip_bar.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/dailyhunt/xpresso_side_menu.dart';
@@ -353,7 +354,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 if (data.hidden) return const SizedBox.shrink();
                 final news = context.read<NewsProvider>();
                 return RepaintBoundary(
-                  child: _PoliticsScopeChips(
+                  child: FeedScopeChipBar(
                     selectedScope: data.selectedScope,
                     options: data.options,
                     onSelected: data.onSelectPolitics
@@ -432,52 +433,6 @@ class _RegionChipBarData {
         selectedScope = 'all',
         options = const [],
         onSelectPolitics = true;
-}
-
-class _PoliticsScopeChips extends StatelessWidget {
-  final String selectedScope;
-  final List<(String label, String scope)> options;
-  final Future<void> Function(String scope) onSelected;
-
-  const _PoliticsScopeChips({
-    required this.selectedScope,
-    required this.options,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 40,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final opt = options[i];
-          final selected = selectedScope == opt.$2;
-          return FilterChip(
-            label: Text(
-              opt.$1,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.black : FeedXpressoTheme.iconFg,
-              ),
-            ),
-            selected: selected,
-            onSelected: (_) => onSelected(opt.$2),
-            backgroundColor: FeedXpressoTheme.iconSurface,
-            selectedColor: FeedXpressoTheme.iconFg,
-            showCheckmark: false,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            visualDensity: VisualDensity.compact,
-          );
-        },
-      ),
-    );
-  }
 }
 
 class _DailyhuntFeedAppBar extends StatelessWidget {

@@ -26,6 +26,13 @@ abstract final class FeedXpressoTheme {
   static const Color chipInactive = Color(0xFF5C5C5C);
   static const Color chipActive = Color(0xFFFFFFFF);
 
+  static const Color scopePillIdle = Color(0xFF121212);
+  static const Color scopePillActive = Color(0xFFF2F2F2);
+  static const Color scopePillBorderIdle = Color(0xFF2A2A2A);
+  static const Color scopePillBorderActive = Color(0xFFF2F2F2);
+  static const Color scopePillTextIdle = Color(0xFF9A9A9A);
+  static const Color scopePillTextActive = Color(0xFF0A0A0A);
+
   static const Color shimmerBase = Color(0xFF141414);
   static const Color shimmerHighlight = Color(0xFF1E1E1E);
 
@@ -42,8 +49,9 @@ abstract final class FeedXpressoTheme {
   static const int titleMaxLines = 3;
   static const int summaryMaxLines = 1;
 
-  static const double cardRadius = 10;
+  static const double cardRadius = 12;
   static const BorderRadius cardBorderRadius = BorderRadius.all(Radius.circular(cardRadius));
+  static const Color cardBorder = Color(0xFF1C1C1C);
 
   /// Outer gutter + vertical rhythm between cards.
   static const EdgeInsets cardMargin = EdgeInsets.fromLTRB(12, 0, 12, 14);

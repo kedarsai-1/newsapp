@@ -440,33 +440,37 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
     final news = context.watch<NewsProvider>();
     final booting = !auth.initialized || !news.prefsLoaded;
 
-    return Stack(
-      children: [
-        MaterialApp.router(
-          title: AppConstants.appName,
-          theme: XpressoAppTheme.theme(),
-          darkTheme: XpressoAppTheme.theme(),
-          themeMode: ThemeMode.dark,
-          routerConfig: _router!,
-          debugShowCheckedModeBanner: false,
-        ),
-        if (booting)
-          Positioned.fill(
-            child: ColoredBox(
-              color: OnboardingDesign.background,
-              child: Center(
-                child: SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: OnboardingDesign.accent.withValues(alpha: 0.72),
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Stack(
+        alignment: Alignment.topLeft,
+        children: [
+          MaterialApp.router(
+            title: AppConstants.appName,
+            theme: XpressoAppTheme.theme(),
+            darkTheme: XpressoAppTheme.theme(),
+            themeMode: ThemeMode.dark,
+            routerConfig: _router!,
+            debugShowCheckedModeBanner: false,
+          ),
+          if (booting)
+            Positioned.fill(
+              child: Material(
+                color: OnboardingDesign.background,
+                child: Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: OnboardingDesign.accent.withValues(alpha: 0.72),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

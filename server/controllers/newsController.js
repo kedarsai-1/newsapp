@@ -39,6 +39,42 @@ function dedupeFeedPosts(rows) {
   return out;
 }
 
+/** Politics tab scope filters — keeps AP/TG out of India/International buckets. */
+function politicsScopeMatchClause(scope, langParam) {
+  const ps = String(scope || '').toLowerCase().trim();
+  if (!ps || ps === 'all') return null;
+
+  const regional = ['andhra', 'telangana', 'north', 'states', 'delhi'];
+  if (ps === 'india') {
+    return {
+      $and: [
+        { politicsScope: { $nin: [...regional, 'international'] } },
+        {
+          $or: [
+            { politicsScope: 'india' },
+            { politicsScope: 'all' },
+            { politicsScope: null },
+            { politicsScope: { $exists: false } },
+          ],
+        },
+      ],
+    };
+  }
+  if (ps === 'international') {
+    return { politicsScope: 'international' };
+  }
+  if (ps === 'north') {
+    return { politicsScope: { $in: ['north', 'states', 'delhi'] } };
+  }
+  if (ps === 'states' || ps === 'delhi') {
+    return { politicsScope: ps };
+  }
+  if (ps === 'andhra' || ps === 'telangana') {
+    return { politicsScope: ps };
+  }
+  return null;
+}
+
 function feedMatchForAggregate(query) {
   const m = { ...query };
   if (m.category != null) {
@@ -131,16 +167,7 @@ const getFeed = async (req, res) => {
         ? String(language).toLowerCase()
         : null;
 
-    const ps = String(politicsScope || '').toLowerCase().trim();
-    if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international'].includes(ps)) {
-      const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
-      const enHiScopes = new Set(['india', 'international']);
-      const scopeOk = !langParam
-        || (langParam === 'te' && teScopes.has(ps))
-        || ((langParam === 'en' || langParam === 'hi') && enHiScopes.has(ps))
-        || (langParam !== 'te' && langParam !== 'en' && langParam !== 'hi');
-      if (scopeOk) query.politicsScope = ps;
-    }
+    const politicsScopeParam = String(politicsScope || '').toLowerCase().trim();
 
     if (breaking === 'true') query.isBreaking = true;
     if (featured === 'true') query.isFeatured = true;
@@ -218,6 +245,21 @@ const getFeed = async (req, res) => {
     const filterAnd = [...(query.$and || [])];
     if (searchOr) filterAnd.push({ $or: searchOr });
     if (languageClause) filterAnd.push(languageClause);
+    const ps = politicsScopeParam;
+    if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(ps)) {
+      const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
+      const hiScopes = new Set(['india', 'international', 'north', 'states', 'delhi']);
+      const enHiScopes = new Set(['india', 'international']);
+      const scopeOk = !langParam
+        || (langParam === 'te' && teScopes.has(ps))
+        || (langParam === 'hi' && hiScopes.has(ps))
+        || (langParam === 'en' && enHiScopes.has(ps))
+        || (langParam !== 'te' && langParam !== 'en' && langParam !== 'hi');
+      if (scopeOk) {
+        const scopeClause = politicsScopeMatchClause(ps, langParam);
+        if (scopeClause) filterAnd.push(scopeClause);
+      }
+    }
     if (filterAnd.length) query.$and = filterAnd;
 
     // Optional freshness window.

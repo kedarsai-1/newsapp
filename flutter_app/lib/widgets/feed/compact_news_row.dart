@@ -49,11 +49,23 @@ class CompactNewsRow extends StatelessWidget {
 
     return Padding(
       padding: FeedXpressoTheme.cardMargin,
-      child: ClipRRect(
-        borderRadius: FeedXpressoTheme.cardBorderRadius,
-        child: Material(
-          color: FeedXpressoTheme.cardSurface,
-          child: InkWell(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: FeedXpressoTheme.cardBorderRadius,
+          border: Border.all(color: FeedXpressoTheme.cardBorder, width: 0.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x18000000),
+              blurRadius: 12,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: FeedXpressoTheme.cardBorderRadius,
+          child: Material(
+            color: FeedXpressoTheme.cardSurface,
+            child: InkWell(
             onTap: onTap,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -124,6 +136,7 @@ class CompactNewsRow extends StatelessWidget {
               ],
             ),
           ),
+        ),
         ),
       ),
     );
@@ -199,12 +212,27 @@ class _HeroImageState extends State<_HeroImage> {
       imageBuilder: (context, imageProvider) {
         return AspectRatio(
           aspectRatio: FeedXpressoTheme.imageAspectRatio,
-          child: Image(
-            image: imageProvider,
-            fit: FeedXpressoTheme.imageFit,
-            alignment: FeedXpressoTheme.imageAlignment,
-            width: double.infinity,
-            height: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image(
+                image: imageProvider,
+                fit: FeedXpressoTheme.imageFit,
+                alignment: FeedXpressoTheme.imageAlignment,
+                width: double.infinity,
+                height: double.infinity,
+              ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: [0.55, 1.0],
+                    colors: [Colors.transparent, Color(0x66000000)],
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },

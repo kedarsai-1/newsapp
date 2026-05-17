@@ -328,6 +328,10 @@ class NewsProvider extends ChangeNotifier {
       if (!['andhra', 'telangana', 'all'].contains(_selectedLocalScope)) {
         _selectedLocalScope = 'all';
       }
+    } else if (lang == 'hi') {
+      if (!['north', 'all'].contains(_selectedLocalScope)) {
+        _selectedLocalScope = 'all';
+      }
     } else {
       _selectedLocalScope = 'all';
     }
@@ -378,14 +382,20 @@ class NewsProvider extends ChangeNotifier {
     final s = scope.trim().toLowerCase();
     _selectedPoliticsScope =
         ['india', 'international', 'all'].contains(s) ? s : 'all';
+    _posts = [];
+    notifyListeners();
     await refresh();
   }
 
   Future<void> selectLocalScope(String scope) async {
     final s = scope.trim().toLowerCase();
-    _selectedLocalScope =
-        ['andhra', 'telangana', 'all'].contains(s) ? s : 'all';
+    final allowed = selectedLanguage == 'hi'
+        ? ['north', 'all']
+        : ['andhra', 'telangana', 'all'];
+    _selectedLocalScope = allowed.contains(s) ? s : 'all';
     if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
+    _posts = [];
+    notifyListeners();
     await refresh();
   }
 
@@ -400,6 +410,8 @@ class NewsProvider extends ChangeNotifier {
   }
 
   bool get isTeluguLocalMode => selectedLanguage == 'te' && isLocalMode;
+
+  bool get isHindiLocalMode => selectedLanguage == 'hi' && isLocalMode;
 
   bool get isPoliticsMode {
     if (_selectedCategoryId == null) return false;
@@ -418,7 +430,7 @@ class NewsProvider extends ChangeNotifier {
   }
 
   bool get shouldShowLocalScopeDropdown {
-    return isTeluguLocalMode;
+    return isTeluguLocalMode || isHindiLocalMode;
   }
 
   List<String> get availablePoliticalConstituencies {
@@ -446,8 +458,14 @@ class NewsProvider extends ChangeNotifier {
     ];
   }
 
-  /// State / regional news (Local tab — Telugu).
+  /// State / regional news (Local tab).
   List<(String label, String scope)> get localScopeOptions {
+    if (selectedLanguage == 'hi') {
+      return const [
+        ('All', 'all'),
+        ('North', 'north'),
+      ];
+    }
     return const [
       ('All', 'all'),
       ('Andhra', 'andhra'),
@@ -464,8 +482,12 @@ class NewsProvider extends ChangeNotifier {
   }
 
   String get localScopeForApi {
-    if (!isTeluguLocalMode || _selectedLocalScope == 'all') return 'all';
-    if (_selectedLocalScope == 'andhra' || _selectedLocalScope == 'telangana') {
+    if (!isLocalMode || _selectedLocalScope == 'all') return 'all';
+    if (isTeluguLocalMode &&
+        (_selectedLocalScope == 'andhra' || _selectedLocalScope == 'telangana')) {
+      return _selectedLocalScope;
+    }
+    if (isHindiLocalMode && _selectedLocalScope == 'north') {
       return _selectedLocalScope;
     }
     return 'all';

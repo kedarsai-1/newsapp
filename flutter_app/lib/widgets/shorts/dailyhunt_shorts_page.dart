@@ -123,7 +123,6 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
   Widget build(BuildContext context) {
     final p = context.palette;
     final isYt = widget.post.isYoutube;
-    final playback = context.watch<ShortsPlaybackController>();
     final topSafe = MediaQuery.paddingOf(context).top;
 
     return ColoredBox(
@@ -142,13 +141,11 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                const metaHeight = 200.0;
                 final cardW = constraints.maxWidth.clamp(0.0, ShortsFeedTheme.maxCardWidth);
-                final videoHeight = (constraints.maxHeight - metaHeight)
-                    .clamp(200.0, cardW * 16 / 9);
 
                 return SizedBox(
                   width: cardW,
+                  height: constraints.maxHeight,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: ShortsFeedTheme.card,
@@ -157,9 +154,9 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                       border: Border.all(color: ShortsFeedTheme.cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.5),
-                          blurRadius: 28,
-                          offset: const Offset(0, 10),
+                          color: Colors.black.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
@@ -167,73 +164,82 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                       borderRadius:
                           BorderRadius.circular(ShortsFeedTheme.cardRadius),
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SizedBox(
-                            height: videoHeight,
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(ShortsFeedTheme.videoRadius),
-                              ),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  ShortsMediaLayer(
-                                    post: widget.post,
-                                    isActive: widget.isActive,
-                                    immersive: false,
-                                  ),
-                                  const DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        stops: [0.0, 0.35, 1.0],
-                                        colors: [
-                                          Color(0x66000000),
-                                          Colors.transparent,
-                                          Color(0x99000000),
-                                        ],
+                          Expanded(
+                            child: RepaintBoundary(
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(ShortsFeedTheme.videoRadius),
+                                ),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    ShortsMediaLayer(
+                                      post: widget.post,
+                                      isActive: widget.isActive,
+                                      immersive: false,
+                                    ),
+                                    const IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            stops: [0.0, 0.4, 1.0],
+                                            colors: [
+                                              Color(0x55000000),
+                                              Colors.transparent,
+                                              Color(0x77000000),
+                                            ],
+                                          ),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  if (isYt)
-                                    const Positioned(
-                                      top: 10,
-                                      left: 10,
-                                      child: _SourcePill(
-                                        label: 'YouTube',
-                                        icon: Icons.play_circle_filled,
-                                        iconColor: Color(0xFFFF0000),
+                                    if (isYt)
+                                      const Positioned(
+                                        top: 10,
+                                        left: 10,
+                                        child: _SourcePill(
+                                          label: 'YouTube',
+                                          icon: Icons.play_circle_filled,
+                                          iconColor: Color(0xFFFF0000),
+                                        ),
                                       ),
-                                    ),
-                                  Positioned(
-                                    left: 10,
-                                    bottom: 10,
-                                    child: _DurationViewsPill(
-                                      duration: _durationLabel,
-                                      views: ShortsFeedTheme.formatViews(
-                                        widget.post.views,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isYt && widget.isActive)
                                     Positioned(
-                                      right: 10,
+                                      left: 10,
                                       bottom: 10,
-                                      child: _MuteButton(
-                                        muted: playback.muted,
-                                        onTap: () {
-                                          playback.setMuted(!playback.muted);
+                                      child: _DurationViewsPill(
+                                        duration: _durationLabel,
+                                        views: ShortsFeedTheme.formatViews(
+                                          widget.post.views,
+                                        ),
+                                      ),
+                                    ),
+                                    if (isYt && widget.isActive)
+                                      Selector<ShortsPlaybackController, bool>(
+                                        selector: (_, p) => p.muted,
+                                        builder: (context, muted, _) {
+                                          return Positioned(
+                                            right: 10,
+                                            bottom: 10,
+                                            child: _MuteButton(
+                                              muted: muted,
+                                              onTap: () {
+                                                final playback = context
+                                                    .read<ShortsPlaybackController>();
+                                                playback.setMuted(!muted);
+                                              },
+                                            ),
+                                          );
                                         },
                                       ),
-                                    ),
-                                  if (!widget.isActive && isYt)
-                                    const Center(
-                                      child: _InactivePlayBadge(),
-                                    ),
-                                ],
+                                    if (!widget.isActive && isYt)
+                                      const Center(
+                                        child: _InactivePlayBadge(),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -576,14 +582,14 @@ class _MuteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.55),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
+    return Listener(
+      onPointerDown: (_) => onTap(),
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        elevation: 4,
+        shape: const CircleBorder(),
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(10),
           child: Icon(
             muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
             color: Colors.white,

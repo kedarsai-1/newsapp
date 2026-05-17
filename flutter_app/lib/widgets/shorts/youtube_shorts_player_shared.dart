@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -48,6 +49,14 @@ class _HdYoutubeThumbnailState extends State<HdYoutubeThumbnail> {
     if (vid == null || vid.isEmpty) {
       final stored = widget.post.youtubeThumbnailUrl;
       return stored.isEmpty ? const [] : [stored];
+    }
+    // Web: load hq first (smaller/faster); mobile: maxres then fallbacks.
+    if (kIsWeb) {
+      return [
+        YoutubeThumbUrl.high(vid),
+        YoutubeThumbUrl.maxRes(vid),
+        YoutubeThumbUrl.standard(vid),
+      ];
     }
     return YoutubeThumbUrl.fallbacks(vid);
   }

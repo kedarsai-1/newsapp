@@ -17,6 +17,7 @@ import '../../widgets/premium_news_ui.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
 import '../../widgets/shorts/shorts_chrome.dart';
+import '../../widgets/shorts/shorts_feed_tuning.dart';
 import '../../widgets/shorts/shorts_language_bar.dart';
 
 /// YouTube-backed vertical shorts: [PageView.builder], official iframe embeds.
@@ -38,7 +39,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   late final ShortsPlaybackController _playback;
   bool _wasShortsRefreshing = false;
   bool _shortsBoundToNews = false;
-  int _index = 0;
+  final ValueNotifier<int> _pageIndex = ValueNotifier(0);
   final Map<String, bool> _liked = {};
   final Map<String, bool> _saved = {};
   final Map<String, String?> _translated = {};
@@ -51,8 +52,24 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
     _shorts = context.read<ShortsProvider>();
     _playback = context.read<ShortsPlaybackController>();
     _shorts.addListener(_onShortsRefreshTick);
+    _shorts.addListener(_syncActivePlayback);
     _pageController = PageController();
     _bindShortsToFeedLanguage();
+  }
+
+  void _syncActivePlayback() {
+    final posts = _shorts.posts;
+    if (!mounted || posts.isEmpty) return;
+    final i = _pageIndex.value.clamp(0, posts.length - 1);
+    final id = posts[i].id;
+    if (_playback.isActivePost(id)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final current = _shorts.posts;
+      if (current.isEmpty) return;
+      final j = _pageIndex.value.clamp(0, current.length - 1);
+      _playback.setActivePost(current[j].id, immediate: true);
+    });
   }
 
   void _bindShortsToFeedLanguage() {
@@ -77,9 +94,9 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
         if (_pageController.hasClients) {
           _pageController.jumpToPage(0);
         }
-        setState(() => _index = 0);
+        _pageIndex.value = 0;
         if (s.posts.isNotEmpty) {
-          _playback.setActivePost(s.posts.first.id);
+          _playback.setActivePost(s.posts.first.id, immediate: true);
         }
       });
     }
@@ -90,12 +107,14 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   void dispose() {
     _news.removeListener(_syncShortsToFeedLanguage);
     _shorts.removeListener(_onShortsRefreshTick);
+    _shorts.removeListener(_syncActivePlayback);
+    _pageIndex.dispose();
     _pageController.dispose();
     super.dispose();
   }
 
   void _maybeLoadMore(int index, ShortsProvider shorts, String? lang) {
-    if (index >= shorts.posts.length - 2 &&
+    if (index >= shorts.posts.length - 4 &&
         shorts.posts.isNotEmpty &&
         shorts.hasMore &&
         !shorts.loading) {
@@ -201,27 +220,26 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final shorts = context.watch<ShortsProvider>();
-    final news = context.watch<NewsProvider>();
-    final lang = news.shortsFeedLanguage;
-    final posts = shorts.posts;
-    if (posts.isNotEmpty) {
-      final wantId = posts[_index.clamp(0, posts.length - 1)].id;
-      if (!_playback.isActivePost(wantId)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          final current = shorts.posts;
-          if (current.isEmpty) return;
-          final id = current[_index.clamp(0, current.length - 1)].id;
-          _playback.setActivePost(id);
-        });
-      }
-    }
+    final lang = context.select<NewsProvider, String?>(
+      (n) => n.shortsFeedLanguage,
+    );
+    final posts = context.select<ShortsProvider, List<NewsPost>>(
+      (s) => s.posts,
+    );
+    final shortsError = context.select<ShortsProvider, String?>(
+      (s) => s.error,
+    );
+    final shortsRefreshing = context.select<ShortsProvider, bool>(
+      (s) => s.refreshing,
+    );
+    final shortsLoading = context.select<ShortsProvider, bool>(
+      (s) => s.loading,
+    );
 
     final bottomPad = FeedXpressoTheme.feedBottomInset(context) + 28;
     final pageHeight = MediaQuery.sizeOf(context).height;
 
-    if (shorts.error != null && posts.isEmpty && !shorts.refreshing) {
+    if (shortsError != null && posts.isEmpty && !shortsRefreshing) {
       return Scaffold(
         backgroundColor: Colors.black,
         body: Center(
@@ -231,13 +249,14 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  shorts.error!,
+                  shortsError,
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: () => shorts.refresh(language: lang),
+                  onPressed: () =>
+                      context.read<ShortsProvider>().refresh(language: lang),
                   child: Text(I18n.t(context, 'action_try_again')),
                 ),
               ],
@@ -247,7 +266,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
       );
     }
 
-    if (posts.isEmpty && shorts.refreshing) {
+    if (posts.isEmpty && shortsRefreshing) {
       return Scaffold(
         backgroundColor: ShortsFeedTheme.background,
         body: Column(
@@ -308,7 +327,9 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                       ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: () => shorts.refresh(language: lang),
+                        onPressed: () => context
+                            .read<ShortsProvider>()
+                            .refresh(language: lang),
                         child: Text(I18n.t(context, 'action_refresh')),
                       ),
                     ],
@@ -326,41 +347,26 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            physics: const _ShortsSnapScrollPhysics(),
-            pageSnapping: true,
-            allowImplicitScrolling: true,
-            itemCount: posts.length,
-            onPageChanged: (i) {
-              setState(() => _index = i);
+          _ShortsFeedPager(
+            pageController: _pageController,
+            pageHeight: pageHeight,
+            bottomPad: bottomPad,
+            posts: posts,
+            liked: _liked,
+            saved: _saved,
+            translating: _translating,
+            translated: _translated,
+            onIndexChanged: (i) {
+              _pageIndex.value = i;
               _playback.setActivePost(posts[i].id);
-              _maybeLoadMore(i, shorts, lang);
+              _maybeLoadMore(i, context.read<ShortsProvider>(), lang);
+              ShortsFeedTuning.precacheThumbnails(context, posts, i);
             },
-            itemBuilder: (context, i) {
-              final post = posts[i];
-              return SizedBox(
-                height: pageHeight,
-                child: RepaintBoundary(
-                  child: DailyhuntShortsPage(
-                    key: ValueKey(post.id),
-                    post: post,
-                    isActive: i == _index,
-                    liked: _liked[post.id] ?? false,
-                    saved: _saved[post.id] ?? false,
-                    translating: _translating[post.id] ?? false,
-                    translatedSummary: _translated[post.id],
-                    onLike: () => _toggleLike(post),
-                    onSave: () => _toggleSave(post),
-                    onShare: () => _share(post),
-                    onTranslate: () => _translate(post),
-                    onOpenArticle: () => _openArticle(post),
-                    bottomContentPadding: bottomPad,
-                  ),
-                ),
-              );
-            },
+            onLike: _toggleLike,
+            onSave: _toggleSave,
+            onShare: _share,
+            onTranslate: _translate,
+            onOpenArticle: _openArticle,
           ),
           const Positioned(
             top: 0,
@@ -378,12 +384,15 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
             left: 14,
             right: 14,
             bottom: FeedXpressoTheme.feedBottomInset(context) + 6,
-            child: ShortsFeedProgress(
-              total: posts.length,
-              index: _index,
+            child: ValueListenableBuilder<int>(
+              valueListenable: _pageIndex,
+              builder: (_, index, __) => ShortsFeedProgress(
+                total: posts.length,
+                index: index,
+              ),
             ),
           ),
-          if (shorts.loading && posts.isNotEmpty)
+          if (shortsLoading && posts.isNotEmpty)
             Positioned(
               left: 0,
               right: 0,
@@ -407,46 +416,83 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   }
 }
 
-/// Full-viewport vertical snap between Shorts pages.
-class _ShortsSnapScrollPhysics extends ScrollPhysics {
-  const _ShortsSnapScrollPhysics({super.parent});
+/// Vertical [PageView] — owns active index so parent does not rebuild on every swipe.
+class _ShortsFeedPager extends StatefulWidget {
+  final PageController pageController;
+  final double pageHeight;
+  final double bottomPad;
+  final List<NewsPost> posts;
+  final Map<String, bool> liked;
+  final Map<String, bool> saved;
+  final Map<String, bool> translating;
+  final Map<String, String?> translated;
+  final ValueChanged<int> onIndexChanged;
+  final Future<bool> Function(NewsPost) onLike;
+  final Future<bool> Function(NewsPost) onSave;
+  final void Function(NewsPost) onShare;
+  final void Function(NewsPost) onTranslate;
+  final void Function(NewsPost) onOpenArticle;
+
+  const _ShortsFeedPager({
+    required this.pageController,
+    required this.pageHeight,
+    required this.bottomPad,
+    required this.posts,
+    required this.liked,
+    required this.saved,
+    required this.translating,
+    required this.translated,
+    required this.onIndexChanged,
+    required this.onLike,
+    required this.onSave,
+    required this.onShare,
+    required this.onTranslate,
+    required this.onOpenArticle,
+  });
 
   @override
-  _ShortsSnapScrollPhysics applyTo(ScrollPhysics? ancestor) {
-    return _ShortsSnapScrollPhysics(parent: buildParent(ancestor));
-  }
+  State<_ShortsFeedPager> createState() => _ShortsFeedPagerState();
+}
+
+class _ShortsFeedPagerState extends State<_ShortsFeedPager> {
+  int _activeIndex = 0;
 
   @override
-  SpringDescription get spring => const SpringDescription(
-        mass: 0.5,
-        stiffness: 320,
-        damping: 34,
-      );
-
-  @override
-  double get minFlingVelocity => 280;
-
-  @override
-  double get maxFlingVelocity => 4200;
-
-  @override
-  Simulation? createBallisticSimulation(
-    ScrollMetrics position,
-    double velocity,
-  ) {
-    final page = position.pixels / position.viewportDimension;
-    final target = velocity.abs() < 350
-        ? page.round()
-        : (velocity > 0 ? page.ceil() : page.floor());
-    final clamped = target.clamp(0, (position.maxScrollExtent / position.viewportDimension).round());
-    final to = clamped * position.viewportDimension;
-    if ((to - position.pixels).abs() < 0.5) return null;
-    return ScrollSpringSimulation(
-      spring,
-      position.pixels,
-      to,
-      velocity,
-      tolerance: toleranceFor(position),
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      controller: widget.pageController,
+      scrollDirection: Axis.vertical,
+      physics: ShortsFeedTuning.scrollPhysics,
+      pageSnapping: true,
+      allowImplicitScrolling: ShortsFeedTuning.allowImplicitScrolling,
+      itemCount: widget.posts.length,
+      onPageChanged: (i) {
+        setState(() => _activeIndex = i);
+        widget.onIndexChanged(i);
+      },
+      itemBuilder: (context, i) {
+        final post = widget.posts[i];
+        return SizedBox(
+          height: widget.pageHeight,
+          child: RepaintBoundary(
+            child: DailyhuntShortsPage(
+              key: ValueKey(post.id),
+              post: post,
+              isActive: i == _activeIndex,
+              liked: widget.liked[post.id] ?? false,
+              saved: widget.saved[post.id] ?? false,
+              translating: widget.translating[post.id] ?? false,
+              translatedSummary: widget.translated[post.id],
+              onLike: () => widget.onLike(post),
+              onSave: () => widget.onSave(post),
+              onShare: () => widget.onShare(post),
+              onTranslate: () => widget.onTranslate(post),
+              onOpenArticle: () => widget.onOpenArticle(post),
+              bottomContentPadding: widget.bottomPad,
+            ),
+          ),
+        );
+      },
     );
   }
 }

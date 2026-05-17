@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 /// Coordinates a single active Shorts embed (autoplay, mute, pause on scroll).
 class ShortsPlaybackController extends ChangeNotifier {
+  static const embedDelay = Duration(milliseconds: 180);
+
   String? _activePostId;
   bool _muted = true;
+  Timer? _activateTimer;
 
   String? get activePostId => _activePostId;
   bool get muted => _muted;
@@ -11,11 +16,31 @@ class ShortsPlaybackController extends ChangeNotifier {
   bool isActivePost(String postId) =>
       postId.isNotEmpty && _activePostId == postId;
 
-  void setActivePost(String? postId) {
+  /// [immediate] mounts the embed now; default waits until scroll settles (smoother swipe).
+  void setActivePost(String? postId, {bool immediate = false}) {
     final next = (postId == null || postId.isEmpty) ? null : postId;
-    if (_activePostId == next) return;
-    _activePostId = next;
-    notifyListeners();
+    _activateTimer?.cancel();
+
+    if (next == _activePostId && (immediate || next == null)) return;
+
+    // Pause the previous clip immediately while swiping.
+    if (_activePostId != null && _activePostId != next) {
+      _activePostId = null;
+      notifyListeners();
+    }
+
+    if (next == null) return;
+
+    if (immediate) {
+      _activePostId = next;
+      notifyListeners();
+      return;
+    }
+
+    _activateTimer = Timer(embedDelay, () {
+      _activePostId = next;
+      notifyListeners();
+    });
   }
 
   void toggleMute() {
@@ -30,8 +55,15 @@ class ShortsPlaybackController extends ChangeNotifier {
   }
 
   void pauseAll() {
+    _activateTimer?.cancel();
     if (_activePostId == null) return;
     _activePostId = null;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _activateTimer?.cancel();
+    super.dispose();
   }
 }

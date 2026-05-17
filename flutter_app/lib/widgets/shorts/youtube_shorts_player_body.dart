@@ -45,6 +45,9 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
     if (oldWidget.isActive != widget.isActive ||
         oldWidget.post.id != widget.post.id) {
       _syncWithPlayback();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
     }
   }
 
@@ -59,6 +62,9 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
     if (!mounted) return;
     _syncWithPlayback();
     _applyMute();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   bool get _shouldPlay {
@@ -76,7 +82,6 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
       if (_playerReady) _runJs('window.pauseCmd()');
       if (!widget.isActive) _teardownPlayer();
     }
-    setState(() {});
   }
 
   void _mountPlayerIfNeeded() {

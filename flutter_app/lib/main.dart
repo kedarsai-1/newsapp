@@ -102,6 +102,9 @@ GoRouter createAppRouter(BuildContext context) {
       final news = context.read<NewsProvider>();
       final loc = state.matchedLocation;
 
+      // Keep deep links (e.g. /shorts) while auth/prefs hydrate — avoids MaterialApp home mismatch on web.
+      if (!auth.initialized || !news.prefsLoaded) return null;
+
       if (loc == '/select-language') return '/onboarding/language';
 
       if (auth.isLoggedIn && (auth.isAdmin || auth.isReporter)) {
@@ -403,34 +406,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],
-      child: Consumer2<AuthProvider, NewsProvider>(
-        builder: (context, auth, news, _) {
-          if (!auth.initialized || !news.prefsLoaded) {
-            return Consumer<ThemeProvider>(
-              builder: (context, theme, _) => MaterialApp(
-                debugShowCheckedModeBanner: false,
-                theme: XpressoAppTheme.theme(),
-                darkTheme: XpressoAppTheme.theme(),
-                themeMode: ThemeMode.dark,
-                home: ColoredBox(
-                  color: OnboardingDesign.background,
-                  child: Center(
-                    child: SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: OnboardingDesign.accent.withValues(alpha: 0.72),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-          return const _AuthenticatedAppShell();
-        },
-      ),
+      child: const _AuthenticatedAppShell(),
     );
   }
 }
@@ -460,13 +436,37 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: AppConstants.appName,
-      theme: XpressoAppTheme.theme(),
-      darkTheme: XpressoAppTheme.theme(),
-      themeMode: ThemeMode.dark,
-      routerConfig: _router!,
-      debugShowCheckedModeBanner: false,
+    final auth = context.watch<AuthProvider>();
+    final news = context.watch<NewsProvider>();
+    final booting = !auth.initialized || !news.prefsLoaded;
+
+    return Stack(
+      children: [
+        MaterialApp.router(
+          title: AppConstants.appName,
+          theme: XpressoAppTheme.theme(),
+          darkTheme: XpressoAppTheme.theme(),
+          themeMode: ThemeMode.dark,
+          routerConfig: _router!,
+          debugShowCheckedModeBanner: false,
+        ),
+        if (booting)
+          Positioned.fill(
+            child: ColoredBox(
+              color: OnboardingDesign.background,
+              child: Center(
+                child: SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: OnboardingDesign.accent.withValues(alpha: 0.72),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

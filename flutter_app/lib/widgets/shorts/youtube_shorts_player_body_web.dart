@@ -36,12 +36,25 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   void initState() {
     super.initState();
     context.read<ShortsPlaybackController>().addListener(_onPlaybackChanged);
+    if (widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_shouldEmbed) return;
+        _ensureViewRegistered();
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   @override
   void didUpdateWidget(YoutubeShortsPlayerBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isActive != widget.isActive) {
+      if (widget.isActive && _shouldEmbed) {
+        _ensureViewRegistered();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      }
       _applyPlaybackCommands();
     }
   }
@@ -56,7 +69,9 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   void _onPlaybackChanged() {
     if (!mounted) return;
     _applyPlaybackCommands();
-    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   bool get _shouldEmbed {
@@ -145,7 +160,7 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   var iframe = document.createElement('iframe');
   iframe.setAttribute('allowfullscreen', 'true');
   iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
-  iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+  iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none;';
   iframe.src = 'https://www.youtube-nocookie.com/embed/$safeId'
     + '?enablejsapi=1&autoplay=1&mute=1&playsinline=1&controls=0&rel=0&modestbranding=1&fs=0&iv_load_policy=3'
     + '&origin=$origin';
@@ -216,17 +231,19 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
     }
 
     if (_shouldEmbed) {
-      _ensureViewRegistered();
-      return _wrap(
-        GestureDetector(
-          onTap: _onTapVideo,
-          behavior: HitTestBehavior.opaque,
-          child: ColoredBox(
-            color: Colors.black,
-            child: HtmlElementView(viewType: _viewType),
+      if (!_registeredViews.contains(_viewType)) {
+        return _wrap(
+          GestureDetector(
+            onTap: _onTapVideo,
+            child: YoutubeThumbnailLayer(
+              post: widget.post,
+              immersive: widget.immersive,
+              showPlay: true,
+            ),
           ),
-        ),
-      );
+        );
+      }
+      return _wrap(_embeddedPlayerStack());
     }
 
     return _wrap(
@@ -237,6 +254,24 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
           immersive: widget.immersive,
         ),
       ),
+    );
+  }
+
+  /// Iframe uses pointer-events:none so Flutter overlays (mute, etc.) receive taps on web.
+  Widget _embeddedPlayerStack() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: Colors.black),
+        HtmlElementView(viewType: _viewType),
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: _onTapVideo,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ],
     );
   }
 

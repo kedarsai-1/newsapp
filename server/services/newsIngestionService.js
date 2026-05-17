@@ -590,15 +590,15 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       budget.throwIfExpired('rss:before-loop');
       const maxPerFeed = Math.min(
         50,
-        Math.max(5, Number(process.env.RSS_ITEMS_PER_FEED || 20)),
+        Math.max(5, Number(process.env.RSS_ITEMS_PER_FEED || 25)),
       );
       const maxScanPerFeed = Math.min(
-        80,
-        Math.max(maxPerFeed, Number(process.env.RSS_SCAN_PER_FEED || 40)),
+        100,
+        Math.max(maxPerFeed, Number(process.env.RSS_SCAN_PER_FEED || 50)),
       );
       const targetInsertsPerFeed = Math.max(
         1,
-        Number(process.env.RSS_INSERTS_PER_FEED || 6),
+        Number(process.env.RSS_INSERTS_PER_FEED || 10),
       );
       console.log(
         `[ingest] RSS processing ${feeds.length} feeds `
@@ -849,7 +849,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
             // Skip stories with no usable thumbnail (RSS + og:image both failed).
             if (
-              process.env.RSS_REQUIRE_IMAGE !== 'false'
+              process.env.RSS_REQUIRE_IMAGE === 'true'
               && (!postFields.mediaUrl || isUnusableFeedImageUrl(postFields.mediaUrl))
             ) {
               stats.skippedNoImage += 1;

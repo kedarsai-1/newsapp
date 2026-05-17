@@ -258,7 +258,7 @@ async function main() {
         }
 
         if (
-          process.env.RSS_REQUIRE_IMAGE !== 'false'
+          process.env.RSS_REQUIRE_IMAGE === 'true'
           && (!postFields.mediaUrl || isUnusableFeedImageUrl(postFields.mediaUrl))
         ) {
           stats.skippedNoImage += 1;

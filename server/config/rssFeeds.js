@@ -14,7 +14,7 @@ const defaultRssFeeds = [
   // ═══════════════════════════════════════════════════════════════════════════
   { name: 'Times of India', url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms', categorySlug: 'general', language: 'en' },
   { name: 'The Hindu - National', url: 'https://www.thehindu.com/news/national/feeder/default.rss', categorySlug: 'general', language: 'en' },
-  { name: 'The Hindu - Politics', url: 'https://www.thehindu.com/news/national/politics/feeder/default.rss', categorySlug: 'politics', language: 'en', politicsScope: 'india', ogImageFallback: true },
+  { name: 'The Hindu - Politics', url: 'https://www.thehindu.com/news/national/?service=rss', categorySlug: 'politics', language: 'en', politicsScope: 'india', ogImageFallback: true },
   // The Hindu section feeds (very reliable)
   { name: 'The Hindu - Sport', url: 'https://www.thehindu.com/sport/feeder/default.rss', categorySlug: 'sports', language: 'en' },
   { name: 'The Hindu - Business', url: 'https://www.thehindu.com/business/feeder/default.rss', categorySlug: 'business', language: 'en' },
@@ -64,19 +64,22 @@ const defaultRssFeeds = [
   { name: 'Hindustan Times - Entertainment', url: 'https://www.hindustantimes.com/feeds/rss/entertainment/rssfeed.xml', categorySlug: 'entertainment', language: 'en' },
   { name: 'Hindustan Times - Lifestyle', url: 'https://www.hindustantimes.com/feeds/rss/lifestyle/rssfeed.xml', categorySlug: 'health', language: 'en' },
   { name: 'Hindustan Times - Education', url: 'https://www.hindustantimes.com/feeds/rss/education/rssfeed.xml', categorySlug: 'education', language: 'en' },
+  { name: 'India Today', url: 'https://www.indiatoday.in/rss/home', categorySlug: 'general', language: 'en' },
+  { name: 'India Today - Politics', url: 'https://www.indiatoday.in/rss/1206514', categorySlug: 'politics', language: 'en', politicsScope: 'india' },
+  { name: 'India Today - Sports', url: 'https://www.indiatoday.in/rss/1206516', categorySlug: 'sports', language: 'en' },
+  { name: 'India Today - Business', url: 'https://www.indiatoday.in/rss/1206518', categorySlug: 'business', language: 'en' },
+  { name: 'India Today - Technology', url: 'https://www.indiatoday.in/rss/1206570', categorySlug: 'technology', language: 'en' },
+  { name: 'Indian Express - Top', url: 'https://indianexpress.com/feed/', categorySlug: 'general', language: 'en' },
+  { name: 'NDTV - Latest', url: 'https://feeds.feedburner.com/ndtvnews-latest', categorySlug: 'general', language: 'en' },
+  { name: 'Moneycontrol - Latest', url: 'https://www.moneycontrol.com/rss/latestnews.xml', categorySlug: 'business', language: 'en' },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HINDI - Direct publisher feeds (images in RSS; no Google News redirects).
   // ═══════════════════════════════════════════════════════════════════════════
-  // News18 Hindi (good Hindi-script coverage)
-  { name: 'News18 Hindi', url: 'https://hindi.news18.com/rss/khabar/nation/nation.xml', categorySlug: 'general', language: 'hi' },
-  { name: 'News18 Hindi - Politics', url: 'https://hindi.news18.com/rss/khabar/politics/politics.xml', categorySlug: 'politics', language: 'hi', ogImageFallback: true, politicsScope: 'india' },
-  { name: 'News18 Hindi - Sports', url: 'https://hindi.news18.com/rss/khabar/sports/sports.xml', categorySlug: 'sports', language: 'hi', ogImageFallback: true },
-  { name: 'News18 Hindi - Business', url: 'https://hindi.news18.com/rss/khabar/business/business.xml', categorySlug: 'business', language: 'hi', ogImageFallback: true },
-  { name: 'News18 Hindi - Entertainment', url: 'https://hindi.news18.com/rss/khabar/entertainment/entertainment.xml', categorySlug: 'entertainment', language: 'hi', ogImageFallback: true },
-  { name: 'News18 Hindi - Lifestyle', url: 'https://hindi.news18.com/rss/khabar/lifestyle/lifestyle.xml', categorySlug: 'health', language: 'hi', ogImageFallback: true },
-  { name: 'News18 Hindi - Tech', url: 'https://hindi.news18.com/rss/khabar/business/tech.xml', categorySlug: 'technology', language: 'hi', ogImageFallback: true },
-  { name: 'News18 Hindi - Career', url: 'https://hindi.news18.com/rss/khabar/career/career.xml', categorySlug: 'education', language: 'hi', ogImageFallback: true },
+  { name: 'BBC Hindi', url: 'https://feeds.bbci.co.uk/hindi/rss.xml', categorySlug: 'general', language: 'hi' },
+  { name: 'BBC Hindi - India', url: 'https://feeds.bbci.co.uk/hindi/india/rss.xml', categorySlug: 'politics', language: 'hi', politicsScope: 'india' },
+  { name: 'NDTV Khabar', url: 'https://feeds.feedburner.com/ndtvkhabar-latest', categorySlug: 'general', language: 'hi', ogImageFallback: true },
+  { name: 'Prabhat Khabar', url: 'https://www.prabhatkhabar.com/feed', categorySlug: 'general', language: 'hi', ogImageFallback: true },
   // Dainik Bhaskar (only categories with confirmed-working RSS endpoints)
   { name: 'Dainik Bhaskar - Sports', url: 'https://www.bhaskar.com/rss-v1--category-1061.xml', categorySlug: 'sports', language: 'hi' },
   { name: 'Dainik Bhaskar - Education', url: 'https://www.bhaskar.com/rss-v1--category-1051.xml', categorySlug: 'education', language: 'hi' },
@@ -104,8 +107,6 @@ const defaultRssFeeds = [
   { name: 'TV9 Telugu', url: 'https://www.tv9telugu.com/feed', categorySlug: 'general', language: 'te' },
   { name: 'TV9 Telugu - Andhra Pradesh', url: 'https://www.tv9telugu.com/category/andhra-pradesh/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'andhra' },
   { name: 'TV9 Telugu - Telangana', url: 'https://www.tv9telugu.com/category/telangana/feed', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'telangana' },
-  { name: 'Eenadu - Andhra Pradesh', url: 'https://www.eenadu.net/rss/andhra-pradesh.rss', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'andhra' },
-  { name: 'Eenadu - Telangana', url: 'https://www.eenadu.net/rss/telangana.rss', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'telangana' },
   // TV9 category feeds (WordPress style)
   { name: 'TV9 Telugu - Sports', url: 'https://www.tv9telugu.com/category/sports/feed', categorySlug: 'sports', language: 'te', ogImageFallback: true },
   { name: 'TV9 Telugu - Business', url: 'https://www.tv9telugu.com/category/business/feed', categorySlug: 'business', language: 'te', ogImageFallback: true },
@@ -114,26 +115,13 @@ const defaultRssFeeds = [
   { name: 'TV9 Telugu - Health', url: 'https://www.tv9telugu.com/category/health/feed', categorySlug: 'health', language: 'te', ogImageFallback: true },
   { name: 'TV9 Telugu - Lifestyle', url: 'https://www.tv9telugu.com/category/lifestyle/feed', categorySlug: 'health', language: 'te', ogImageFallback: true },
   { name: 'TV9 Telugu - Hyderabad', url: 'https://www.tv9telugu.com/category/hyderabad/feed', categorySlug: 'local', language: 'te', ogImageFallback: true },
+  { name: 'V6 Velugu', url: 'https://www.v6velugu.com/feed', categorySlug: 'general', language: 'te', ogImageFallback: true },
+  { name: 'Andhra Jyothy', url: 'https://www.andhrajyothy.com/rss/feed.xml', categorySlug: 'general', language: 'te', ogImageFallback: true },
   { name: 'Mana Telangana', url: 'https://manatelangana.news/feed/', categorySlug: 'general', language: 'te' },
   { name: 'Mana Telangana - Sports', url: 'https://manatelangana.news/category/sports/feed/', categorySlug: 'sports', language: 'te', ogImageFallback: true },
   // Category URLs can change; keep only confirmed-working endpoints.
   { name: '123Telugu', url: 'https://www.123telugu.com/feed', categorySlug: 'general', language: 'te', ogImageFallback: true },
   { name: '123Telugu - Movies', url: 'https://www.123telugu.com/category/mnews/feed', categorySlug: 'entertainment', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Politics', url: 'https://www.eenadu.net/rss/politics.rss', categorySlug: 'politics', language: 'te', ogImageFallback: true, politicsScope: 'all' },
-  { name: 'Eenadu - Top News', url: 'https://www.eenadu.net/rss/home-top-news.rss', categorySlug: 'general', language: 'te', ogImageFallback: true },
-  { name: 'Sakshi - Sports', url: 'https://www.sakshi.com/rss/sports', categorySlug: 'sports', language: 'te', ogImageFallback: true },
-  { name: 'Sakshi - Business', url: 'https://www.sakshi.com/rss/business', categorySlug: 'business', language: 'te', ogImageFallback: true },
-  { name: 'Sakshi - Technology', url: 'https://www.sakshi.com/rss/technology', categorySlug: 'technology', language: 'te', ogImageFallback: true },
-  { name: 'Sakshi - Entertainment', url: 'https://www.sakshi.com/rss/entertainment', categorySlug: 'entertainment', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Health', url: 'https://www.eenadu.net/rss/health.rss', categorySlug: 'health', language: 'te', ogImageFallback: true },
-  { name: 'Sakshi - Education', url: 'https://www.sakshi.com/rss/education', categorySlug: 'education', language: 'te', ogImageFallback: true },
-  { name: 'Sakshi - Hyderabad', url: 'https://www.sakshi.com/rss/hyderabad', categorySlug: 'local', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Sports', url: 'https://www.eenadu.net/rss/sports.rss', categorySlug: 'sports', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Business', url: 'https://www.eenadu.net/rss/business.rss', categorySlug: 'business', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Technology', url: 'https://www.eenadu.net/rss/technology.rss', categorySlug: 'technology', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Cinema', url: 'https://www.eenadu.net/rss/cinema.rss', categorySlug: 'entertainment', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Education', url: 'https://www.eenadu.net/rss/education.rss', categorySlug: 'education', language: 'te', ogImageFallback: true },
-  { name: 'Eenadu - Hyderabad', url: 'https://www.eenadu.net/rss/hyderabad.rss', categorySlug: 'local', language: 'te', ogImageFallback: true },
 ];
 
 function getRssFeedsFromEnv() {

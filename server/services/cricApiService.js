@@ -81,23 +81,97 @@ function parseTeams(match) {
   });
 }
 
-function normalizeStatus(raw) {
-  const s = String(raw || '').toLowerCase();
-  if (s.includes('live') || s.includes('started') || s.includes('in progress')) {
-    return 'live';
-  }
-  if (s.includes('not started') || s.includes('upcoming') || s.includes('scheduled')) {
+function matchStatusText(match) {
+  return String(match?.status || match?.state || match?.msg || '').trim();
+}
+
+/** Classify using CricAPI fields — status strings often contain scores, not the word "live". */
+function detectMatchStatus(match) {
+  const text = matchStatusText(match).toLowerCase();
+  const started = match?.matchStarted === true || match?.matchStarted === 'true';
+
+  if (started) return 'live';
+
+  if (
+    /match not started|not started yet|starts at|scheduled|upcoming/i.test(text)
+    && !/\d+\s*\/\s*\d+/.test(text)
+  ) {
     return 'upcoming';
   }
-  if (s.includes('finished') || s.includes('completed') || s.includes('won')) {
+
+  if (
+    /won by|won the|beat |defeated|drawn|tied|no result|abandon|finished|completed|match over/i.test(
+      text,
+    )
+  ) {
     return 'finished';
   }
+
+  if (
+    /live|in progress|innings break|stumps|lunch|tea|drinks break|play ongoing|need \d+ runs/i.test(
+      text,
+    )
+  ) {
+    return 'live';
+  }
+
+  const scores = Array.isArray(match?.score) ? match.score : [];
+  const hasRuns = scores.some((s) => {
+    const r = s?.r ?? s?.runs;
+    return r != null && r !== '';
+  });
+  if (hasRuns) {
+    if (/won|draw|tie|no result|abandon/i.test(text)) return 'finished';
+    return 'live';
+  }
+
+  if (/\d+\s*\/\s*\d+/.test(text)) return 'live';
+
+  if (text.includes('not started') || text.includes('scheduled')) return 'upcoming';
+
   return 'upcoming';
+}
+
+function normalizeStatus(raw) {
+  return detectMatchStatus(typeof raw === 'object' && raw !== null ? raw : { status: raw });
+}
+
+function isIplOrMajorLeague(match) {
+  const blob = `${match?.series || ''} ${match?.name || ''} ${match?.matchType || ''}`.toLowerCase();
+  return (
+    /\bipl\b|indian premier league|\bwpl\b|women'?s premier league|tata ipl|syed mushtaq|smat\b|ranji/i.test(
+      blob,
+    )
+  );
+}
+
+function mergeRawMatches(lists) {
+  const byId = new Map();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const m of list) {
+      const id = String(m?.id || m?.unique_id || '');
+      if (!id) continue;
+      if (!byId.has(id)) byId.set(id, m);
+    }
+  }
+  return [...byId.values()];
+}
+
+function sortMatchesForDisplay(matches) {
+  return [...matches].sort((a, b) => {
+    const aIpl = isIplOrMajorLeague(a) ? 1 : 0;
+    const bIpl = isIplOrMajorLeague(b) ? 1 : 0;
+    if (aIpl !== bIpl) return bIpl - aIpl;
+    const ta = new Date(a.dateTimeGMT || a.dateTimeGmt || a.date || 0).getTime();
+    const tb = new Date(b.dateTimeGMT || b.dateTimeGmt || b.date || 0).getTime();
+    return ta - tb;
+  });
 }
 
 function normalizeMatchSummary(match) {
   const teams = parseTeams(match);
-  const status = normalizeStatus(match.status || match.state || match.matchStarted);
+  const status = detectMatchStatus(match);
   const time =
     match.dateTimeGMT ||
     match.dateTimeGmt ||
@@ -171,11 +245,33 @@ async function fetchCurrentMatches() {
   if (cached) return cached;
 
   const body = await cricGet('/currentMatches', { offset: 0 });
-  const list = Array.isArray(body.data) ? body.data : [];
-  const normalized = list.map(normalizeMatchSummary).filter((m) => m.id);
+  let rawList = Array.isArray(body.data) ? body.data : [];
+
+  // currentMatches often omits IPL/WPL — scan /matches pages for major leagues.
+  try {
+    const leagueRows = [];
+    for (const offset of [0, 25, 50, 75]) {
+      const more = await cricGet('/matches', { offset });
+      const page = Array.isArray(more.data) ? more.data : [];
+      for (const m of page) {
+        if (isIplOrMajorLeague(m)) leagueRows.push(m);
+      }
+      if (page.length < 25) break;
+    }
+    rawList = mergeRawMatches([rawList, leagueRows]);
+  } catch (e) {
+    console.warn('[cricapi] league matches merge skipped:', e.message);
+  }
+
+  rawList = sortMatchesForDisplay(rawList);
+  const normalized = rawList.map(normalizeMatchSummary).filter((m) => m.id);
 
   const live = normalized.filter((m) => m.status === 'live');
-  const upcoming = normalized.filter((m) => m.status === 'upcoming');
+  const upcoming = normalized.filter((m) => {
+    if (m.status !== 'upcoming') return false;
+    // Drop misclassified in-progress rows (scores present).
+    return !m.teams.some((t) => t.score != null && String(t.score).trim() !== '');
+  });
   const finished = normalized.filter((m) => m.status === 'finished');
 
   const payload = { live, upcoming, finished, fetchedAt: new Date().toISOString() };

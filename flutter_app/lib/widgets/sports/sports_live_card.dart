@@ -9,7 +9,15 @@ class SportsLiveCard extends StatelessWidget {
   final SportsMatch match;
   final VoidCallback? onTap;
 
-  const SportsLiveCard({super.key, required this.match, this.onTap});
+  /// Tighter layout for horizontal carousels (no thumbnail, shorter footer).
+  final bool compact;
+
+  const SportsLiveCard({
+    super.key,
+    required this.match,
+    this.onTap,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,9 +25,15 @@ class SportsLiveCard extends StatelessWidget {
     final isLive = match.status == SportsMatchStatus.live;
     final a = match.teams.isNotEmpty ? match.teams.first : null;
     final b = match.teams.length > 1 ? match.teams[1] : null;
+    final hasScores = match.teams.any(
+      (t) => t.score != null && t.score!.trim().isNotEmpty,
+    );
+    final showFooter =
+        !compact || (!hasScores && match.status == SportsMatchStatus.upcoming);
+    final pad = compact ? 10.0 : 12.0;
 
     return SizedBox(
-      width: 268,
+      width: compact ? 252 : 268,
       child: Material(
         color: fx.surfaceElevated,
         shape: RoundedRectangleBorder(
@@ -30,9 +44,10 @@ class SportsLiveCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(pad),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   children: [
@@ -71,22 +86,26 @@ class SportsLiveCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                _teamRow(fx, a),
-                const SizedBox(height: 6),
-                _teamRow(fx, b),
-                const SizedBox(height: 8),
-                Text(
-                  match.statusLabel,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.25,
-                    color: fx.summary,
+                SizedBox(height: compact ? 8 : 10),
+                _teamRow(fx, a, compact: compact),
+                SizedBox(height: compact ? 4 : 6),
+                _teamRow(fx, b, compact: compact),
+                if (showFooter && match.statusLabel.trim().isNotEmpty) ...[
+                  SizedBox(height: compact ? 6 : 8),
+                  Text(
+                    match.statusLabel,
+                    maxLines: compact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.2,
+                      color: fx.summary,
+                    ),
                   ),
-                ),
-                if (match.thumbnail != null && match.thumbnail!.isNotEmpty) ...[
+                ],
+                if (!compact &&
+                    match.thumbnail != null &&
+                    match.thumbnail!.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
@@ -112,17 +131,22 @@ class SportsLiveCard extends StatelessWidget {
     );
   }
 
-  Widget _teamRow(FeedXpressoPalette fx, SportsTeam? t) {
+  Widget _teamRow(
+    FeedXpressoPalette fx,
+    SportsTeam? t, {
+    bool compact = false,
+  }) {
     if (t == null) return const SizedBox.shrink();
     final scoreLine = [
       if (t.score != null) t.score,
       if (t.overs != null) '${t.overs} ov',
     ].join(' · ');
+    final badge = compact ? 24.0 : 28.0;
     return Row(
       children: [
         Container(
-          width: 28,
-          height: 28,
+          width: badge,
+          height: badge,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: fx.iconSurface,

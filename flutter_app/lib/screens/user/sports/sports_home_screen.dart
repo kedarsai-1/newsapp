@@ -187,6 +187,68 @@ class _LiveSection extends StatelessWidget {
 
   const _LiveSection({required this.onMatchTap});
 
+  Widget _sectionHeader(
+    FeedXpressoPalette fx, {
+    required String title,
+    String? badge,
+    Color? badgeColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: fx.title,
+            ),
+          ),
+          if (badge != null) ...[
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: (badgeColor ?? fx.accent).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                badge,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: badgeColor ?? fx.accent,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _matchRow(
+    List<SportsMatch> matches, {
+    required double height,
+  }) {
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: matches.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) => SportsLiveCard(
+          match: matches[i],
+          compact: true,
+          onTap: () => onMatchTap(matches[i]),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
@@ -196,14 +258,13 @@ class _LiveSection extends StatelessWidget {
         final live = data.$1;
         final upcoming = data.$2;
         final err = data.$3;
-        final combined = [...live, ...upcoming];
-        if (combined.isEmpty && err != null) {
+        if (live.isEmpty && upcoming.isEmpty && err != null) {
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Text(err, style: TextStyle(color: fx.meta, fontSize: 13)),
           );
         }
-        if (combined.isEmpty) {
+        if (live.isEmpty && upcoming.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Text(
@@ -215,52 +276,23 @@ class _LiveSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-              child: Row(
-                children: [
-                  Text(
-                    live.isNotEmpty ? 'Live now' : 'Upcoming',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: fx.title,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (live.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE53935).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${live.length} live',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFE53935),
-                        ),
-                      ),
-                    ),
-                ],
+            if (live.isNotEmpty) ...[
+              _sectionHeader(
+                fx,
+                title: 'Live now',
+                badge: '${live.length} live',
+                badgeColor: const Color(0xFFE53935),
               ),
-            ),
-            SizedBox(
-              height: 132,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: combined.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (_, i) => SportsLiveCard(
-                  match: combined[i],
-                  onTap: () => onMatchTap(combined[i]),
-                ),
+              _matchRow(live, height: 118),
+            ],
+            if (upcoming.isNotEmpty) ...[
+              _sectionHeader(
+                fx,
+                title: 'Upcoming',
+                badge: upcoming.length > 1 ? '${upcoming.length} matches' : null,
               ),
-            ),
+              _matchRow(upcoming, height: 108),
+            ],
           ],
         );
       },

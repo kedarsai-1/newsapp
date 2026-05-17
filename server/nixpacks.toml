@@ -2,6 +2,9 @@
 [variables]
 NPM_CONFIG_CACHE = "/tmp/npm-cache"
 NODE_ENV = "production"
+# Avoid heavy RSS/YouTube ingest during deploy on small Railway instances.
+SCRAPER_RUN_ON_START = "false"
+YOUTUBE_RUN_ON_START = "false"
 
 [phases.install]
 cmds = ["npm ci --omit=dev"]

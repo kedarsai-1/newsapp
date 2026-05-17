@@ -45,8 +45,23 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/sports', sportsRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
+// Liveness — always 200 once HTTP is up (Railway health checks hit this before Mongo is ready).
+app.get('/api/health', (req, res) => {
+  const mongoState = mongoose.connection.readyState;
+  res.json({
+    status: 'OK',
+    mongo: mongoState === 1 ? 'connected' : mongoState === 2 ? 'connecting' : 'disconnected',
+    timestamp: new Date(),
+  });
+});
+
+// Readiness — 503 until DB is ready (optional; do not point Railway healthcheck here).
+app.get('/api/ready', (req, res) => {
+  if (mongoose.connection.readyState === 1) {
+    return res.json({ ready: true, timestamp: new Date() });
+  }
+  return res.status(503).json({ ready: false, timestamp: new Date() });
+});
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -64,11 +79,28 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => console.log('Client disconnected:', socket.id));
 });
 
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(async () => {
-    console.log('MongoDB connected');
-    await ensureDefaultCategories();
+const port = Number(process.env.PORT) || 5000;
+const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+
+server.listen(port, () => {
+  console.log(`Server listening on port ${port} (mongo connecting in background)`);
+});
+
+process.on('SIGTERM', () => {
+  console.log('[shutdown] SIGTERM received, closing HTTP server…');
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 12_000).unref();
+});
+
+let backgroundJobsStarted = false;
+
+async function runBackgroundJobs() {
+  if (backgroundJobsStarted) return;
+  if (mongoose.connection.readyState !== 1) return;
+  backgroundJobsStarted = true;
+
+  console.log('MongoDB connected');
+  await ensureDefaultCategories();
     try {
       const { cleaned } = await ensureNewsPostIndexes();
       if (cleaned > 0) {
@@ -80,7 +112,9 @@ mongoose.connect(process.env.MONGO_URI)
     // Production default: every 5 minutes (safe + fresh).
     const cronExpr = process.env.SCRAPER_CRON || '*/5 * * * *';
     const scrapingEnabled = process.env.SCRAPER_ENABLED !== 'false';
-    const runOnStart = process.env.SCRAPER_RUN_ON_START !== 'false';
+    const runOnStart =
+      process.env.SCRAPER_RUN_ON_START === 'true'
+      || (!isRailway && process.env.SCRAPER_RUN_ON_START !== 'false');
 
     // Retention cleanup (production): delete ingested news older than N days + Cloudinary assets.
     const retentionEnabled = process.env.RETENTION_ENABLED !== 'false';
@@ -139,7 +173,9 @@ mongoose.connect(process.env.MONGO_URI)
 
     const youtubeEnabled = process.env.YOUTUBE_ENABLED !== 'false';
     const youtubeCronExpr = process.env.YOUTUBE_CRON || '*/15 * * * *';
-    const youtubeRunOnStart = process.env.YOUTUBE_RUN_ON_START !== 'false';
+    const youtubeRunOnStart =
+      process.env.YOUTUBE_RUN_ON_START === 'true'
+      || (!isRailway && process.env.YOUTUBE_RUN_ON_START !== 'false');
 
     async function runScheduledYoutube(triggeredBy) {
       console.log(`[youtube] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
@@ -215,20 +251,42 @@ mongoose.connect(process.env.MONGO_URI)
         setTimeout(() => runRetention('startup'), 4500);
         console.log('[retention] will run once on startup (RETENTION_RUN_ON_START=true)');
       }
-    } else {
-      console.log('[retention] disabled by RETENTION_ENABLED=false');
-    }
+  } else {
+    console.log('[retention] disabled by RETENTION_ENABLED=false');
+  }
+}
 
-    // On Railway, binding to the injected PORT is required. Avoid forcing an IPv4-only host;
-    // letting Node decide tends to work best across IPv4/IPv6 edge networks.
-    const port = Number(process.env.PORT) || 5000;
-    server.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+const mongoUri = process.env.MONGO_URI?.trim();
+const mongoOpts = {
+  serverSelectionTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS) || 20_000,
+};
+
+function scheduleMongoConnect() {
+  if (!mongoUri) return;
+  mongoose
+    .connect(mongoUri, mongoOpts)
+    .then(() => runBackgroundJobs().catch((e) => {
+      backgroundJobsStarted = false;
+      console.error('[startup] background jobs failed:', e?.message || e);
+    }))
+    .catch((err) => {
+      console.error('[mongo] connection error, retry in 10s:', err?.message || err);
+      setTimeout(scheduleMongoConnect, 10_000).unref();
     });
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
+}
+
+if (!mongoUri) {
+  console.error('[mongo] MONGO_URI is not set — API routes need a database. Set it in Railway Variables.');
+} else {
+  mongoose.connection.on('disconnected', () => {
+    console.warn('[mongo] disconnected');
+    backgroundJobsStarted = false;
   });
+  mongoose.connection.on('reconnected', () => {
+    console.log('[mongo] reconnected');
+    runBackgroundJobs().catch((e) => console.error('[startup] background jobs failed:', e));
+  });
+  scheduleMongoConnect();
+}
 
 module.exports = { app, io };

@@ -982,8 +982,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     }
     ingestState.lastSuccessAt = stats.endedAt;
     ingestState.lastSummary = stats;
-    if (stats.inserted > 0 && ingestionSocket) {
-      ingestionSocket.to('all').emit('feed_updated', {
+    if (stats.inserted > 0) {
+      emitFeedUpdated({
         inserted: stats.inserted,
         at: stats.endedAt,
       });

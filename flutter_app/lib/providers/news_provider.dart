@@ -346,6 +346,10 @@ class NewsProvider extends ChangeNotifier {
       _resetPoliticsScopeForLanguage(selectedLanguage);
     }
     if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
+    _posts = [];
+    _refreshing = true;
+    _error = null;
+    notifyListeners();
     await refresh();
   }
 
@@ -383,6 +387,8 @@ class NewsProvider extends ChangeNotifier {
     _selectedPoliticsScope =
         ['india', 'international', 'all'].contains(s) ? s : 'all';
     _posts = [];
+    _refreshing = true;
+    _error = null;
     notifyListeners();
     await refresh();
   }
@@ -395,6 +401,8 @@ class NewsProvider extends ChangeNotifier {
     _selectedLocalScope = allowed.contains(s) ? s : 'all';
     if (!shouldShowAndhraConstituencyFilter) _selectedConstituency = 'all';
     _posts = [];
+    _refreshing = true;
+    _error = null;
     notifyListeners();
     await refresh();
   }

@@ -48,6 +48,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   String? _fullError;
   bool _fullTriedByUser = false;
   final _commentCtrl = TextEditingController();
+  final _commentFocus = FocusNode();
+  final _scrollCtrl = ScrollController();
+  final _commentsSectionKey = GlobalKey();
 
   @override
   void initState() {
@@ -266,6 +269,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       if (!mounted) return;
       _commentCtrl.clear();
       setState(() => _comments.insert(0, Comment.fromJson(created)));
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToComments());
       return;
     }
 
@@ -280,12 +284,89 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     if (res['success'] == true && mounted) {
       _commentCtrl.clear();
       setState(() => _comments.insert(0, Comment.fromJson(res['comment'])));
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToComments());
     }
+  }
+
+  void _focusCommentField() {
+    _commentFocus.requestFocus();
+  }
+
+  void _scrollToComments() {
+    final ctx = _commentsSectionKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: 0.08,
+    );
+  }
+
+  Widget _commentComposer(BuildContext context, dynamic p) {
+    return Material(
+      elevation: 12,
+      shadowColor: Colors.black.withValues(alpha: 0.18),
+      color: p.surface,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: p.glassBorder)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.s12,
+              AppSpacing.s8,
+              AppSpacing.s4,
+              AppSpacing.s8,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _commentCtrl,
+                    focusNode: _commentFocus,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _submitComment(),
+                    decoration: InputDecoration(
+                      hintText: 'Write a comment…',
+                      hintStyle: TextStyle(fontSize: 14, color: p.textHint),
+                      filled: true,
+                      fillColor: p.inputFill,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.s16,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.s4),
+                IconButton(
+                  tooltip: 'Post comment',
+                  icon: Icon(Icons.send_rounded, color: p.primary),
+                  onPressed: _submitComment,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _commentCtrl.dispose();
+    _commentFocus.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -372,11 +453,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     required BuildContext context,
     required Widget icon,
     required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
     String? tooltip,
   }) {
     return IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
+      onLongPress: onLongPress,
       icon: _glassActionShell(context: context, child: icon),
     );
   }
@@ -404,7 +487,10 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       ),
       child: Scaffold(
         backgroundColor: p.scaffoldBackground,
+        resizeToAvoidBottomInset: true,
+        bottomNavigationBar: _commentComposer(context, p),
         body: CustomScrollView(
+          controller: _scrollCtrl,
           physics: const BouncingScrollPhysics(),
           slivers: [
             SliverAppBar(
@@ -552,6 +638,47 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   context: context,
                   icon: Icon(Icons.share_outlined, color: actionIconColor),
                   onPressed: _shareArticle,
+                ),
+                _glassActionIcon(
+                  context: context,
+                  tooltip: _comments.isEmpty
+                      ? 'Comment'
+                      : '${_comments.length} comments',
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(Icons.chat_bubble_outline, color: actionIconColor),
+                      if (_comments.isNotEmpty)
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 14),
+                            decoration: BoxDecoration(
+                              color: p.primary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _comments.length > 99
+                                  ? '99+'
+                                  : '${_comments.length}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  onPressed: _focusCommentField,
+                  onLongPress: _scrollToComments,
                 ),
               ],
             ),
@@ -779,41 +906,91 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                   TextStyle(fontSize: 13, color: p.textHint)),
                         ]),
 
+                        const SizedBox(height: AppSpacing.s16),
+                        Material(
+                          color: p.inputFill,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: _comments.isEmpty
+                                ? _focusCommentField
+                                : _scrollToComments,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.s16,
+                                vertical: AppSpacing.s12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.forum_outlined,
+                                    size: 20,
+                                    color: p.primary,
+                                  ),
+                                  const SizedBox(width: AppSpacing.s12),
+                                  Expanded(
+                                    child: Text(
+                                      _comments.isEmpty
+                                          ? 'Be the first to comment'
+                                          : '${_comments.length} comment${_comments.length == 1 ? '' : 's'}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: p.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _comments.isEmpty ? 'Comment' : 'View all',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: p.primary,
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    size: 20,
+                                    color: p.primary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
                         const SizedBox(height: AppSpacing.s24),
                         Divider(height: 1, color: p.glassBorder),
                         const SizedBox(height: AppSpacing.s16),
 
                         // Comments section
-                        Text('Comments (${_comments.length})',
+                        KeyedSubtree(
+                          key: _commentsSectionKey,
+                          child: Text(
+                            'Comments (${_comments.length})',
                             style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: p.textPrimary)),
-                        const SizedBox(height: AppSpacing.s12),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: p.textPrimary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.s16),
 
-                        // Add comment
-                        Row(children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _commentCtrl,
-                              decoration: InputDecoration(
-                                hintText: 'Write a comment...',
-                                hintStyle: const TextStyle(fontSize: 14),
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: AppSpacing.s12, vertical: 10),
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(20)),
+                        if (_comments.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.s24,
+                            ),
+                            child: Text(
+                              'No comments yet. Use the bar below to share your thoughts.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: p.textHint,
+                                height: 1.4,
                               ),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.s8),
-                          IconButton(
-                            icon: Icon(Icons.send, color: p.primary),
-                            onPressed: _submitComment,
-                          ),
-                        ]),
-
-                        const SizedBox(height: AppSpacing.s16),
 
                         // Comments list
                         ..._comments.map((c) => Padding(
@@ -855,7 +1032,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                               ),
                             )),
 
-                        const SizedBox(height: 40),
+                        const SizedBox(height: AppSpacing.s24),
                       ],
                     ),
                   ),

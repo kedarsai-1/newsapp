@@ -2,47 +2,78 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/sports_models.dart' show SportsMatch, SportsTeam;
+import '../../../models/sports_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../widgets/feed/feed_xpresso_theme.dart';
 
 class MatchDetailScreen extends StatefulWidget {
   final String matchId;
+  final SportsMatch? initialMatch;
 
-  const MatchDetailScreen({super.key, required this.matchId});
+  const MatchDetailScreen({
+    super.key,
+    required this.matchId,
+    this.initialMatch,
+  });
 
   @override
   State<MatchDetailScreen> createState() => _MatchDetailScreenState();
 }
 
-class _MatchDetailScreenState extends State<MatchDetailScreen> {
+class _MatchDetailScreenState extends State<MatchDetailScreen>
+    with SingleTickerProviderStateMixin {
   SportsMatch? _match;
   bool _loading = true;
   String? _error;
+  TabController? _inningsTab;
 
   @override
   void initState() {
     super.initState();
+    _match = widget.initialMatch;
+    _syncInningsTabs(_match);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _inningsTab?.dispose();
+    super.dispose();
+  }
+
+  void _syncInningsTabs(SportsMatch? m) {
+    final count = m?.scorecard.length ?? 0;
+    if (count <= 1) {
+      _inningsTab?.dispose();
+      _inningsTab = null;
+      return;
+    }
+    if (_inningsTab == null || _inningsTab!.length != count) {
+      _inningsTab?.dispose();
+      _inningsTab = TabController(length: count, vsync: this);
+    }
   }
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = _match == null;
       _error = null;
     });
     final m = await context.read<SportsProvider>().fetchMatchDetail(widget.matchId);
     if (!mounted) return;
     setState(() {
-      _match = m;
+      _match = m ?? _match;
       _loading = false;
-      _error = m == null ? 'Match not found or scores unavailable.' : null;
+      _error = _match == null ? 'Match not found or scores unavailable.' : null;
     });
+    _syncInningsTabs(_match);
+    if (mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
+    final m = _match;
 
     return Scaffold(
       backgroundColor: fx.background,
@@ -50,78 +81,200 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
         backgroundColor: fx.background,
         surfaceTintColor: Colors.transparent,
         foregroundColor: fx.title,
-        title: Text('Match', style: fx.screenTitleStyle.copyWith(fontSize: 17)),
+        title: Text(
+          m != null && m.teams.length >= 2
+              ? '${m.teams[0].shortName} vs ${m.teams[1].shortName}'
+              : 'Scorecard',
+          style: fx.screenTitleStyle.copyWith(fontSize: 17),
+        ),
       ),
-      body: _loading
+      body: _loading && m == null
           ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
-          : _error != null
+          : _error != null && m == null
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(_error!, textAlign: TextAlign.center),
                   ),
                 )
-              : _buildBody(context, fx, _match!),
+              : m == null
+                  ? const SizedBox.shrink()
+                  : _buildBody(context, fx, m),
     );
   }
 
   Widget _buildBody(BuildContext context, FeedXpressoPalette fx, SportsMatch m) {
+    final hasScorecard = m.scorecard.isNotEmpty;
+
     return RefreshIndicator(
       color: fx.accent,
       onRefresh: _load,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 32),
         children: [
-          if (m.thumbnail != null && m.thumbnail!.isNotEmpty)
+          _summaryCard(fx, m),
+          const SizedBox(height: 14),
+          Text(
+            'Scorecard',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: fx.title,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (hasScorecard) ...[
+            if (_inningsTab != null) ...[
+              TabBar(
+                controller: _inningsTab,
+                isScrollable: true,
+                labelColor: fx.accent,
+                unselectedLabelColor: fx.meta,
+                indicatorColor: fx.accent,
+                tabs: m.scorecard
+                    .map((inn) => Tab(text: _shortInningLabel(inn.label)))
+                    .toList(),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: _scorecardPaneHeight(m.scorecard[_inningsTab!.index]),
+                child: TabBarView(
+                  controller: _inningsTab,
+                  children: m.scorecard
+                      .map((inn) => _inningScorecard(fx, inn))
+                      .toList(),
+                ),
+              ),
+            ] else
+              _inningScorecard(fx, m.scorecard.first),
+          ] else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: fx.surfaceElevated,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: fx.divider, width: 0.5),
+              ),
+              child: Text(
+                m.status == SportsMatchStatus.upcoming
+                    ? 'Full scorecard will appear once the match starts.'
+                    : 'Detailed scorecard is not available for this match yet. Pull to refresh.',
+                style: TextStyle(fontSize: 13, color: fx.summary, height: 1.35),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  double _scorecardPaneHeight(SportsInningScorecard inn) {
+    final rows = inn.batting.length + inn.bowling.length + 6;
+    return (rows * 34.0 + 120).clamp(280.0, 520.0);
+  }
+
+  String _shortInningLabel(String label) {
+    final parts = label.split(' ');
+    if (parts.length >= 2) {
+      return '${parts.first} ${parts.last.replaceAll('Inning', '').trim()}';
+    }
+    return label.length > 18 ? '${label.substring(0, 16)}…' : label;
+  }
+
+  Widget _summaryCard(FeedXpressoPalette fx, SportsMatch m) {
+    final isLive = m.status == SportsMatchStatus.live;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: fx.surfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: fx.divider, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (m.thumbnail != null && m.thumbnail!.isNotEmpty) ...[
             ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               child: CachedNetworkImage(
                 imageUrl: m.thumbnail!,
-                height: 140,
+                height: 100,
                 width: double.infinity,
                 fit: BoxFit.cover,
                 memCacheWidth: 720,
               ),
             ),
-          const SizedBox(height: 12),
-          Text(
-            m.tournament,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fx.meta),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              if (isLive) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE53935),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'LIVE',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFE53935),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  m.tournament,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fx.meta),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             m.statusLabel,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fx.title),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: fx.title),
           ),
           if (m.venue.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(m.venue, style: TextStyle(fontSize: 12, color: fx.summary)),
           ],
-          const SizedBox(height: 16),
-          ...m.teams.map((t) => _teamCard(fx, t)),
-          if (m.result != null && m.result!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(m.result!, style: TextStyle(fontSize: 13, color: fx.summary)),
+          if (m.tossWinner != null && m.tossWinner!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Toss: ${m.tossWinner} chose to ${m.tossChoice ?? 'bat/bowl'}',
+              style: TextStyle(fontSize: 12, color: fx.meta),
+            ),
+          ],
+          const SizedBox(height: 12),
+          ...m.teams.map((t) => _teamRow(fx, t)),
+          if (m.matchWinner != null && m.matchWinner!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Winner: ${m.matchWinner}',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fx.accent),
+            ),
           ],
         ],
       ),
     );
   }
 
-  Widget _teamCard(FeedXpressoPalette fx, SportsTeam t) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: fx.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: fx.divider, width: 0.5),
-      ),
+  Widget _teamRow(FeedXpressoPalette fx, SportsTeam t) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: fx.iconSurface,
@@ -129,28 +282,167 @@ class _MatchDetailScreenState extends State<MatchDetailScreen> {
             ),
             child: Text(
               t.shortName,
-              style: TextStyle(fontWeight: FontWeight.w800, color: fx.title),
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, color: fx.title),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               t.name,
               style: TextStyle(fontWeight: FontWeight.w700, color: fx.title),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (t.score != null)
-                Text(
-                  t.score!,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: fx.title),
-                ),
-              if (t.overs != null)
-                Text('${t.overs} ov', style: TextStyle(fontSize: 11, color: fx.meta)),
-            ],
+          if (t.score != null)
+            Text(
+              t.score!,
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: fx.title),
+            ),
+          if (t.overs != null) ...[
+            const SizedBox(width: 6),
+            Text('(${t.overs} ov)', style: TextStyle(fontSize: 11, color: fx.meta)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _inningScorecard(FeedXpressoPalette fx, SportsInningScorecard inn) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      children: [
+        if (inn.totals != null && inn.totals!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(inn.totals!, style: TextStyle(fontWeight: FontWeight.w700, color: fx.title)),
           ),
+        if (inn.extras != null && inn.extras!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(inn.extras!, style: TextStyle(fontSize: 12, color: fx.meta)),
+          ),
+        _sectionTitle(fx, 'Batting'),
+        _battingTable(fx, inn.batting),
+        const SizedBox(height: 12),
+        _sectionTitle(fx, 'Bowling'),
+        _bowlingTable(fx, inn.bowling),
+      ],
+    );
+  }
+
+  Widget _sectionTitle(FeedXpressoPalette fx, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        title,
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: fx.title),
+      ),
+    );
+  }
+
+  Widget _battingTable(FeedXpressoPalette fx, List<SportsBatsmanRow> rows) {
+    if (rows.isEmpty) {
+      return Text('No batting data', style: TextStyle(fontSize: 12, color: fx.meta));
+    }
+    return _tableShell(
+      fx,
+      header: const ['Batsman', 'R', 'B', '4s', '6s', 'SR'],
+      rows: rows
+          .map(
+            (b) => [
+              '${b.name}\n${b.dismissal}',
+              '${b.runs}',
+              '${b.balls}',
+              '${b.fours}',
+              '${b.sixes}',
+              b.strikeRate.toStringAsFixed(1),
+            ],
+          )
+          .toList(),
+      firstColumnFlex: 4,
+    );
+  }
+
+  Widget _bowlingTable(FeedXpressoPalette fx, List<SportsBowlerRow> rows) {
+    if (rows.isEmpty) {
+      return Text('No bowling data', style: TextStyle(fontSize: 12, color: fx.meta));
+    }
+    return _tableShell(
+      fx,
+      header: const ['Bowler', 'O', 'M', 'R', 'W', 'Eco'],
+      rows: rows
+          .map(
+            (b) => [
+              b.name,
+              _fmtOvers(b.overs),
+              '${b.maidens}',
+              '${b.runs}',
+              '${b.wickets}',
+              b.economy.toStringAsFixed(1),
+            ],
+          )
+          .toList(),
+      firstColumnFlex: 3,
+    );
+  }
+
+  String _fmtOvers(double o) {
+    if (o % 1 == 0) return o.toInt().toString();
+    return o.toStringAsFixed(1);
+  }
+
+  Widget _tableShell(
+    FeedXpressoPalette fx, {
+    required List<String> header,
+    required List<List<String>> rows,
+    required int firstColumnFlex,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: fx.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: fx.divider, width: 0.5),
+      ),
+      child: Column(
+        children: [
+          _tableRow(fx, header, bold: true, firstColumnFlex: firstColumnFlex),
+          ...rows.map(
+            (cells) => _tableRow(fx, cells, firstColumnFlex: firstColumnFlex),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableRow(
+    FeedXpressoPalette fx,
+    List<String> cells, {
+    bool bold = false,
+    int firstColumnFlex = 3,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: fx.divider.withValues(alpha: 0.5))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < cells.length; i++)
+            Expanded(
+              flex: i == 0 ? firstColumnFlex : 1,
+              child: Text(
+                cells[i],
+                maxLines: i == 0 ? 3 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: i == 0 ? 12 : 11,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w500,
+                  height: 1.25,
+                  color: i == 0 ? fx.title : fx.summary,
+                ),
+              ),
+            ),
         ],
       ),
     );

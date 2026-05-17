@@ -66,7 +66,7 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
 
   void _openMatch(SportsMatch match) {
     if (match.id.isEmpty) return;
-    context.push('/sports/match/${match.id}');
+    context.push('/sports/match/${match.id}', extra: match);
   }
 
   Future<bool> _toggleLike(NewsPost post) async {
@@ -252,19 +252,20 @@ class _LiveSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    return Selector<SportsProvider, (List<SportsMatch>, List<SportsMatch>, String?)>(
-      selector: (_, p) => (p.live, p.upcoming, p.liveError),
+    return Selector<SportsProvider, (List<SportsMatch>, List<SportsMatch>, List<SportsMatch>, String?)>(
+      selector: (_, p) => (p.live, p.upcoming, p.ipl, p.liveError),
       builder: (context, data, _) {
         final live = data.$1;
         final upcoming = data.$2;
-        final err = data.$3;
-        if (live.isEmpty && upcoming.isEmpty && err != null) {
+        final ipl = data.$3;
+        final err = data.$4;
+        if (live.isEmpty && upcoming.isEmpty && ipl.isEmpty && err != null) {
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Text(err, style: TextStyle(color: fx.meta, fontSize: 13)),
           );
         }
-        if (live.isEmpty && upcoming.isEmpty) {
+        if (live.isEmpty && upcoming.isEmpty && ipl.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Text(
@@ -276,6 +277,10 @@ class _LiveSection extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (ipl.isNotEmpty) ...[
+              _sectionHeader(fx, title: 'IPL', badge: '${ipl.length} matches'),
+              _matchRow(ipl, height: 118),
+            ],
             if (live.isNotEmpty) ...[
               _sectionHeader(
                 fx,

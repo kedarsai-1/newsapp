@@ -62,6 +62,7 @@ const getLive = async (req, res) => {
       success: true,
       live: data.live,
       upcoming: data.upcoming,
+      ipl: data.ipl || [],
       cached: true,
       fetchedAt: data.fetchedAt,
     });

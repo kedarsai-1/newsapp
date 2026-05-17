@@ -1,3 +1,102 @@
+class SportsBatsmanRow {
+  final String name;
+  final String dismissal;
+  final int runs;
+  final int balls;
+  final int fours;
+  final int sixes;
+  final double strikeRate;
+
+  const SportsBatsmanRow({
+    required this.name,
+    required this.dismissal,
+    this.runs = 0,
+    this.balls = 0,
+    this.fours = 0,
+    this.sixes = 0,
+    this.strikeRate = 0,
+  });
+
+  factory SportsBatsmanRow.fromJson(Map<String, dynamic> j) {
+    return SportsBatsmanRow(
+      name: j['name']?.toString() ?? '',
+      dismissal: j['dismissal']?.toString() ?? '',
+      runs: int.tryParse('${j['runs']}') ?? 0,
+      balls: int.tryParse('${j['balls']}') ?? 0,
+      fours: int.tryParse('${j['fours']}') ?? 0,
+      sixes: int.tryParse('${j['sixes']}') ?? 0,
+      strikeRate: double.tryParse('${j['strikeRate']}') ?? 0,
+    );
+  }
+}
+
+class SportsBowlerRow {
+  final String name;
+  final double overs;
+  final int maidens;
+  final int runs;
+  final int wickets;
+  final double economy;
+
+  const SportsBowlerRow({
+    required this.name,
+    this.overs = 0,
+    this.maidens = 0,
+    this.runs = 0,
+    this.wickets = 0,
+    this.economy = 0,
+  });
+
+  factory SportsBowlerRow.fromJson(Map<String, dynamic> j) {
+    return SportsBowlerRow(
+      name: j['name']?.toString() ?? '',
+      overs: double.tryParse('${j['overs']}') ?? 0,
+      maidens: int.tryParse('${j['maidens']}') ?? 0,
+      runs: int.tryParse('${j['runs']}') ?? 0,
+      wickets: int.tryParse('${j['wickets']}') ?? 0,
+      economy: double.tryParse('${j['economy']}') ?? 0,
+    );
+  }
+}
+
+class SportsInningScorecard {
+  final String label;
+  final String? extras;
+  final String? totals;
+  final List<SportsBatsmanRow> batting;
+  final List<SportsBowlerRow> bowling;
+
+  const SportsInningScorecard({
+    required this.label,
+    this.extras,
+    this.totals,
+    this.batting = const [],
+    this.bowling = const [],
+  });
+
+  factory SportsInningScorecard.fromJson(Map<String, dynamic> j) {
+    final batRaw = j['batting'];
+    final bowlRaw = j['bowling'];
+    return SportsInningScorecard(
+      label: j['label']?.toString() ?? 'Innings',
+      extras: j['extras']?.toString(),
+      totals: j['totals']?.toString(),
+      batting: batRaw is List
+          ? batRaw
+              .whereType<Map>()
+              .map((e) => SportsBatsmanRow.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      bowling: bowlRaw is List
+          ? bowlRaw
+              .whereType<Map>()
+              .map((e) => SportsBowlerRow.fromJson(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+    );
+  }
+}
+
 class SportsTeam {
   final String name;
   final String shortName;
@@ -46,6 +145,10 @@ class SportsMatch {
   final String tournament;
   final String venue;
   final String? result;
+  final List<SportsInningScorecard> scorecard;
+  final String? tossWinner;
+  final String? tossChoice;
+  final String? matchWinner;
 
   const SportsMatch({
     required this.id,
@@ -57,6 +160,10 @@ class SportsMatch {
     this.tournament = 'Cricket',
     this.venue = '',
     this.result,
+    this.scorecard = const [],
+    this.tossWinner,
+    this.tossChoice,
+    this.matchWinner,
   });
 
   factory SportsMatch.fromJson(Map<String, dynamic> j) {
@@ -72,6 +179,14 @@ class SportsMatch {
     if (t != null) {
       parsedTime = DateTime.tryParse(t.toString());
     }
+    final scRaw = j['scorecard'];
+    final scorecard = scRaw is List
+        ? scRaw
+            .whereType<Map>()
+            .map((e) => SportsInningScorecard.fromJson(Map<String, dynamic>.from(e)))
+            .toList()
+        : <SportsInningScorecard>[];
+
     return SportsMatch(
       id: j['id']?.toString() ?? '',
       teams: teams,
@@ -82,6 +197,10 @@ class SportsMatch {
       tournament: j['tournament']?.toString() ?? 'Cricket',
       venue: j['venue']?.toString() ?? '',
       result: j['result']?.toString(),
+      scorecard: scorecard,
+      tossWinner: j['tossWinner']?.toString(),
+      tossChoice: j['tossChoice']?.toString(),
+      matchWinner: j['matchWinner']?.toString(),
     );
   }
 }

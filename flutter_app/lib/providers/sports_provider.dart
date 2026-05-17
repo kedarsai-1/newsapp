@@ -11,6 +11,7 @@ import '../services/sports_news_feed.dart';
 class SportsProvider extends ChangeNotifier {
   List<SportsMatch> _live = [];
   List<SportsMatch> _upcoming = [];
+  List<SportsMatch> _ipl = [];
   List<NewsPost> _posts = [];
 
   bool _loadingLive = false;
@@ -26,6 +27,7 @@ class SportsProvider extends ChangeNotifier {
 
   List<SportsMatch> get live => _live;
   List<SportsMatch> get upcoming => _upcoming;
+  List<SportsMatch> get ipl => _ipl;
   List<NewsPost> get posts => _posts;
   bool get loadingLive => _loadingLive;
   bool get loadingNews => _loadingNews;
@@ -92,6 +94,7 @@ class SportsProvider extends ChangeNotifier {
     } else if (res['code'] == SportsApiService.codeSportsApiMissing) {
       _live = [];
       _upcoming = [];
+      _ipl = [];
       _liveError =
           'Live scores need a backend redeploy on Railway (add CRICAPI_KEY in Railway variables, then redeploy).';
     } else {
@@ -104,6 +107,7 @@ class SportsProvider extends ChangeNotifier {
   void _applyLivePayload(Map<String, dynamic> res) {
     _live = _parseMatches(res['live']);
     _upcoming = _parseMatches(res['upcoming']);
+    _ipl = _parseMatches(res['ipl']);
   }
 
   List<SportsMatch> _parseMatches(dynamic raw) {

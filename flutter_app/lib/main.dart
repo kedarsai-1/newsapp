@@ -8,6 +8,7 @@ import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
 import 'providers/shorts_playback_controller.dart';
 import 'providers/sports_provider.dart';
+import 'models/sports_models.dart';
 import 'providers/reporter_provider.dart';
 import 'providers/admin_provider.dart';
 import 'constants.dart';
@@ -299,7 +300,10 @@ GoRouter createAppRouter(BuildContext context) {
             path: '/sports/match/:id',
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
-              child: MatchDetailScreen(matchId: state.pathParameters['id']!),
+              child: MatchDetailScreen(
+                matchId: state.pathParameters['id']!,
+                initialMatch: state.extra is SportsMatch ? state.extra as SportsMatch : null,
+              ),
             ),
           ),
           GoRoute(

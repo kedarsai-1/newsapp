@@ -1,4 +1,8 @@
-# Railway / Nixpacks — install from lock file only (must match package.json).
+# Nixpacks (Railway). Do not set a custom Build Command in the dashboard — this file handles install.
+[variables]
+NPM_CONFIG_CACHE = "/tmp/npm-cache"
+NODE_ENV = "production"
+
 [phases.install]
 cmds = ["npm ci --omit=dev"]
 

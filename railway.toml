@@ -1,8 +1,7 @@
-# Service Root Directory should be `server` in Railway → Settings.
-# Build runs inside /server, so do not `cd server` here.
+# Root Directory in Railway must be: server
+# Leave "Custom Build Command" empty in the dashboard (nixpacks.toml runs npm ci).
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci --omit=dev"
 
 [deploy]
 startCommand = "npm start"

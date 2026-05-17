@@ -35,7 +35,6 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   late bool _saved;
   late String _metaLine;
   late String _imageUrl;
-  bool _hideCard = false;
 
   @override
   void initState() {
@@ -48,7 +47,6 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
     _saved = widget.saved;
     _imageUrl = premiumImageUrl(widget.post);
     _metaLine = _buildMeta(widget.post);
-    _hideCard = _imageUrl.trim().isEmpty;
   }
 
   @override
@@ -87,14 +85,12 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   }
 
   void _onImageUnavailable() {
-    if (_hideCard || !mounted) return;
-    setState(() => _hideCard = true);
+    if (_imageUrl.trim().isEmpty || !mounted) return;
+    setState(() => _imageUrl = '');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_hideCard) return const SizedBox.shrink();
-
     return RepaintBoundary(
       child: CompactNewsRow(
         title: widget.post.title,

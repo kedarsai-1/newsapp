@@ -7,6 +7,12 @@ const {
   getYoutubeChannelsByLanguage,
 } = require('../config/youtubeIngestPlan');
 const { emitFeedUpdated } = require('./feedSocket');
+const {
+  isYoutubeQuotaError,
+  isYoutubeQuotaBlocked,
+  markYoutubeQuotaBlocked,
+  formatBlockedUntil,
+} = require('../utils/youtubeQuota');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
@@ -58,9 +64,30 @@ async function youtubeGet(path, params) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = data?.error?.message || res.statusText || `HTTP ${res.status}`;
-    throw new Error(`YouTube API ${path}: ${msg}`);
+    const reasons = (data?.error?.errors || []).map((e) => e?.reason).filter(Boolean);
+    const err = new Error(`YouTube API ${path}: ${msg}`);
+    err.youtubeReasons = reasons;
+    throw err;
   }
   return data;
+}
+
+function isSearchEnabled() {
+  return process.env.YOUTUBE_SEARCH_ENABLED === 'true';
+}
+
+function handleYoutubeQuotaHit(stats, context) {
+  const until = markYoutubeQuotaBlocked();
+  stats.quotaExceeded = true;
+  stats.quotaBlockedUntil = until;
+  if (!stats.quotaWarned) {
+    stats.quotaWarned = true;
+    console.warn(
+      `[youtube] API quota exceeded${context ? ` (${context})` : ''} — `
+        + `pausing all YouTube API calls until ${formatBlockedUntil(until)}. `
+        + 'RSS ingestion is unaffected. Set YOUTUBE_SEARCH_ENABLED=false to avoid search quota use.',
+    );
+  }
 }
 
 async function ensureSystemReporter() {
@@ -319,6 +346,15 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
     return { success: false, error: 'YOUTUBE_API_KEY is not set', stats };
   }
 
+  if (isYoutubeQuotaBlocked()) {
+    return {
+      success: true,
+      skipped: true,
+      message: 'YouTube API quota cooldown active',
+      stats: { ...stats, quotaSkipped: true },
+    };
+  }
+
   const searchPerCategory = Math.min(
     25,
     Math.max(3, Number(process.env.YOUTUBE_SEARCH_PER_CATEGORY || 8)),
@@ -335,8 +371,10 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
   try {
     const reporter = await ensureSystemReporter();
     const channels = getYoutubeChannelsByLanguage();
+    let quotaHit = false;
 
-    for (const { channelId, language } of channels) {
+    for (const { channelId, language, categorySlug: channelCategorySlug } of channels) {
+      if (quotaHit) break;
       let insertedFromChannel = 0;
       try {
         const videos = await fetchChannelUploads(channelId, channelMax);
@@ -346,7 +384,11 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
           try {
             // eslint-disable-next-line no-await-in-loop
             const ok = await insertNormalizedItem(
-              { ...v, categorySlug: DEFAULT_CATEGORY_SLUG, language },
+              {
+                ...v,
+                categorySlug: channelCategorySlug || DEFAULT_CATEGORY_SLUG,
+                language,
+              },
               reporter,
               stats,
             );
@@ -363,6 +405,16 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
           success: true,
         });
       } catch (e) {
+        if (isYoutubeQuotaError(e)) {
+          handleYoutubeQuotaHit(stats, `channel ${channelId}`);
+          quotaHit = true;
+          stats.sourceRuns.push({
+            source: `YouTube:channel:${channelId}:${language}`,
+            success: false,
+            error: 'quotaExceeded',
+          });
+          break;
+        }
         stats.youtubeFailed += 1;
         stats.sourceRuns.push({
           source: `YouTube:channel:${channelId}:${language}`,
@@ -373,50 +425,65 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
       }
     }
 
-    const plans = getYoutubeSearchPlan();
-    for (const plan of plans) {
-      let insertedFromSearch = 0;
-      try {
-        const videos = await searchVideos(
-          plan.query,
-          searchPerCategory,
-          plan.language || 'en',
-        );
-        stats.youtubeFetched += videos.length;
-        for (const v of videos) {
-          if (insertedFromSearch >= targetInsertsPerSource) break;
-          try {
-            // eslint-disable-next-line no-await-in-loop
-            const ok = await insertNormalizedItem(
-              {
-                ...v,
-                categorySlug: plan.categorySlug,
-                language: plan.language || 'en',
-              },
-              reporter,
-              stats,
-            );
-            if (ok) insertedFromSearch += 1;
-          } catch (e) {
-            stats.youtubeFailed += 1;
-            console.warn(`[youtube] search "${plan.query}" item failed:`, e?.message || e);
+    if (isSearchEnabled() && !quotaHit) {
+      const plans = getYoutubeSearchPlan();
+      for (const plan of plans) {
+        if (quotaHit) break;
+        let insertedFromSearch = 0;
+        try {
+          const videos = await searchVideos(
+            plan.query,
+            searchPerCategory,
+            plan.language || 'en',
+          );
+          stats.youtubeFetched += videos.length;
+          for (const v of videos) {
+            if (insertedFromSearch >= targetInsertsPerSource) break;
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              const ok = await insertNormalizedItem(
+                {
+                  ...v,
+                  categorySlug: plan.categorySlug,
+                  language: plan.language || 'en',
+                },
+                reporter,
+                stats,
+              );
+              if (ok) insertedFromSearch += 1;
+            } catch (e) {
+              stats.youtubeFailed += 1;
+              console.warn(`[youtube] search "${plan.query}" item failed:`, e?.message || e);
+            }
           }
+          stats.sourceRuns.push({
+            source: `YouTube:search:${plan.categorySlug}:${plan.language || 'en'}`,
+            mode: 'youtube',
+            count: videos.length,
+            success: true,
+          });
+        } catch (e) {
+          if (isYoutubeQuotaError(e)) {
+            handleYoutubeQuotaHit(stats, `search "${plan.query}"`);
+            quotaHit = true;
+            stats.sourceRuns.push({
+              source: `YouTube:search:${plan.categorySlug}`,
+              success: false,
+              error: 'quotaExceeded',
+            });
+            break;
+          }
+          stats.youtubeFailed += 1;
+          stats.sourceRuns.push({
+            source: `YouTube:search:${plan.categorySlug}`,
+            success: false,
+            error: e.message,
+          });
+          console.warn(`[youtube] search "${plan.query}" failed:`, e.message);
         }
-        stats.sourceRuns.push({
-          source: `YouTube:search:${plan.categorySlug}:${plan.language || 'en'}`,
-          mode: 'youtube',
-          count: videos.length,
-          success: true,
-        });
-      } catch (e) {
-        stats.youtubeFailed += 1;
-        stats.sourceRuns.push({
-          source: `YouTube:search:${plan.categorySlug}`,
-          success: false,
-          error: e.message,
-        });
-        console.warn(`[youtube] search "${plan.query}" failed:`, e.message);
       }
+    } else if (!isSearchEnabled()) {
+      stats.youtubeSearchSkipped = true;
     }
 
     console.log(

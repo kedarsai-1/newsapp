@@ -5,7 +5,6 @@ import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import '../constants.dart';
 import '../utils/feed_dedupe.dart';
-import '../utils/feed_image_url.dart';
 import '../utils/feed_language.dart';
 
 class NewsProvider extends ChangeNotifier {
@@ -418,39 +417,31 @@ class NewsProvider extends ChangeNotifier {
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).
         // RSS items in your DB are ~15 days old, so 7 days hides everything.
         // Once NewsAPI ingestion is confirmed working, you can tighten back to 7.
-        days: isPoliticsMode ? 7 : 30,
-        // Show reporter/manual + NewsAPI. Temporarily also allow RSS since your DB currently contains RSS
-        // and NewsAPI is returning apiKeyInvalid (so api feed would be empty otherwise).
-        sourceTypes: const ['api', 'manual', 'rss'],
+        days: 30,
+        sourceTypes: const ['api', 'manual', 'rss', 'html'],
       );
       if (res['success'] == true) {
-        var fetched = (res['posts'] as List)
+        final rawPosts = (res['posts'] as List)
             .map((p) => NewsPost.fromJson(Map<String, dynamic>.from(p as Map)))
             .toList();
-        final wantSlug = selectedCategorySlug;
-        if (wantSlug != null) {
-          fetched = fetched
-              .where((p) => (p.category?.slug.toLowerCase() ?? '') == wantSlug)
-              .toList();
-        }
+        final apiPage = int.tryParse('${res['page']}') ?? (reset ? 1 : _page - 1);
+        final apiPages = int.tryParse('${res['pages']}') ?? 1;
+
+        var fetched = rawPosts;
         if (selectedLanguage != 'all') {
           fetched = fetched
               .where((p) => postMatchesFeedLanguage(p, selectedLanguage))
               .toList();
         }
-        // Hide broken / missing hero images (legacy rows ingested before RSS_REQUIRE_IMAGE).
-        fetched = fetched
-            .where((p) => feedImageUrlForPost(p).isNotEmpty)
-            .toList();
         fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
         if (reset) {
           _posts = dedupeNewsPosts(fetched);
-          _page = 2;
+          _page = apiPage + 1;
         } else {
           _posts = mergeDedupedPosts(_posts, fetched);
-          _page++;
+          _page = apiPage + 1;
         }
-        _hasMore = fetched.length == AppConstants.pageSize;
+        _hasMore = apiPage < apiPages;
         _error = null;
       } else {
         _error = (res['message']?.toString().trim().isNotEmpty == true)

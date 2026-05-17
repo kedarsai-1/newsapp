@@ -5,7 +5,6 @@ const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const { canonicalizeUrl, hashUrl, normalizeTitle, titleFingerprint } = require('../utils/storyDedupe');
-const { filterPostsForCategory } = require('../utils/categoryRelevance');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
 
@@ -291,9 +290,8 @@ const getFeed = async (req, res) => {
     ]);
 
     let posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
-    if (categorySlugFilter && categorySlugFilter !== 'general') {
-      posts = filterPostsForCategory(posts, categorySlugFilter);
-    }
+    // Category is already set at ingest from section RSS/API — trust the DB assignment on read.
+    // Keyword re-filtering hid valid stories and made category tabs look empty.
 
     res.json({
       success: true,

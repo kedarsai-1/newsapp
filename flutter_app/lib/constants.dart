@@ -18,24 +18,24 @@ class AppConstants {
   static String get baseUrl {
     final v = dotenv.env['API_BASE_URL']?.trim();
     if (v != null && v.isNotEmpty) return v;
-    if (kIsWeb) return 'http://127.0.0.1:5001/api';
+    if (kIsWeb) return 'http://127.0.0.1:5000/api';
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:5001/api';
+        return 'http://10.0.2.2:5000/api';
       default:
-        return 'http://127.0.0.1:5001/api';
+        return 'http://127.0.0.1:5000/api';
     }
   }
 
   static String get socketUrl {
     final v = dotenv.env['SOCKET_URL']?.trim();
     if (v != null && v.isNotEmpty) return v;
-    if (kIsWeb) return 'http://127.0.0.1:5001';
+    if (kIsWeb) return 'http://127.0.0.1:5000';
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:5001';
+        return 'http://10.0.2.2:5000';
       default:
-        return 'http://127.0.0.1:5001';
+        return 'http://127.0.0.1:5000';
     }
   }
 

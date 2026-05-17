@@ -57,22 +57,45 @@ function getYoutubeChannelIds() {
   return getYoutubeChannelsByLanguage().map((c) => c.channelId);
 }
 
+/** Built-in channels when env lists are empty (public channel IDs). */
+const defaultYoutubeChannels = [
+  { channelId: 'UCumtYpCY26F6Jr3satUgMvA', language: 'te', categorySlug: 'general' },
+];
+
 /**
  * Channel IDs per language — set YOUTUBE_CHANNEL_IDS_TE / _HI / _EN (or YOUTUBE_CHANNEL_IDS → en).
  */
 function getYoutubeChannelsByLanguage() {
+  const seen = new Set();
   const out = [];
-  const add = (envKey, language) => {
+
+  const push = (channelId, language, categorySlug = 'general') => {
+    if (!channelId || seen.has(channelId)) return;
+    seen.add(channelId);
+    out.push({
+      channelId,
+      language: String(language || 'en').toLowerCase(),
+      categorySlug: String(categorySlug || 'general').trim(),
+    });
+  };
+
+  const addFromEnv = (envKey, language) => {
     for (const channelId of parseChannelIds(process.env[envKey])) {
-      out.push({ channelId, language });
+      push(channelId, language);
     }
   };
-  add('YOUTUBE_CHANNEL_IDS_TE', 'te');
-  add('YOUTUBE_CHANNEL_IDS_HI', 'hi');
-  add('YOUTUBE_CHANNEL_IDS_EN', 'en');
+
+  addFromEnv('YOUTUBE_CHANNEL_IDS_TE', 'te');
+  addFromEnv('YOUTUBE_CHANNEL_IDS_HI', 'hi');
+  addFromEnv('YOUTUBE_CHANNEL_IDS_EN', 'en');
   if (out.length === 0) {
-    add('YOUTUBE_CHANNEL_IDS', 'en');
+    addFromEnv('YOUTUBE_CHANNEL_IDS', 'en');
   }
+
+  for (const row of defaultYoutubeChannels) {
+    push(row.channelId, row.language, row.categorySlug);
+  }
+
   return out;
 }
 

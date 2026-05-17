@@ -36,8 +36,10 @@ const List<(String, String?)> _kFeedTabs = [
   ('Sports', 'sports'),
   ('Entertainment', 'entertainment'),
   ('Technology', 'technology'),
-  ('Local', 'local'),
   ('Business', 'business'),
+  ('Health', 'health'),
+  ('Education', 'education'),
+  ('Local', 'local'),
 ];
 
 const List<String> _kFeedTabLabels = [
@@ -46,8 +48,10 @@ const List<String> _kFeedTabLabels = [
   'Sports',
   'Entertainment',
   'Technology',
-  'Local',
   'Business',
+  'Health',
+  'Education',
+  'Local',
 ];
 
 class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {

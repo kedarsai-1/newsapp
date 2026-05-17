@@ -885,8 +885,9 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       }
     }
 
-    // YouTube ingestion (metadata + embed URLs only).
-    if (process.env.YOUTUBE_ENABLED !== 'false') {
+    // YouTube: optional during scraper runs (dedicated YOUTUBE_CRON handles it by default).
+    const youtubeWithScraper = process.env.YOUTUBE_INGEST_WITH_SCRAPER === 'true';
+    if (process.env.YOUTUBE_ENABLED !== 'false' && youtubeWithScraper) {
       try {
         budget.throwIfExpired('youtube:start');
         const yt = await runYoutubeIngestion({ triggeredBy: `${triggeredBy}:youtube` });

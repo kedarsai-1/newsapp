@@ -60,6 +60,8 @@ function getYoutubeChannelIds() {
 /** Built-in channels when env lists are empty (public channel IDs). */
 const defaultYoutubeChannels = [
   { channelId: 'UCumtYpCY26F6Jr3satUgMvA', language: 'te', categorySlug: 'general' },
+  { channelId: 'UCwqusr8YDwM-3mEYTDeJHzw', language: 'en', categorySlug: 'general' },
+  { channelId: 'UCt4t-jeY85JegMlZ-E5UWtA', language: 'hi', categorySlug: 'general' },
 ];
 
 /**

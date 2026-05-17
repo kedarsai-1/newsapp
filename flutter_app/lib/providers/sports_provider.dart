@@ -90,7 +90,16 @@ class SportsProvider extends ChangeNotifier {
     if (res['success'] == true) {
       _applyLivePayload(res);
       await SportsCache.saveLive(res);
-      _liveError = null;
+      final warning = res['warning']?.toString();
+      final apiMessage = res['message']?.toString();
+      final empty = _live.isEmpty && _upcoming.isEmpty && _ipl.isEmpty;
+      if (warning != null && warning.isNotEmpty) {
+        _liveError = warning;
+      } else if (empty && apiMessage != null && apiMessage.isNotEmpty) {
+        _liveError = apiMessage;
+      } else {
+        _liveError = null;
+      }
     } else if (res['code'] == SportsApiService.codeSportsApiMissing) {
       _live = [];
       _upcoming = [];

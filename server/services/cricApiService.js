@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const axios = require('axios');
 const memoryCache = require('../utils/memoryCache');
 
@@ -7,9 +9,10 @@ const BASE = (process.env.CRICAPI_BASE_URL || 'https://api.cricapi.com/v1').repl
 );
 const API_KEY = process.env.CRICAPI_KEY || process.env.CRIC_API_KEY || '';
 
-const TTL_LIVE_MS = 30 * 1000;
+const TTL_LIVE_MS = 45 * 1000;
 const TTL_MATCH_MS = 60 * 1000;
-const TTL_SERIES_MS = 15 * 60 * 1000;
+const TTL_SERIES_MS = 6 * 60 * 60 * 1000;
+const TTL_STALE_MS = 24 * 60 * 60 * 1000;
 
 /** Fallback when /series search is rate-limited — IPL 2025 on CricAPI. */
 const DEFAULT_LEAGUE_SERIES_IDS = [
@@ -94,8 +97,10 @@ function matchStatusText(match) {
 /** Classify using CricAPI fields — status strings often contain scores, not the word "live". */
 function detectMatchStatus(match) {
   const text = matchStatusText(match).toLowerCase();
+  const ended = match?.matchEnded === true || match?.matchEnded === 'true';
   const started = match?.matchStarted === true || match?.matchStarted === 'true';
 
+  if (ended) return 'finished';
   if (started) return 'live';
 
   if (
@@ -199,13 +204,16 @@ async function fetchLeagueSeriesMatches() {
   if (cached) return cached;
 
   const ids = new Set(configuredLeagueSeriesIds());
-  try {
-    for (const search of ['IPL', 'WPL']) {
-      const series = await findLatestLeagueSeries(search);
-      if (series?.id) ids.add(String(series.id));
+  // Series search costs extra quota — only when no IDs configured in env.
+  if (!process.env.CRICAPI_LEAGUE_SERIES_IDS?.trim()) {
+    try {
+      for (const search of ['IPL', 'WPL']) {
+        const series = await findLatestLeagueSeries(search);
+        if (series?.id) ids.add(String(series.id));
+      }
+    } catch (e) {
+      console.warn('[cricapi] series search skipped:', e.message);
     }
-  } catch (e) {
-    console.warn('[cricapi] series search skipped:', e.message);
   }
 
   const merged = [];
@@ -361,30 +369,29 @@ async function cricGet(path, params = {}) {
     params: { apikey: API_KEY, ...params },
   });
   const body = res.data;
-  if (body?.status !== 'success' && body?.success === false) {
-    throw new Error(body?.message || body?.reason || 'CricAPI request failed');
+  if (body?.status && body.status !== 'success') {
+    const err = new Error(body?.message || body?.reason || 'CricAPI request failed');
+    err.code = /blocked|limit|quota|exceeded/i.test(String(err.message))
+      ? 'CRICAPI_RATE_LIMIT'
+      : 'CRICAPI_ERROR';
+    throw err;
   }
   return body;
 }
 
-async function fetchCurrentMatches() {
-  const cacheKey = 'sports:currentMatches';
-  const cached = memoryCache.get(cacheKey);
-  if (cached) return cached;
-
-  const body = await cricGet('/currentMatches', { offset: 0 });
-  let rawList = Array.isArray(body.data) ? body.data : [];
-
+function loadIplFallbackMatches() {
   try {
-    const leagueRows = leagueMatchesForFeed(await fetchLeagueSeriesMatches()).map((m) => ({
-      ...m,
-      series: m.series || 'Indian Premier League',
-    }));
-    rawList = mergeRawMatches([rawList, leagueRows]);
+    const filePath = path.join(__dirname, '../data/ipl2025-fallback.json');
+    if (!fs.existsSync(filePath)) return [];
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.warn('[cricapi] IPL/WPL series merge skipped:', e.message);
+    console.warn('[cricapi] IPL fallback file read failed:', e.message);
+    return [];
   }
+}
 
+function buildLivePayload(rawList) {
   rawList = sortMatchesForDisplay(rawList);
   const normalized = rawList.map(normalizeMatchSummary).filter((m) => m.id);
 
@@ -396,14 +403,78 @@ async function fetchCurrentMatches() {
   const finished = normalized.filter((m) => m.status === 'finished');
 
   const ipl = normalized
-    .filter((m) => isIplOrMajorLeague(m) || /super kings|knight riders|royal challengers|mumbai indians|sunrisers|delhi capitals|punjab kings|rajasthan royal|gujarat titans|lucknow super/i.test(
-      `${m.tournament} ${m.teams.map((t) => t.name).join(' ')}`,
-    ))
+    .filter(
+      (m) =>
+        isIplOrMajorLeague(m)
+        || /super kings|knight riders|royal challengers|mumbai indians|sunrisers|delhi capitals|punjab kings|rajasthan royal|gujarat titans|lucknow super/i.test(
+          `${m.tournament} ${m.teams.map((t) => t.name).join(' ')}`,
+        ),
+    )
     .slice(0, 12);
 
-  const payload = { live, upcoming, finished, ipl, fetchedAt: new Date().toISOString() };
-  memoryCache.set(cacheKey, payload, TTL_LIVE_MS);
-  return payload;
+  return { live, upcoming, finished, ipl, fetchedAt: new Date().toISOString() };
+}
+
+async function fetchCurrentMatches() {
+  const cacheKey = 'sports:currentMatches';
+  const staleKey = 'sports:currentMatches:stale';
+  const cached = memoryCache.get(cacheKey);
+  if (cached) return cached;
+
+  try {
+    let rawList = [];
+
+    // IPL/WPL via series_info (cached 6h) — one call, works when currentMatches is rate-limited.
+    try {
+      const leagueRows = leagueMatchesForFeed(await fetchLeagueSeriesMatches()).map((m) => ({
+        ...m,
+        series: m.series || 'Indian Premier League',
+      }));
+      rawList = mergeRawMatches([rawList, leagueRows]);
+    } catch (e) {
+      console.warn('[cricapi] IPL/WPL series merge skipped:', e.message);
+    }
+
+    try {
+      const body = await cricGet('/currentMatches', { offset: 0 });
+      rawList = mergeRawMatches([rawList, Array.isArray(body.data) ? body.data : []]);
+    } catch (e) {
+      console.warn('[cricapi] currentMatches skipped:', e.message);
+      if (!rawList.length && e.code !== 'CRICAPI_RATE_LIMIT') throw e;
+    }
+
+    let warning = null;
+    if (!rawList.length) {
+      const fallback = loadIplFallbackMatches();
+      if (fallback.length) {
+        rawList = fallback;
+        warning =
+          'Showing saved IPL 2025 results. Live scores resume when the cricket API quota resets.';
+      } else {
+        const err = new Error('No cricket matches returned from CricAPI');
+        err.code = 'CRICAPI_EMPTY';
+        throw err;
+      }
+    }
+
+    const payload = { ...buildLivePayload(rawList), ...(warning ? { warning } : {}) };
+    memoryCache.set(cacheKey, payload, TTL_LIVE_MS);
+    memoryCache.set(staleKey, payload, TTL_STALE_MS);
+    return payload;
+  } catch (e) {
+    const stale = memoryCache.get(staleKey);
+    if (stale) {
+      return {
+        ...stale,
+        stale: true,
+        warning:
+          e.code === 'CRICAPI_RATE_LIMIT'
+            ? 'Cricket scores are temporarily limited. Showing last saved matches.'
+            : 'Could not refresh scores. Showing last saved matches.',
+      };
+    }
+    throw e;
+  }
 }
 
 async function fetchMatchById(id) {

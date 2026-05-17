@@ -259,18 +259,14 @@ class _LiveSection extends StatelessWidget {
         final upcoming = data.$2;
         final ipl = data.$3;
         final err = data.$4;
-        if (live.isEmpty && upcoming.isEmpty && ipl.isEmpty && err != null) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(err, style: TextStyle(color: fx.meta, fontSize: 13)),
-          );
-        }
         if (live.isEmpty && upcoming.isEmpty && ipl.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Text(
-              'No live or upcoming matches right now.',
-              style: TextStyle(color: fx.meta, fontSize: 13),
+              err?.trim().isNotEmpty == true
+                  ? err!
+                  : 'No live or upcoming matches right now. Pull to refresh.',
+              style: TextStyle(color: fx.meta, fontSize: 13, height: 1.35),
             ),
           );
         }

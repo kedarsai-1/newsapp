@@ -1,0 +1,122 @@
+[
+  {
+    "id": "b39bbd39-c67f-4892-9a48-02e958946718",
+    "name": "Chennai Super Kings vs Kolkata Knight Riders, 25th Match",
+    "series": "Indian Premier League 2025 (IPL)",
+    "matchType": "t20",
+    "status": "Kolkata Knight Riders won by 8 wkts",
+    "venue": "MA Chidambaram Stadium, Chennai",
+    "dateTimeGMT": "2025-04-11T14:00:00",
+    "teams": ["Chennai Super Kings", "Kolkata Knight Riders"],
+    "teamInfo": [
+      { "name": "Chennai Super Kings", "shortname": "CSK" },
+      { "name": "Kolkata Knight Riders", "shortname": "KKR" }
+    ],
+    "score": [
+      { "r": 103, "w": 9, "o": 20, "inning": "Chennai Super Kings Inning 1" },
+      { "r": 107, "w": 2, "o": 10.1, "inning": "Kolkata Knight Riders Inning 1" }
+    ],
+    "matchStarted": true,
+    "matchEnded": true
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Royal Challengers Bengaluru vs Punjab Kings, 34th Match",
+    "series": "Indian Premier League 2025 (IPL)",
+    "matchType": "t20",
+    "status": "Royal Challengers Bengaluru won by 6 wkts",
+    "venue": "M.Chinnaswamy Stadium, Bengaluru",
+    "dateTimeGMT": "2025-04-28T14:00:00",
+    "teams": ["Royal Challengers Bengaluru", "Punjab Kings"],
+    "teamInfo": [
+      { "name": "Royal Challengers Bengaluru", "shortname": "RCB" },
+      { "name": "Punjab Kings", "shortname": "PBKS" }
+    ],
+    "score": [
+      { "r": 198, "w": 6, "o": 20, "inning": "Royal Challengers Bengaluru Inning 1" },
+      { "r": 192, "w": 10, "o": 19.2, "inning": "Punjab Kings Inning 1" }
+    ],
+    "matchStarted": true,
+    "matchEnded": true
+  },
+  {
+    "id": "c2d3e4f5-a6b7-8901-cdef-234567890abc",
+    "name": "Mumbai Indians vs Chennai Super Kings, 12th Match",
+    "series": "Indian Premier League 2025 (IPL)",
+    "matchType": "t20",
+    "status": "Chennai Super Kings won by 4 wkts",
+    "venue": "Wankhede Stadium, Mumbai",
+    "dateTimeGMT": "2025-03-30T14:00:00",
+    "teams": ["Mumbai Indians", "Chennai Super Kings"],
+    "teamInfo": [
+      { "name": "Mumbai Indians", "shortname": "MI" },
+      { "name": "Chennai Super Kings", "shortname": "CSK" }
+    ],
+    "score": [
+      { "r": 176, "w": 8, "o": 20, "inning": "Mumbai Indians Inning 1" },
+      { "r": 178, "w": 6, "o": 19.1, "inning": "Chennai Super Kings Inning 1" }
+    ],
+    "matchStarted": true,
+    "matchEnded": true
+  },
+  {
+    "id": "d3e4f5a6-b7c8-9012-def0-345678901bcd",
+    "name": "Rajasthan Royals vs Delhi Capitals, 19th Match",
+    "series": "Indian Premier League 2025 (IPL)",
+    "matchType": "t20",
+    "status": "Delhi Capitals won by 6 wkts",
+    "venue": "Sawai Mansingh Stadium, Jaipur",
+    "dateTimeGMT": "2025-04-05T14:00:00",
+    "teams": ["Rajasthan Royals", "Delhi Capitals"],
+    "teamInfo": [
+      { "name": "Rajasthan Royals", "shortname": "RR" },
+      { "name": "Delhi Capitals", "shortname": "DC" }
+    ],
+    "score": [
+      { "r": 173, "w": 4, "o": 20, "inning": "Rajasthan Royals Inning 1" },
+      { "r": 175, "w": 4, "o": 18.5, "inning": "Delhi Capitals Inning 1" }
+    ],
+    "matchStarted": true,
+    "matchEnded": true
+  },
+  {
+    "id": "e4f5a6b7-c8d9-0123-ef01-456789012cde",
+    "name": "Sunrisers Hyderabad vs Lucknow Super Giants, 27th Match",
+    "series": "Indian Premier League 2025 (IPL)",
+    "matchType": "t20",
+    "status": "Lucknow Super Giants won by 5 wkts",
+    "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+    "dateTimeGMT": "2025-04-14T14:00:00",
+    "teams": ["Sunrisers Hyderabad", "Lucknow Super Giants"],
+    "teamInfo": [
+      { "name": "Sunrisers Hyderabad", "shortname": "SRH" },
+      { "name": "Lucknow Super Giants", "shortname": "LSG" }
+    ],
+    "score": [
+      { "r": 190, "w": 7, "o": 20, "inning": "Sunrisers Hyderabad Inning 1" },
+      { "r": 193, "w": 5, "o": 19.3, "inning": "Lucknow Super Giants Inning 1" }
+    ],
+    "matchStarted": true,
+    "matchEnded": true
+  },
+  {
+    "id": "f5a6b7c8-d9e0-1234-f012-567890123def",
+    "name": "Gujarat Titans vs Mumbai Indians, 41st Match",
+    "series": "Indian Premier League 2025 (IPL)",
+    "matchType": "t20",
+    "status": "Mumbai Indians won by 3 runs",
+    "venue": "Narendra Modi Stadium, Ahmedabad",
+    "dateTimeGMT": "2025-05-04T14:00:00",
+    "teams": ["Gujarat Titans", "Mumbai Indians"],
+    "teamInfo": [
+      { "name": "Gujarat Titans", "shortname": "GT" },
+      { "name": "Mumbai Indians", "shortname": "MI" }
+    ],
+    "score": [
+      { "r": 210, "w": 7, "o": 20, "inning": "Gujarat Titans Inning 1" },
+      { "r": 207, "w": 9, "o": 20, "inning": "Mumbai Indians Inning 1" }
+    ],
+    "matchStarted": true,
+    "matchEnded": true
+  }
+]

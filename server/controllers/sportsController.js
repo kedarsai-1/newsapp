@@ -58,19 +58,29 @@ const getLive = async (req, res) => {
       });
     }
     const data = await cricApi.fetchCurrentMatches();
+    const empty =
+      !data.live?.length && !data.upcoming?.length && !(data.ipl || []).length;
     return res.json({
       success: true,
       live: data.live,
       upcoming: data.upcoming,
       ipl: data.ipl || [],
       cached: true,
+      stale: Boolean(data.stale),
+      warning: data.warning || null,
+      message: empty
+        ? 'No live or upcoming matches right now. Pull to refresh in a few minutes.'
+        : data.warning || null,
       fetchedAt: data.fetchedAt,
     });
   } catch (e) {
     console.error('[sports] live', e.message);
+    const rateLimited = /blocked|limit|quota|exceeded/i.test(e.message);
     return res.status(502).json({
       success: false,
-      message: 'Could not load live cricket scores.',
+      message: rateLimited
+        ? 'Cricket API daily limit reached. Scores will return after the quota resets (usually within an hour).'
+        : 'Could not load live cricket scores.',
     });
   }
 };

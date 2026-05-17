@@ -5,7 +5,7 @@ const {
   normalizeTitle,
   titleFingerprint,
 } = require('../utils/storyDedupe');
-const { matchesFeedCategory } = require('../utils/categoryRelevance');
+const { passesIngestCategoryGate } = require('../utils/categoryRelevance');
 const User = require('../models/User');
 const Category = require('../models/Category');
 const {
@@ -377,16 +377,25 @@ function getIngestPlans() {
   return newsApiIngestPlan;
 }
 
-/** GNews runs once per language so Telugu/Hindi feeds get fresh items, not only legacy RSS rows. */
-function getGNewsIngestLanguages() {
-  const raw = process.env.GNEWS_INGEST_LANGS?.trim();
+/** Languages for API ingestion — en/te/hi by default, plus any RSS feed languages. */
+function getIngestLanguages() {
+  const raw = process.env.GNEWS_INGEST_LANGS?.trim() || process.env.INGEST_LANGUAGES?.trim();
   if (raw) {
-    return raw
-      .split(',')
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
+    return [...new Set(
+      raw
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    )];
   }
-  return ['en', 'te', 'hi'];
+  const langs = new Set(['en', 'te', 'hi']);
+  if (process.env.RSS_ENABLED !== 'false') {
+    for (const feed of getRssFeeds()) {
+      const l = String(feed.language || '').trim().toLowerCase();
+      if (l) langs.add(l);
+    }
+  }
+  return [...langs];
 }
 
 async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
@@ -443,11 +452,33 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     const reporter = await ensureSystemReporter();
 
     if (useGNews || useNewsApi) {
-      const fetchItems = useGNews ? fetchGNewsItems : fetchNewsApiItems;
-      const providerLabel = useGNews ? 'GNews' : 'NewsAPI';
+      const defaultProviderLabel = useGNews ? 'GNews' : 'NewsAPI';
+      const gnewsFallbackWarned = { value: false };
+
+      async function fetchApiItems(options) {
+        if (!useGNews) {
+          return { items: await fetchNewsApiItems(options), providerLabel: 'NewsAPI' };
+        }
+        try {
+          return { items: await fetchGNewsItems(options), providerLabel: 'GNews' };
+        } catch (error) {
+          const msg = String(error?.message || '');
+          const gnewsBlocked = /forbidden|403|401|invalid api key|unauthorized/i.test(msg);
+          if (useNewsApi && gnewsBlocked) {
+            if (!gnewsFallbackWarned.value) {
+              gnewsFallbackWarned.value = true;
+              console.warn(
+                `[ingest] GNews unavailable (${msg}); falling back to NewsAPI for this run.`,
+              );
+            }
+            return { items: await fetchNewsApiItems(options), providerLabel: 'NewsAPI' };
+          }
+          throw error;
+        }
+      }
 
       // Same language list for both providers so Telugu/Hindi feeds fill when using NewsAPI too (where supported).
-      const ingestLanguages = getGNewsIngestLanguages();
+      const ingestLanguages = getIngestLanguages();
       if (!useGNews) {
         console.log(
           '[ingest] NewsAPI: fetching en, te, hi per plan (unsupported langs return 0 articles). '
@@ -477,7 +508,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             category = await getCategoryBySlug(plan.categorySlug);
           } catch {
             stats.sourceRuns.push({
-              source: `${providerLabel}:${ingestLang}:${plan.categorySlug}`,
+              source: `${defaultProviderLabel}:${ingestLang}:${plan.categorySlug}`,
               success: false,
               error: `Category slug "${plan.categorySlug}" not found; seed categories.`,
             });
@@ -486,7 +517,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
           const apiLabel = plan.newsApiCategory ?? 'mixed';
           try {
-            const items = await fetchItems({
+            const { items, providerLabel } = await fetchApiItems({
               newsApiCategory: plan.newsApiCategory,
               pageSize: perRequest,
               language: ingestLang,
@@ -540,7 +571,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
           } catch (error) {
             stats.failed += 1;
             stats.sourceRuns.push({
-              source: `${providerLabel}:${ingestLang}:${plan.categorySlug}/${apiLabel}`,
+              source: `${defaultProviderLabel}:${ingestLang}:${plan.categorySlug}/${apiLabel}`,
               success: false,
               error: error.message,
             });
@@ -567,7 +598,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       );
       const targetInsertsPerFeed = Math.max(
         1,
-        Number(process.env.RSS_INSERTS_PER_FEED || 2),
+        Number(process.env.RSS_INSERTS_PER_FEED || 6),
       );
       console.log(
         `[ingest] RSS processing ${feeds.length} feeds `
@@ -627,7 +658,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             // Telugu politics feeds can contain lifestyle/astrology/clickbait.
             // Keep only party/government/election-related stories in Politics.
             if (
-              String(feed.language || '').toLowerCase() === 'te'
+              process.env.INGEST_STRICT_POLITICS_FILTER === 'true'
+              && String(feed.language || '').toLowerCase() === 'te'
               && String(feed.categorySlug || '').toLowerCase() === 'politics'
               && !isTeluguPoliticalStory(item)
             ) {
@@ -636,7 +668,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             }
             if (
               String(feed.categorySlug || '').toLowerCase() !== 'general'
-              && !matchesFeedCategory(item, feed.categorySlug, { feedUrl: feed.url })
+              && !passesIngestCategoryGate(item, feed.categorySlug, { feedUrl: feed.url })
             ) {
               stats.categoryFiltered += 1;
               continue;

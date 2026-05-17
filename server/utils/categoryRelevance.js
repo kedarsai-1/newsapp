@@ -79,6 +79,31 @@ function isSectionSpecificSource(categorySlug, feedUrl, articleUrl) {
   return false;
 }
 
+function passesCategoryExclusions(item, categorySlug) {
+  const slug = String(categorySlug || 'general').toLowerCase();
+  if (slug === 'general') return true;
+  const text = storyText(item);
+  const exclusions = EXCLUDE_BY_CATEGORY[slug] || [];
+  for (const re of exclusions) {
+    if (re.test(text)) return false;
+  }
+  return true;
+}
+
+/**
+ * Ingest gate: trust RSS/API categorySlug by default; only drop obvious cross-topic noise.
+ * Set INGEST_STRICT_CATEGORY_FILTER=true to require keyword signals (legacy behavior).
+ */
+function passesIngestCategoryGate(item, categorySlug, { feedUrl } = {}) {
+  const slug = String(categorySlug || 'general').toLowerCase();
+  if (slug === 'general') return true;
+  if (!passesCategoryExclusions(item, slug)) return false;
+  if (process.env.INGEST_STRICT_CATEGORY_FILTER === 'true') {
+    return matchesFeedCategory(item, categorySlug, { feedUrl });
+  }
+  return true;
+}
+
 function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
   const slug = String(categorySlug || 'general').toLowerCase();
   if (slug === 'general') return true;
@@ -86,10 +111,7 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
   const text = storyText(item);
   const articleUrl = item?.sourceUrl || '';
 
-  const exclusions = EXCLUDE_BY_CATEGORY[slug] || [];
-  for (const re of exclusions) {
-    if (re.test(text)) return false;
-  }
+  if (!passesCategoryExclusions(item, slug)) return false;
 
   if (isSectionSpecificSource(slug, feedUrl, articleUrl)) return true;
 
@@ -167,6 +189,8 @@ function filterPostsForCategory(posts, categorySlug) {
 
 module.exports = {
   matchesFeedCategory,
+  passesIngestCategoryGate,
+  passesCategoryExclusions,
   isSectionSpecificSource,
   isLegacyMiscategorized,
   filterPostsForCategory,

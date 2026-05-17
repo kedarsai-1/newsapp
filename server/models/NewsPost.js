@@ -92,18 +92,20 @@ const newsPostSchema = new mongoose.Schema({
     enum: ['rss', 'html', 'manual', 'api', 'youtube'],
     default: 'manual',
   },
-  /** YouTube embed metadata only — no video file stored. */
+  /** YouTube embed metadata only — no video file stored (omit on RSS/API/manual posts). */
   youtube: {
-    videoId: { type: String, trim: true, default: null },
-    channelId: { type: String, trim: true, default: null },
-    channelTitle: { type: String, trim: true, default: null },
-    embedUrl: { type: String, trim: true, default: null },
-    watchUrl: { type: String, trim: true, default: null },
-    channelUrl: { type: String, trim: true, default: null },
-    durationSeconds: { type: Number, default: null },
-    isShort: { type: Boolean, default: false },
-    embeddable: { type: Boolean, default: true },
-    privacyStatus: { type: String, trim: true, default: null },
+    type: new mongoose.Schema({
+      videoId: { type: String, trim: true },
+      channelId: { type: String, trim: true },
+      channelTitle: { type: String, trim: true },
+      embedUrl: { type: String, trim: true },
+      watchUrl: { type: String, trim: true },
+      channelUrl: { type: String, trim: true },
+      durationSeconds: { type: Number },
+      isShort: { type: Boolean },
+      embeddable: { type: Boolean },
+      privacyStatus: { type: String, trim: true },
+    }, { _id: false }),
   },
   politicsScope: { type: String, trim: true, lowercase: true, default: undefined, index: true },
   constituency: { type: String, trim: true, default: 'Unknown', index: true },
@@ -127,7 +129,15 @@ newsPostSchema.index({ reporter: 1, createdAt: -1 });
 newsPostSchema.index({ 'location.city': 1, status: 1 });
 newsPostSchema.index({ language: 1, status: 1, createdAt: -1 });
 newsPostSchema.index({ sourceUrlHash: 1 }, { unique: true, sparse: true });
-newsPostSchema.index({ 'youtube.videoId': 1 }, { unique: true, sparse: true });
+newsPostSchema.index(
+  { 'youtube.videoId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'youtube.videoId': { $type: 'string', $gt: '' },
+    },
+  },
+);
 newsPostSchema.index({ status: 1, sourceType: 1, sourcePublishedAt: -1 });
 
 // Virtual: has video

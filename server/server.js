@@ -10,6 +10,7 @@ const { setIngestionSocket } = require('./services/feedSocket');
 const { runYoutubeIngestion } = require('./services/youtubeIngestionService');
 const { purgeOldNews } = require('./services/retentionCleanupService');
 const { ensureDefaultCategories } = require('./utils/ensureDefaultData');
+const { ensureNewsPostIndexes } = require('./utils/ensureNewsPostIndexes');
 
 const authRoutes = require('./routes/auth');
 const newsRoutes = require('./routes/news');
@@ -66,6 +67,14 @@ mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log('MongoDB connected');
     await ensureDefaultCategories();
+    try {
+      const { cleaned } = await ensureNewsPostIndexes();
+      if (cleaned > 0) {
+        console.log(`[db] removed phantom youtube field from ${cleaned} post(s)`);
+      }
+    } catch (e) {
+      console.error('[db] NewsPost index setup failed:', e?.message || e);
+    }
     // Production default: every 5 minutes (safe + fresh).
     const cronExpr = process.env.SCRAPER_CRON || '*/5 * * * *';
     const scrapingEnabled = process.env.SCRAPER_ENABLED !== 'false';

@@ -249,17 +249,6 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                     const Center(
                                       child: _InactivePlayBadge(),
                                     ),
-                                  Positioned(
-                                    right: 6,
-                                    bottom: 72,
-                                    child: _VideoActionRail(
-                                      liked: _liked,
-                                      likeCount: widget.post.likes,
-                                      onLike: _handleLike,
-                                      onComment: _onComment,
-                                      onShare: widget.onShare,
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -436,98 +425,6 @@ class _InactivePlayBadge extends StatelessWidget {
         Icons.play_arrow_rounded,
         color: Colors.white,
         size: 36,
-      ),
-    );
-  }
-}
-
-/// Moj/Josh-style vertical actions on the video edge.
-class _VideoActionRail extends StatelessWidget {
-  final bool liked;
-  final int likeCount;
-  final VoidCallback onLike;
-  final VoidCallback onComment;
-  final VoidCallback onShare;
-
-  const _VideoActionRail({
-    required this.liked,
-    required this.likeCount,
-    required this.onLike,
-    required this.onComment,
-    required this.onShare,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final likeLabel = likeCount > 0
-        ? ShortsFeedTheme.formatCountShort(likeCount)
-        : 'Like';
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _RailButton(
-          icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          label: likeLabel,
-          iconColor: liked ? ShortsFeedTheme.accent : Colors.white,
-          onTap: onLike,
-        ),
-        const SizedBox(height: 14),
-        _RailButton(
-          icon: Icons.chat_bubble_outline_rounded,
-          label: 'Comment',
-          onTap: onComment,
-        ),
-        const SizedBox(height: 14),
-        _RailButton(
-          icon: Icons.share_outlined,
-          label: 'Share',
-          onTap: onShare,
-        ),
-      ],
-    );
-  }
-}
-
-class _RailButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color? iconColor;
-
-  const _RailButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.45),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            child: Icon(icon, color: iconColor ?? Colors.white, size: 22),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: ShortsFeedTheme.verticalActionCountStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ),
     );
   }

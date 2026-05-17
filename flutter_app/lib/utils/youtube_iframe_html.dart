@@ -38,14 +38,13 @@ abstract final class YoutubeIframeHtml {
 <style>
   html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
   #wrap {
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-    background:#000;
+    position:fixed; inset:0; background:#000; overflow:hidden;
   }
   #$elementId {
-    width:100vw;
-    height:calc(100vw * 16 / 9);
-    max-height:100vh;
-    max-width:calc(100vh * 9 / 16);
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
   }
 </style>
 </head>

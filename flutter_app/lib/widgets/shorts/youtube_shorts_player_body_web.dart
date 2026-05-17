@@ -108,68 +108,71 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
     final elementId = 'player-${widget.post.id}';
     final safeId = _escape(videoId);
 
+    final origin = _escape(Uri.base.origin.isNotEmpty ? Uri.base.origin : 'http://localhost');
+
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int _) {
       final wrap = web.HTMLDivElement()
         ..id = 'wrap-${widget.post.id}'
         ..style.setProperty('width', '100%')
         ..style.setProperty('height', '100%')
         ..style.setProperty('background', '#000')
-        ..style.setProperty('display', 'flex')
-        ..style.setProperty('align-items', 'center')
-        ..style.setProperty('justify-content', 'center');
+        ..style.setProperty('position', 'relative')
+        ..style.setProperty('overflow', 'hidden');
 
       final playerDiv = web.HTMLDivElement()
         ..id = elementId
-        ..style.setProperty('width', '100vw')
-        ..style.setProperty('height', 'calc(100vw * 16 / 9)')
-        ..style.setProperty('max-height', '100vh')
-        ..style.setProperty('max-width', 'calc(100vh * 9 / 16)');
+        ..style.setProperty('position', 'absolute')
+        ..style.setProperty('inset', '0')
+        ..style.setProperty('width', '100%')
+        ..style.setProperty('height', '100%');
 
       wrap.appendChild(playerDiv);
 
-      final apiScript = web.HTMLScriptElement()
-        ..src = 'https://www.youtube.com/iframe_api';
-      wrap.appendChild(apiScript);
-
+      // Direct nocookie embed — more reliable in Flutter web HtmlElementView than Iframe API.
       final initScript = web.HTMLScriptElement()
         ..text = '''
-window.__shortsYT = window.__shortsYT || {};
-window.__shortsCmd = function(videoId, cmd, arg) {
-  var p = window.__shortsYT[videoId];
-  if (!p) return;
-  if (cmd === 'play' && p.playVideo) p.playVideo();
-  if (cmd === 'pause' && p.pauseVideo) p.pauseVideo();
-  if (cmd === 'mute') { arg ? p.mute() : p.unMute(); }
-};
-var player = null;
-function onYouTubeIframeAPIReady() {
-  player = new YT.Player('$elementId', {
-    videoId: '$safeId',
-    width: '100%',
-    height: '100%',
-    playerVars: {
-      autoplay: 1, mute: 1, playsinline: 1, controls: 1, rel: 0,
-      modestbranding: 1, enablejsapi: 1
-    },
-    events: {
-      onReady: function(e) {
-        window.__shortsYT['$safeId'] = e.target;
-        e.target.playVideo();
-      }
-    }
-  });
-}
-var wrapEl = document.getElementById('wrap-${widget.post.id}');
-if (wrapEl && 'IntersectionObserver' in window) {
-  new IntersectionObserver(function(entries) {
-    entries.forEach(function(entry) {
-      var p = window.__shortsYT['$safeId'];
-      if (!p) return;
-      if (entry.intersectionRatio >= 0.55) p.playVideo();
-      else p.pauseVideo();
-    });
-  }, { threshold: [0, 0.55, 1] }).observe(wrapEl);
-}
+(function() {
+  window.__shortsYT = window.__shortsYT || {};
+  window.__shortsCmd = window.__shortsCmd || function(videoId, cmd, arg) {
+    var p = window.__shortsYT[videoId];
+    if (!p) return;
+    if (cmd === 'play' && p.playVideo) p.playVideo();
+    if (cmd === 'pause' && p.pauseVideo) p.pauseVideo();
+    if (cmd === 'mute') { arg ? p.mute() : p.unMute(); }
+  };
+  var host = document.getElementById('$elementId');
+  if (!host) return;
+  var iframe = document.createElement('iframe');
+  iframe.setAttribute('allowfullscreen', 'true');
+  iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+  iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+  iframe.src = 'https://www.youtube-nocookie.com/embed/$safeId'
+    + '?enablejsapi=1&autoplay=1&mute=1&playsinline=1&controls=1&rel=0&modestbranding=1&fs=0&iv_load_policy=3'
+    + '&origin=$origin';
+  host.appendChild(iframe);
+  function ytCmd(func) {
+    iframe.contentWindow.postMessage(JSON.stringify({
+      event: 'command', func: func, args: ''
+    }), '*');
+  }
+  window.__shortsYT['$safeId'] = {
+    playVideo: function() { ytCmd('playVideo'); },
+    pauseVideo: function() { ytCmd('pauseVideo'); },
+    mute: function() { ytCmd('mute'); },
+    unMute: function() { ytCmd('unMute'); }
+  };
+  var wrapEl = document.getElementById('wrap-${widget.post.id}');
+  if (wrapEl && 'IntersectionObserver' in window) {
+    new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        var p = window.__shortsYT['$safeId'];
+        if (!p) return;
+        if (entry.intersectionRatio >= 0.55) p.playVideo();
+        else p.pauseVideo();
+      });
+    }, { threshold: [0, 0.55, 1] }).observe(wrapEl);
+  }
+})();
 ''';
       wrap.appendChild(initScript);
       return wrap;

@@ -30,7 +30,7 @@ class XpressoBottomNavBar extends StatelessWidget {
           ),
           if (!isDark)
             BoxShadow(
-              color: fx.accent.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, -2),
             ),
@@ -118,8 +118,8 @@ class _XpressoNavItem extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                   boxShadow: [
                     BoxShadow(
-                      color: fx.accent.withValues(alpha: 0.35),
-                      blurRadius: 6,
+                      color: Colors.black.withValues(alpha: 0.12),
+                      blurRadius: 4,
                     ),
                   ],
                 ),

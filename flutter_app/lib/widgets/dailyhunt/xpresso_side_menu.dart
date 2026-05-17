@@ -48,6 +48,11 @@ class XpressoSideMenu extends StatelessWidget {
               onTap: () => _go(context, '/categories'),
             ),
             _XpressoMenuTile(
+              label: 'Cricket',
+              icon: Icons.sports_cricket_outlined,
+              onTap: () => _go(context, '/sports'),
+            ),
+            _XpressoMenuTile(
               label: 'Profile',
               icon: Icons.person_outline_rounded,
               onTap: () => _go(context, '/settings'),

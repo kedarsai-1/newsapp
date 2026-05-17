@@ -18,20 +18,23 @@ class DailyhuntCategoryTabBar extends StatelessWidget {
     this.dark = false,
   });
 
-  static const double stripHeight = 32;
-  static const double stripHeightDark = 44;
+  /// Room for label + underline + vertical padding (avoids bottom overflow).
+  static const double stripHeight = 36;
+  static const double stripHeightDark = 48;
 
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     final isDark = dark || FeedXpressoTheme.isDark(context);
+    final barHeight = isDark ? stripHeightDark : stripHeight;
+
     return ColoredBox(
       color: fx.chrome,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            height: isDark ? stripHeightDark : stripHeight,
+            height: barHeight,
             child: ListView.separated(
               padding: EdgeInsets.symmetric(horizontal: isDark ? 6 : 8),
               scrollDirection: Axis.horizontal,
@@ -39,7 +42,8 @@ class DailyhuntCategoryTabBar extends StatelessWidget {
               itemCount: categories.length,
               separatorBuilder: (_, __) => SizedBox(width: isDark ? 6 : 4),
               itemBuilder: (context, i) {
-                return Center(
+                return Align(
+                  alignment: Alignment.center,
                   child: DailyhuntCategoryChip(
                     label: categories[i],
                     selected: i == selectedIndex,

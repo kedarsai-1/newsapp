@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../feed/feed_xpresso_theme.dart';
 
-/// Compact category tab — accent underline + glow (light & dark).
+/// Compact category tab — accent underline (no partial-border assert).
 class DailyhuntCategoryChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -27,49 +27,33 @@ class DailyhuntCategoryChip extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(isDark ? 16 : 4),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
+        child: Padding(
           padding: EdgeInsets.fromLTRB(
-            isDark ? 12 : 8,
-            isDark ? 6 : 5,
-            isDark ? 12 : 8,
-            isDark ? 8 : 7,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? (isDark
-                    ? fx.chipInactiveBg
-                    : fx.chipInactiveBg.withValues(alpha: 0.9))
-                : Colors.transparent,
-            borderRadius: isDark ? BorderRadius.circular(16) : BorderRadius.circular(4),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: fx.accent.withValues(alpha: isDark ? 0.12 : 0.2),
-                      blurRadius: isDark ? 8 : 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
+            isDark ? 12 : 10,
+            6,
+            isDark ? 12 : 10,
+            8,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: fx.chipStyle.copyWith(
+                  fontSize: isDark ? 13 : 12.5,
+                  height: 1.15,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   color: selected ? fx.accent : fx.chipInactive,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 5),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 height: 2.5,
-                width: selected ? 22 : 0,
+                width: selected ? 20 : 0,
                 decoration: BoxDecoration(
                   color: selected ? fx.accent : Colors.transparent,
                   borderRadius: BorderRadius.circular(2),

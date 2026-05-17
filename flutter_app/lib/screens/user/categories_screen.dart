@@ -47,6 +47,11 @@ class CategoriesScreen extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final news = context.read<NewsProvider>();
 
+    if (slug == 'sports') {
+      if (context.mounted) context.push('/sports');
+      return;
+    }
+
     String? id = _matchCategoryId(slug, news.categories);
 
     if (id == null || id.isEmpty) {

@@ -7,6 +7,7 @@ import 'providers/news_provider.dart';
 import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
 import 'providers/shorts_playback_controller.dart';
+import 'providers/sports_provider.dart';
 import 'providers/reporter_provider.dart';
 import 'providers/admin_provider.dart';
 import 'constants.dart';
@@ -31,6 +32,8 @@ import 'screens/user/dailyhunt_home_screen.dart';
 import 'screens/user/shorts_news_screen.dart';
 import 'screens/user/quick_news_screen.dart';
 import 'screens/user/categories_screen.dart';
+import 'screens/user/sports/sports_home_screen.dart';
+import 'screens/user/sports/match_detail_screen.dart';
 import 'screens/user/article_detail_screen.dart';
 import 'screens/user/bookmarks_screen.dart';
 import 'screens/user/profile_screen.dart';
@@ -148,6 +151,8 @@ GoRouter createAppRouter(BuildContext context) {
           loc == '/home' ||
           loc == '/quick-news' ||
           loc == '/categories' ||
+          loc == '/sports' ||
+          loc.startsWith('/sports/') ||
           loc == '/bookmarks' ||
           loc == '/settings' ||
           loc == '/profile' ||
@@ -286,6 +291,18 @@ GoRouter createAppRouter(BuildContext context) {
                 _smoothAppPage(state: state, child: const CategoriesScreen()),
           ),
           GoRoute(
+            path: '/sports',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const SportsHomeScreen()),
+          ),
+          GoRoute(
+            path: '/sports/match/:id',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: MatchDetailScreen(matchId: state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
             path: '/article/:id',
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
@@ -402,6 +419,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => OnboardingDraftProvider()),
         ChangeNotifierProvider(create: (_) => ShortsProvider()),
         ChangeNotifierProvider(create: (_) => ShortsPlaybackController()),
+        ChangeNotifierProvider(create: (_) => SportsProvider()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
       ],

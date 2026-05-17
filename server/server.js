@@ -17,6 +17,7 @@ const newsRoutes = require('./routes/news');
 const reporterRoutes = require('./routes/reporter');
 const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
+const sportsRoutes = require('./routes/sports');
 
 const app = express();
 const server = http.createServer(app);
@@ -42,6 +43,7 @@ app.use('/api/news', newsRoutes);
 app.use('/api/reporter', reporterRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/sports', sportsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));

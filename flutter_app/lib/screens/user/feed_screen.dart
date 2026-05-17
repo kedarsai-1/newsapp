@@ -217,6 +217,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       _scrollFeedToTop();
       return;
     }
+    if (slug == 'sports') {
+      if (mounted) context.push('/sports');
+      return;
+    }
     Category? match;
     for (final c in news.categories) {
       if (c.slug.toLowerCase() == slug) {

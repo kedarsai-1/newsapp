@@ -147,7 +147,7 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
   iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
   iframe.src = 'https://www.youtube-nocookie.com/embed/$safeId'
-    + '?enablejsapi=1&autoplay=1&mute=1&playsinline=1&controls=1&rel=0&modestbranding=1&fs=0&iv_load_policy=3'
+    + '?enablejsapi=1&autoplay=1&mute=1&playsinline=1&controls=0&rel=0&modestbranding=1&fs=0&iv_load_policy=3'
     + '&origin=$origin';
   host.appendChild(iframe);
   function ytCmd(func) {

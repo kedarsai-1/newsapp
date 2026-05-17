@@ -84,7 +84,7 @@ abstract final class YoutubeIframeHtml {
         autoplay: $autoplayJs,
         mute: $muteJs,
         playsinline: 1,
-        controls: 1,
+        controls: 0,
         rel: 0,
         modestbranding: 1,
         fs: 0,

@@ -9,7 +9,6 @@ import '../../providers/shorts_playback_controller.dart';
 import '../../theme/app_palette.dart';
 import 'shorts_feed_theme.dart';
 import 'shorts_media_layer.dart';
-import 'youtube_shorts_player_shared.dart';
 
 /// Dailyhunt-style Shorts card — video on top, metadata + actions below.
 class DailyhuntShortsPage extends StatefulWidget {
@@ -228,21 +227,6 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                         onTap: () {
                                           playback.setMuted(!playback.muted);
                                         },
-                                      ),
-                                    ),
-                                  if (isYt &&
-                                      widget.isActive &&
-                                      playback.muted)
-                                    Positioned(
-                                      left: 0,
-                                      right: 0,
-                                      bottom: 48,
-                                      child: Center(
-                                        child: YoutubeUnmuteChip(
-                                          muted: true,
-                                          onTap: () =>
-                                              playback.setMuted(false),
-                                        ),
                                       ),
                                     ),
                                   if (!widget.isActive && isYt)

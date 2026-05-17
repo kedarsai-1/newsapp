@@ -68,6 +68,39 @@ function interleaveFeedsByCategory(feeds) {
 }
 
 /**
+ * Round-robin en → hi → te (then other langs) so a 12–20 min budget still ingests
+ * regional feeds. Category-only interleave left ~60 English feeds ahead of Hindi/Telugu.
+ */
+function interleaveFeedsByLanguageAndCategory(feeds) {
+  const langOrder = ['en', 'hi', 'te'];
+  const byLang = new Map(langOrder.map((l) => [l, []]));
+  const other = [];
+  for (const f of feeds) {
+    if (!f?.url) continue;
+    const lang = String(f.language || 'en').toLowerCase();
+    if (byLang.has(lang)) byLang.get(lang).push(f);
+    else other.push(f);
+  }
+  const lists = [
+    ...langOrder.map((l) => interleaveFeedsByCategory(byLang.get(l) || [])),
+    interleaveFeedsByCategory(other),
+  ].filter((list) => list.length > 0);
+
+  const out = [];
+  let more = true;
+  while (more) {
+    more = false;
+    for (const list of lists) {
+      if (list.length > 0) {
+        out.push(list.shift());
+        more = true;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Hard wall-clock limit so a single run cannot hold `isRunning` forever (cron then skips every slot).
  * RSS-only runs with many feeds + og:image + body enrich + HF summarize can exceed 15–30+ minutes otherwise.
  * Set INGEST_MAX_RUNTIME_MS=0 for no limit (not recommended on PaaS).
@@ -76,7 +109,7 @@ function createIngestBudget() {
   const raw = process.env.INGEST_MAX_RUNTIME_MS;
   let ms;
   if (raw === undefined || raw === '') {
-    ms = 12 * 60 * 1000; // 12 minutes — fits typical hobby-tier deploy timeouts
+    ms = 20 * 60 * 1000; // 20 minutes — enough for ~98 RSS feeds with en/hi/te interleave
   } else {
     ms = Number(raw);
   }
@@ -91,11 +124,15 @@ function createIngestBudget() {
   return {
     limitMs: ms,
     started,
+    remainingMs() {
+      return ms - (Date.now() - started);
+    },
     throwIfExpired(phase) {
       if (Date.now() - started > ms) {
         throw new Error(
           `[ingest] time budget exceeded (${ms}ms) at ${phase || '?'}. `
-            + 'Set INGEST_MAX_RUNTIME_MS higher, or lower RSS_ITEMS_PER_FEED, or RSS_ENRICH_BODY=false / RSS_OG_FALLBACK=false.',
+            + 'Set INGEST_MAX_RUNTIME_MS higher, or lower RSS_INSERTS_PER_FEED / RSS_SCAN_PER_FEED, '
+            + 'or RSS_ENRICH_BODY=false / RSS_OG_FALLBACK=false.',
         );
       }
     },
@@ -586,7 +623,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
     // RSS ingestion (second source): reliable thumbnails + extra coverage.
     if (rssEnabled) {
-      const feeds = interleaveFeedsByCategory(getRssFeeds());
+      const feeds = interleaveFeedsByLanguageAndCategory(getRssFeeds());
       budget.throwIfExpired('rss:before-loop');
       const maxPerFeed = Math.min(
         50,
@@ -594,15 +631,21 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       );
       const maxScanPerFeed = Math.min(
         100,
-        Math.max(maxPerFeed, Number(process.env.RSS_SCAN_PER_FEED || 50)),
+        Math.max(maxPerFeed, Number(process.env.RSS_SCAN_PER_FEED || 30)),
       );
       const targetInsertsPerFeed = Math.max(
         1,
-        Number(process.env.RSS_INSERTS_PER_FEED || 10),
+        Number(process.env.RSS_INSERTS_PER_FEED || 6),
       );
+      const langCounts = feeds.reduce((acc, f) => {
+        const l = String(f.language || 'en').toLowerCase();
+        acc[l] = (acc[l] || 0) + 1;
+        return acc;
+      }, {});
       console.log(
         `[ingest] RSS processing ${feeds.length} feeds `
-          + `(scan up to ${maxScanPerFeed}, target ${targetInsertsPerFeed} new/feed, interleaved by category)`,
+          + `(scan up to ${maxScanPerFeed}, target ${targetInsertsPerFeed} new/feed, `
+          + `interleaved en/hi/te then category; counts: ${JSON.stringify(langCounts)})`,
       );
 
       let feedIdx = 0;
@@ -677,6 +720,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             const summaryInput = prep.textForSummary;
             const originalLang = prep.originalLang;
             const fallbackSummary = String(item.summary || summarizeInputFromItem(raw)).slice(0, 150).trim();
+            const budgetTight = budget.limitMs != null && budget.remainingMs() < 120_000;
             let displayTitle = item.title;
             if (
               ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
@@ -693,7 +737,11 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             }
 
             let summaryPrimary = '';
-            if (summaryInput) {
+            const skipAiSummary =
+              budgetTight
+              || fallbackSummary.length >= 120
+              || process.env.RSS_SKIP_AI_SUMMARY === 'true';
+            if (summaryInput && !skipAiSummary) {
               try {
                 // eslint-disable-next-line no-await-in-loop
                 summaryPrimary = await summarizeForRssIngest(
@@ -723,12 +771,18 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                 )
                 : null,
             };
-            const constituencyResult = await classifyArticleConstituency(raw);
-            postFields = {
-              ...postFields,
-              constituency: constituencyResult.constituency || 'Unknown',
-              entities: Array.isArray(constituencyResult.entities) ? constituencyResult.entities : [],
-            };
+            const feedLang = String(feed.language || '').toLowerCase();
+            const feedCat = String(feed.categorySlug || '').toLowerCase();
+            if (feedLang === 'te' && (feedCat === 'local' || feedCat === 'politics')) {
+              const constituencyResult = await classifyArticleConstituency(raw);
+              postFields = {
+                ...postFields,
+                constituency: constituencyResult.constituency || 'Unknown',
+                entities: Array.isArray(constituencyResult.entities)
+                  ? constituencyResult.entities
+                  : [],
+              };
+            }
 
             // Google News RSS items often point to news.google.com redirect pages.
             // Resolve to the real publisher URL so:
@@ -763,6 +817,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             // and the global `RSS_OG_FALLBACK=false` env still disables it everywhere.
             if (
               !postFields.mediaUrl
+              && !budgetTight
               && feed.ogImageFallback !== false
               && process.env.RSS_OG_FALLBACK !== 'false'
               && postFields.sourceUrl
@@ -779,7 +834,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             // RSS feeds sometimes provide only a one-line snippet.
             // Enrich short bodies from the source URL so article detail isn't one-liner.
             const shouldEnrichBody =
-              process.env.RSS_ENRICH_BODY !== 'false'
+              !budgetTight
+              && process.env.RSS_ENRICH_BODY !== 'false'
               && postFields.sourceUrl
               && String(postFields.body || '').trim().length < 260;
             if (shouldEnrichBody) {
@@ -838,7 +894,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               postFields = { ...postFields, mediaUrl: null };
             }
 
-            if (postFields.mediaUrl) {
+            if (postFields.mediaUrl && INGEST_REHOST_IMAGES && !budgetTight) {
               const reh = await rehostExternalImageToCloudinary(postFields.mediaUrl, {
                 referer: postFields.sourceUrl || feed.url || null,
               });
@@ -865,6 +921,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
           console.log(
             `[ingest] RSS ${feedIdx}/${feeds.length} done: ${feed.name || 'RSS'} `
+              + `[${String(feed.language || 'en').toLowerCase()}] `
               + `(scanned ${slice.length}, +${insertedThisFeed} new)`,
           );
 
@@ -952,4 +1009,5 @@ module.exports = {
   setIngestionSocket,
   emitFeedUpdated,
   interleaveFeedsByCategory,
+  interleaveFeedsByLanguageAndCategory,
 };

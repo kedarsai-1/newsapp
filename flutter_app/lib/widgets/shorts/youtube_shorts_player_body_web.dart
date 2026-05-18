@@ -37,26 +37,28 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
     super.initState();
     context.read<ShortsPlaybackController>().addListener(_onPlaybackChanged);
     if (widget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_shouldEmbed) return;
-        _ensureViewRegistered();
-        if (mounted) setState(() {});
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _prepareEmbed());
     }
   }
 
   @override
   void didUpdateWidget(YoutubeShortsPlayerBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isActive != widget.isActive) {
-      if (widget.isActive && _shouldEmbed) {
-        _ensureViewRegistered();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() {});
-        });
+    if (oldWidget.isActive != widget.isActive ||
+        oldWidget.post.id != widget.post.id) {
+      if (widget.isActive) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _prepareEmbed());
+      } else {
+        _applyPlaybackCommands();
       }
-      _applyPlaybackCommands();
     }
+  }
+
+  void _prepareEmbed() {
+    if (!mounted || !widget.isActive) return;
+    _ensureViewRegistered();
+    _applyPlaybackCommands();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -70,11 +72,15 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
 
   void _onPlaybackChanged() {
     if (!mounted) return;
+    if (widget.isActive) _ensureViewRegistered();
     _applyPlaybackCommands();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() {});
     });
   }
+
+  bool get _showEmbed =>
+      widget.isActive && _registeredViews.contains(_viewType);
 
   bool get _shouldEmbed {
     final playback = context.read<ShortsPlaybackController>();
@@ -227,20 +233,21 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
       );
     }
 
-    if (_shouldEmbed) {
-      if (!_registeredViews.contains(_viewType)) {
-        return _wrap(
-          GestureDetector(
-            onTap: _onTapVideo,
-            child: YoutubeThumbnailLayer(
-              post: widget.post,
-              immersive: widget.immersive,
-              showPlay: true,
-            ),
-          ),
-        );
-      }
+    if (_showEmbed) {
       return _wrap(_embeddedPlayerStack());
+    }
+
+    if (widget.isActive) {
+      return _wrap(
+        GestureDetector(
+          onTap: _onTapVideo,
+          child: YoutubeThumbnailLayer(
+            post: widget.post,
+            immersive: widget.immersive,
+            showPlay: true,
+          ),
+        ),
+      );
     }
 
     return _wrap(

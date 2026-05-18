@@ -21,15 +21,13 @@ class ShortsPlaybackController extends ChangeNotifier {
     final next = (postId == null || postId.isEmpty) ? null : postId;
     _activateTimer?.cancel();
 
-    if (next == _activePostId && (immediate || next == null)) return;
+    if (next == _activePostId) return;
 
-    // Pause the previous clip immediately while swiping.
-    if (_activePostId != null && _activePostId != next) {
+    if (next == null) {
       _activePostId = null;
       notifyListeners();
+      return;
     }
-
-    if (next == null) return;
 
     if (immediate) {
       _activePostId = next;
@@ -37,6 +35,7 @@ class ShortsPlaybackController extends ChangeNotifier {
       return;
     }
 
+    // Brief delay so PageView snap finishes before swapping embeds (smoother swipe).
     _activateTimer = Timer(embedDelay, () {
       _activePostId = next;
       notifyListeners();

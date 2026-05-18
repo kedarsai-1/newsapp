@@ -360,7 +360,7 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
             translated: _translated,
             onIndexChanged: (i) {
               _pageIndex.value = i;
-              _playback.setActivePost(posts[i].id);
+              _playback.setActivePost(posts[i].id, immediate: true);
               _maybeLoadMore(i, context.read<ShortsProvider>(), lang);
               ShortsFeedTuning.precacheThumbnails(context, posts, i);
             },

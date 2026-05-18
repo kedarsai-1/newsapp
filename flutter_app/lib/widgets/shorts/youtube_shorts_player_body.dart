@@ -75,17 +75,21 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
   }
 
   void _syncWithPlayback() {
-    if (_shouldPlay) {
+    if (widget.isActive) {
       _mountPlayerIfNeeded();
-      if (_playerReady) _runJs('window.playCmd()');
+      if (_playerReady && _shouldPlay) {
+        _runJs('window.playCmd()');
+      } else if (_playerReady) {
+        _runJs('window.pauseCmd()');
+      }
     } else {
       if (_playerReady) _runJs('window.pauseCmd()');
-      if (!widget.isActive) _teardownPlayer();
+      _teardownPlayer();
     }
   }
 
   void _mountPlayerIfNeeded() {
-    if (_embedMounted || _embedFailed) return;
+    if (!widget.isActive || _embedMounted || _embedFailed) return;
     final videoId = _videoId;
     if (videoId == null || videoId.isEmpty) return;
     if (widget.post.youtube?.embeddable == false) return;
@@ -168,7 +172,7 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
       );
     }
 
-    if (_embedMounted && _controller != null && _shouldPlay) {
+    if (_embedMounted && _controller != null && widget.isActive) {
       return _wrap(
         GestureDetector(
           onTap: _onTapVideo,

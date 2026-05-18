@@ -15,6 +15,8 @@ bool isUnusableFeedImageUrl(String? url) {
       RegExp(r'[/_.-]icon\.(jpg|jpeg|png|webp|gif)').hasMatch(u) ||
       u.contains('/icons/') ||
       u.contains('placeholder') ||
+      u.contains('/theme/images/') ||
+      RegExp(r'/default[_-]?og[_-]?image').hasMatch(u) ||
       RegExp(r'/default[/-]').hasMatch(u) ||
       u.contains('avatar') ||
       u.contains('/profile/') ||

@@ -164,45 +164,104 @@ function isLegacyMiscategorized(post, categorySlug) {
   return false;
 }
 
+function postMatchesRegionalPoliticsScope(p, politicsScope) {
+  const ps = String(politicsScope || '').toLowerCase();
+  const rowScope = String(p?.politicsScope || '').toLowerCase();
+  if (!ps || ps === 'all') return true;
+  if (ps === 'andhra') return rowScope === 'andhra';
+  if (ps === 'telangana') return rowScope === 'telangana';
+  if (ps === 'north') return ['north', 'states', 'delhi'].includes(rowScope);
+  return false;
+}
+
+function storyTextFromPost(p) {
+  return `${p?.title || ''} ${p?.summary || ''} ${p?.body || ''}`;
+}
+
+/** Post-filter: keep International chip free of AP/TG/North/India-only rows (mis-tagged RSS). */
+function postMatchesPoliticsScopeFilter(p, politicsScope) {
+  const ps = String(politicsScope || '').toLowerCase();
+  if (!ps || ps === 'all') return true;
+
+  const text = storyTextFromPost(p);
+  const rowScope = String(p?.politicsScope || '').toLowerCase();
+  const lang = String(p?.language || '').toLowerCase();
+
+  const apTgRegional =
+    /(ఆంధ్ర|తెలంగాణ|amaravati|vijayawada|visakhapatnam|guntur|warangal|hyderabad|karimnagar|kurnool|nellore|హైదరాబాద్|అమరావతి|విజయవాడ)/i.test(text)
+    || /\b(andhra pradesh|telangana|amaravati)\b/i.test(text);
+  const northRegional =
+    /(उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|lucknow|chandigarh|noida)/.test(text)
+    || /\b(uttar pradesh|punjab|haryana|rajasthan|bihar)\b/i.test(text);
+  const worldMarkers =
+    /\b(trump|biden|putin|ukraine|gaza|nato|white house|united nations|britain|uk\b|europe|china|pakistan)\b/i.test(text)
+    || /(विदेश|अंतर्राष्ट्रीय|ब्रिटेन|अमेरिका|यूक्रेन|ट्रंप|बाइडेन|पाकिस्तान|चीन)/.test(text)
+    || /(విదేశ|అంతర్జాతీయ|అమెరికా|ట్రంప్|బైడెన్|పాకిస్తాన్|చైనా|బ్రిటన్|యూక్రేన్)/i.test(text);
+
+  if (ps === 'international') {
+    if (['andhra', 'telangana', 'north', 'states', 'delhi'].includes(rowScope)) return false;
+    if (apTgRegional && !worldMarkers) return false;
+    if (northRegional && !worldMarkers) return false;
+    if (lang === 'te' && rowScope === 'india' && !worldMarkers) return false;
+    return true;
+  }
+
+  if (ps === 'india') {
+    if (rowScope === 'international') return false;
+    if (worldMarkers && !/(మోదీ|राहुल|modi|rahul|parliament|lok sabha|ఎన్నిక|चुनाव|bjp|congress)/i.test(text)) {
+      return false;
+    }
+    if (apTgRegional || northRegional) return false;
+    return true;
+  }
+
+  if (ps === 'andhra' || ps === 'telangana' || ps === 'north') {
+    return postMatchesRegionalPoliticsScope(p, ps);
+  }
+
+  return true;
+}
+
 /** Filter feed rows so category tabs only return on-topic stories. */
-function filterPostsForCategory(posts, categorySlug) {
+function filterPostsForCategory(posts, categorySlug, { politicsScope } = {}) {
   const slug = String(categorySlug || '').toLowerCase();
+  const scope = String(politicsScope || '').toLowerCase();
   if (!slug || slug === 'general') return posts;
+
   return (posts || []).filter((p) => {
     if (String(p?.sourceType || '').toLowerCase() === 'youtube') return true;
 
+    const item = {
+      title: p.title,
+      summary: p.summary,
+      body: p.body,
+      sourceUrl: p.sourceUrl,
+      sourceName: p.sourceName,
+    };
     const postSlug = String(p?.category?.slug || '').toLowerCase();
+
+    // Politics tab + AP/TG/North chip: keep Local-category rows merged from the API query.
+    if (
+      slug === 'politics'
+      && ['andhra', 'telangana', 'north'].includes(scope)
+      && postSlug === 'local'
+      && postMatchesRegionalPoliticsScope(p, scope)
+    ) {
+      return matchesFeedCategory(item, 'local', {}) || matchesFeedCategory(item, 'politics', {});
+    }
+
+    if (slug === 'politics' && !postMatchesPoliticsScopeFilter(p, scope)) return false;
+
     if (postSlug === slug) {
       if (isLegacyMiscategorized(p, slug)) return false;
-      // Politics/local: re-check keywords so old miscategorized rows drop out of the tab.
       if (slug === 'politics' || slug === 'local') {
-        return matchesFeedCategory(
-          {
-            title: p.title,
-            summary: p.summary,
-            body: p.body,
-            sourceUrl: p.sourceUrl,
-            sourceName: p.sourceName,
-          },
-          slug,
-          {},
-        );
+        return matchesFeedCategory(item, slug, {});
       }
       return true;
     }
 
     if (isLegacyMiscategorized(p, slug)) return false;
-    return matchesFeedCategory(
-      {
-        title: p.title,
-        summary: p.summary,
-        body: p.body,
-        sourceUrl: p.sourceUrl,
-        sourceName: p.sourceName,
-      },
-      slug,
-      {},
-    );
+    return matchesFeedCategory(item, slug, {});
   });
 }
 
@@ -212,5 +271,6 @@ module.exports = {
   passesCategoryExclusions,
   isSectionSpecificSource,
   isLegacyMiscategorized,
+  postMatchesPoliticsScopeFilter,
   filterPostsForCategory,
 };

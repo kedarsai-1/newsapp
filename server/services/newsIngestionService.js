@@ -4,6 +4,8 @@ const {
   hashUrl,
   normalizeTitle,
   titleFingerprint,
+  summaryFingerprint,
+  summariesAreNearDuplicates,
 } = require('../utils/storyDedupe');
 const { passesIngestCategoryGate } = require('../utils/categoryRelevance');
 const User = require('../models/User');
@@ -235,7 +237,7 @@ function isTeluguPoliticalStory(postLike) {
   if (institutional.some((re) => re.test(text))) score += 1;
   if (apTgContext.some((re) => re.test(text))) score += 1;
 
-  return score >= 1;
+  return score >= 2;
 }
 
 function isHindiPoliticalStory(postLike) {
@@ -273,13 +275,43 @@ function isHindiPoliticalStory(postLike) {
   if (partyOrLeader.some((re) => re.test(text))) score += 1;
   if (institutional.some((re) => re.test(text))) score += 1;
   if (northContext.some((re) => re.test(text))) score += 1;
-  return score >= 1;
+  return score >= 2;
+}
+
+/** Resolve politicsScope — feed section is a hint; story text wins for regional vs world. */
+function resolvePoliticsScope(item, feed) {
+  const feedLang = String(feed.language || '').toLowerCase();
+  const feedCat = String(feed.categorySlug || '').toLowerCase();
+  const s = String(feed.politicsScope || '').toLowerCase();
+  const valid = ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(s)
+    ? s
+    : null;
+
+  if (feedCat !== 'politics' && feedCat !== 'local') return null;
+
+  const inferred = inferPoliticsScopeFromStory(item, null);
+
+  if (feedCat === 'politics') {
+    if (valid && valid !== 'all') {
+      if (valid === 'international' && inferred !== 'international') return inferred;
+      if (valid === 'india' && inferred === 'international') return 'international';
+      if (['andhra', 'telangana', 'north'].includes(valid) && inferred !== valid) return inferred;
+      return valid;
+    }
+    return inferred || 'india';
+  }
+
+  if (feedCat === 'local' && ['andhra', 'telangana', 'north', 'states', 'delhi'].includes(s)) return s;
+  if (feedCat === 'local' && (feedLang === 'te' || feedLang === 'hi')) {
+    return inferPoliticsScopeFromStory(item, s);
+  }
+  return null;
 }
 
 /** Infer india vs international vs AP/TG from story text when feed scope is broad. */
 function inferPoliticsScopeFromStory(postLike, feedScope) {
   const fromFeed = String(feedScope || '').toLowerCase();
-  if (['andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(fromFeed)) {
+  if (['andhra', 'telangana', 'north', 'states', 'delhi'].includes(fromFeed)) {
     return fromFeed;
   }
   const text = stripMarkup(
@@ -445,6 +477,9 @@ async function isDuplicate(item) {
   const fp = titleFingerprint(item.title);
   if (fp && await NewsPost.exists({ titleFingerprint: fp, ...langClause })) return true;
 
+  const sumFp = summaryFingerprint(item.summary);
+  if (sumFp && await NewsPost.exists({ summaryFingerprint: sumFp, ...langClause })) return true;
+
   const titleNorm = normalizeTitle(item.title);
   if (titleNorm.length >= 8) {
     if (await NewsPost.exists({
@@ -485,6 +520,7 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     })(),
     titleNormalized: normalizeTitle(item.title) || null,
     titleFingerprint: titleFingerprint(item.title) || null,
+    summaryFingerprint: summaryFingerprint(item.summary) || null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
     politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(item.politicsScope || '').toLowerCase())
@@ -873,22 +909,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               title: displayTitle,
               summary: summaryPrimary || fallbackSummary || item.summary,
               originalLanguage: originalLang,
-              politicsScope: (() => {
-                const s = String(feed.politicsScope || '').toLowerCase();
-                const valid = ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(s)
-                  ? s
-                  : null;
-                const cat = String(feed.categorySlug || '').toLowerCase();
-                if (cat === 'politics') {
-                  if (valid && valid !== 'all') return valid;
-                  return inferPoliticsScopeFromStory(item, feed.politicsScope);
-                }
-                if (cat === 'local' && ['andhra', 'telangana', 'north', 'states', 'delhi'].includes(s)) return s;
-                if (cat === 'local' && (feedLang === 'te' || feedLang === 'hi')) {
-                  return inferPoliticsScopeFromStory(item, s);
-                }
-                return null;
-              })(),
+              politicsScope: resolvePoliticsScope(item, feed),
             };
             if (feedLang === 'te' && (feedCat === 'local' || feedCat === 'politics')) {
               const constituencyResult = await classifyArticleConstituency(raw);

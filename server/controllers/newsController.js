@@ -4,7 +4,14 @@ const User = require('../models/User');
 const Category = require('../models/Category');
 const Comment = require('../models/Comment');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
-const { canonicalizeUrl, hashUrl, normalizeTitle, titleFingerprint } = require('../utils/storyDedupe');
+const {
+  canonicalizeUrl,
+  hashUrl,
+  normalizeTitle,
+  titleFingerprint,
+  summaryFingerprint,
+  summariesAreNearDuplicates,
+} = require('../utils/storyDedupe');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
 const { filterPostsForCategory } = require('../utils/categoryRelevance');
@@ -23,18 +30,49 @@ function cleanTextForClient(input) {
 }
 
 /** Same filter as find(), but with ObjectId fields cast for aggregation $match. */
-/** Remove duplicate headlines/URLs within a single feed page response. */
+function titleWordSet(title) {
+  const norm = normalizeTitle(title);
+  if (!norm) return new Set();
+  return new Set(norm.split(/\s+/).filter((w) => w.length > 2));
+}
+
+function titlesAreNearDuplicates(a, b) {
+  const A = titleWordSet(a);
+  const B = titleWordSet(b);
+  if (A.size < 4 || B.size < 4) return false;
+  let inter = 0;
+  for (const w of A) {
+    if (B.has(w)) inter += 1;
+  }
+  const ratio = inter / Math.min(A.size, B.size);
+  return ratio >= 0.72;
+}
+
+/** Remove duplicate headlines/URLs/summaries within a single feed page response. */
 function dedupeFeedPosts(rows) {
   const seen = new Set();
+  const keptTitles = [];
+  const keptSummaries = [];
   const out = [];
   for (const p of rows) {
     const urlKey = p.sourceUrlHash
       || (p.sourceUrl ? hashUrl(canonicalizeUrl(p.sourceUrl) || String(p.sourceUrl)) : '');
     const titleKey = p.titleNormalized || normalizeTitle(p.title);
     const fpKey = p.titleFingerprint || titleFingerprint(p.title);
-    const keys = [urlKey, fpKey, titleKey].filter((k) => k && k.length > 8);
+    const sumKey = p.summaryFingerprint || summaryFingerprint(p.summary);
+    const keys = [urlKey, fpKey, titleKey, sumKey].filter((k) => k && k.length > 8);
     if (keys.length && keys.some((k) => seen.has(k))) continue;
+    if (keptTitles.some((t) => titlesAreNearDuplicates(t, p.title))) continue;
+    const summaryText = String(p.summary || '').trim();
+    if (
+      summaryText.length >= 40
+      && keptSummaries.some((s) => summariesAreNearDuplicates(s, summaryText))
+    ) {
+      continue;
+    }
     for (const k of keys) seen.add(k);
+    keptTitles.push(p.title);
+    if (summaryText.length >= 40) keptSummaries.push(summaryText);
     out.push(p);
   }
   return out;
@@ -47,18 +85,35 @@ function politicsScopeMatchClause(scope, langParam) {
 
   const regional = ['andhra', 'telangana', 'north', 'states', 'delhi'];
   if (ps === 'india') {
-    return {
-      $or: [
-        { politicsScope: 'india' },
-        { politicsScope: 'all' },
-        { politicsScope: null },
-        { politicsScope: { $exists: false } },
+    const indiaTitle =
+      /మోదీ|రాహుల్|కేంద్ర|లోక్‌సభ|రాజ్యసభ|ఢిల్లీ|జాతీయ|పార్లమెంట్|మంత్రిమండలి|मोदी|राहुल|संसद|लोकसभा|चुनाव|मंत्री|modi|rahul|parliament|lok sabha|election|minister|cabinet|bjp|congress/i;
+    const orBranches = [
+      { politicsScope: 'india' },
+      { politicsScope: 'all' },
+      {
+        politicsScope: { $nin: [...regional, 'international'] },
+        title: indiaTitle,
+      },
+    ];
+    if (langParam === 'te') {
+      orBranches.push({
+        language: 'te',
+        politicsScope: { $nin: [...regional, 'international'] },
+        sourceName: /tv9\s*telugu\s*-\s*politics|eenadu.*politics|sakshi.*politics/i,
+      });
+    }
+    if (langParam === 'hi') {
+      orBranches.push(
         {
-          politicsScope: { $nin: [...regional, 'international'] },
-          title: /మోదీ|రాహుల్|కేంద్ర|లోక్‌సభ|రాజ్యసభ|ఢిల్లీ|జాతీయ|రేవంత్|జగన్|చంద్రబాబు|मोदी|राहुल|संसद|लोकसभा|चुनाव|मंत्री|modi|rahul|parliament|lok sabha|election|minister/i,
+          politicsScope: { $in: [null] },
+          $or: [
+            { sourceName: /abp\s*news\s*-\s*politics|bbc\s*hindi\s*-\s*india|indian\s*express|hindi/i },
+            { title: indiaTitle },
+          ],
         },
-      ],
-    };
+      );
+    }
+    return { $or: orBranches };
   }
   if (ps === 'international') {
     return { politicsScope: 'international' };
@@ -70,12 +125,11 @@ function politicsScopeMatchClause(scope, langParam) {
         {
           politicsScope: { $in: ['all', null] },
           $or: [
-            { sourceName: /amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar|jagran|abp|prabhat\s*khabar|ndtv\s*khabar/i },
-            { title: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|uttar pradesh|punjab|haryana|rajasthan|bihar|lucknow/i },
+            { sourceName: /amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar|jagran|abp|prabhat\s*khabar|ndtv\s*khabar|abplive/i },
+            { title: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|uttar pradesh|punjab|haryana|rajasthan|bihar|lucknow|noida|ghaziabad|chandigarh/i },
             { body: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|uttar pradesh|punjab/i },
           ],
         },
-        { politicsScope: { $exists: false } },
       ],
     };
   }
@@ -409,7 +463,9 @@ const getFeed = async (req, res) => {
 
     let posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
     if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
-      posts = filterPostsForCategory(posts, categorySlugFilter);
+      posts = filterPostsForCategory(posts, categorySlugFilter, {
+        politicsScope: politicsScopeParam,
+      });
     }
 
     res.json({
@@ -628,6 +684,8 @@ const getProxyImage = async (req, res) => {
   if (host.includes('prabhatkhabar.com')) referer = 'https://www.prabhatkhabar.com/';
   if (host.includes('ndtv.com')) referer = 'https://www.ndtv.com/';
   if (host.includes('theprint.in')) referer = 'https://hindi.theprint.in/';
+  if (host.includes('tv9telugu.com')) referer = 'https://www.tv9telugu.com/';
+  if (host.includes('ntvtelugu.com')) referer = 'https://www.ntvtelugu.com/';
   if (host.includes('bbc.co.uk') || host.includes('bbci.co.uk')) referer = 'https://www.bbc.com/hindi';
 
   const ac = new AbortController();

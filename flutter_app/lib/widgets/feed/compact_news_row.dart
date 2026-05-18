@@ -70,13 +70,15 @@ class CompactNewsRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _HeroImage(
-                    fx: fx,
-                    url: url,
-                    memCacheWidth: memW,
-                    onUnavailable: onImageUnavailable,
-                  ),
-                  const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
+                  if (url.isNotEmpty)
+                    _HeroImage(
+                      fx: fx,
+                      url: url,
+                      memCacheWidth: memW,
+                      onUnavailable: onImageUnavailable,
+                    ),
+                  if (url.isNotEmpty)
+                    const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
                   Text(
                     title,
                     maxLines: titleMaxLines,

@@ -86,6 +86,8 @@ const newsPostSchema = new mongoose.Schema({
   titleNormalized: { type: String, default: null, index: true, sparse: true },
   /** SHA-256 of normalized title — permanent cross-publisher dedupe key. */
   titleFingerprint: { type: String, default: null, index: true, sparse: true },
+  /** SHA-256 of normalized AI/RSS summary — cross-source duplicate detection. */
+  summaryFingerprint: { type: String, default: null, index: true, sparse: true },
   sourcePublishedAt: { type: Date, default: null },
   sourceType: {
     type: String,

@@ -122,7 +122,8 @@ function looksLikeDecorativeImage(url) {
   if (u.includes('favicon') || u.includes('/logo') || u.includes('/logos/') || u.includes('sprite')) return true;
   // Avoid bare `icon` — it false-positives on paths like `article-icon-xyz.jpg` on Hindi CDNs.
   if (/\/icons?\//.test(u) || /[_-]icon\.(jpg|jpeg|png|webp|gif)/.test(u)) return true;
-  if (u.includes('og-image') || u.includes('/theme/images/')) return true;
+  // Theme placeholder paths only — many publishers serve real heroes under /og-image/…
+  if (u.includes('/theme/images/') || /\/default[_-]?og[_-]?image/i.test(u)) return true;
   if (u.includes('1x1') || u.includes('pixel') || u.includes('placeholder')) return true;
   if (/\/default[/-]/.test(u) || u.includes('thumbnail-default')) return true;
   if (u.includes('avatar') || u.includes('/profile/')) return true;
@@ -197,6 +198,8 @@ function refererForImageFetch(pageUrl) {
     if (host.includes('prabhatkhabar.com')) return 'https://www.prabhatkhabar.com/';
     if (host.includes('ndtv.com')) return 'https://www.ndtv.com/';
     if (host.includes('theprint.in')) return 'https://hindi.theprint.in/';
+    if (host.includes('tv9telugu.com')) return 'https://www.tv9telugu.com/';
+    if (host.includes('ntvtelugu.com')) return 'https://www.ntvtelugu.com/';
     if (host.includes('bbc.co.uk') || host.includes('bbci.co.uk')) return 'https://www.bbc.com/hindi';
     return `${parsed.protocol}//${parsed.host}/`;
   } catch {

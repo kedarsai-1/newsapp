@@ -76,7 +76,7 @@ class _PoliticalReelsScreenState extends State<PoliticalReelsScreen>
     if (_boundToNews) return;
     _boundToNews = true;
     _news.addListener(_syncToFeedLanguage);
-    _syncToFeedLanguage();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncToFeedLanguage());
   }
 
   void _syncToFeedLanguage() {

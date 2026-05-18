@@ -60,37 +60,85 @@ class ApiService {
     return 'Something went wrong. Please try again.';
   }
 
+  static Future<Map<String, dynamic>> _decodeGetResponse(http.Response res) async {
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      return {
+        'success': false,
+        'statusCode': res.statusCode,
+        'message': res.statusCode == 404
+            ? 'Endpoint not found on server (deploy latest API or use local API_BASE_URL).'
+            : 'Server error ${res.statusCode}. Check API is running.',
+      };
+    }
+    final body = res.body.trim();
+    if (body.isEmpty) {
+      return {
+        'success': false,
+        'statusCode': res.statusCode,
+        'message': 'Empty response from server.',
+      };
+    }
+    if (body.startsWith('<')) {
+      return {
+        'success': false,
+        'statusCode': res.statusCode,
+        'message': res.statusCode == 404
+            ? 'Political videos API is not on this server yet. Deploy the latest backend or use http://127.0.0.1:5001/api locally.'
+            : 'Server returned HTML instead of JSON.',
+      };
+    }
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      return {'statusCode': res.statusCode, ...decoded};
+    }
+    return {'success': false, 'message': 'Unexpected response format.'};
+  }
+
   static Future<Map<String, dynamic>> _get(String path) async {
     try {
       final res = await http
           .get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _getHeaders)
           .timeout(_httpTimeout);
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        return {
-          'success': false,
-          'statusCode': res.statusCode,
-          'message': 'Server error ${res.statusCode}. Check API is running.',
-        };
-      }
-      final body = res.body.trim();
-      if (body.isEmpty) {
-        return {
-          'success': false,
-          'statusCode': res.statusCode,
-          'message': 'Empty response from server.',
-        };
-      }
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        // Preserve existing payload and add statusCode for callers that need it.
-        return {'statusCode': res.statusCode, ...decoded};
-      }
-      return {'success': false, 'message': 'Unexpected response format.'};
+      return _decodeGetResponse(res);
     } on TimeoutException {
       return {
         'success': false,
         'message':
             'Request timed out. The API may be waking up — pull to refresh in a moment.',
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Could not read data from the server (invalid JSON).',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _friendlyNetworkMessage(e),
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> _getQuery(
+    String path,
+    Map<String, String> queryParams,
+  ) async {
+    try {
+      final uri = Uri.parse('${AppConstants.baseUrl}$path')
+          .replace(queryParameters: queryParams);
+      final res =
+          await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
+      return _decodeGetResponse(res);
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message':
+            'Request timed out. The API may be waking up — pull to refresh in a moment.',
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Could not read data from the server (invalid JSON).',
       };
     } catch (e) {
       return {
@@ -220,6 +268,7 @@ class ApiService {
     int? days,
     List<String>? sourceTypes,
     bool hasVideo = false,
+    bool politicalOnly = false,
   }) async {
     final params = {
       'page': page.toString(),
@@ -244,49 +293,9 @@ class ApiService {
             .where((s) => s.isNotEmpty)
             .join(','),
       if (hasVideo) 'hasVideo': 'true',
+      if (politicalOnly) 'politicalOnly': 'true',
     };
-    final uri = Uri.parse('${AppConstants.baseUrl}/news/feed')
-        .replace(queryParameters: params);
-    try {
-      final res =
-          await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        return {
-          'success': false,
-          'statusCode': res.statusCode,
-          'message':
-              'News feed unavailable (${res.statusCode}). Try again in a moment.',
-        };
-      }
-      final body = res.body.trim();
-      if (body.isEmpty) {
-        return {
-          'success': false,
-          'message': 'Empty response from news server.',
-        };
-      }
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic>) {
-        return {'statusCode': res.statusCode, ...decoded};
-      }
-      return {'success': false, 'message': 'Unexpected feed response format.'};
-    } on TimeoutException {
-      return {
-        'success': false,
-        'message':
-            'Feed request timed out. The server may be cold-starting — tap refresh or try again shortly.',
-      };
-    } on FormatException {
-      return {
-        'success': false,
-        'message': 'Could not read feed data from the server.',
-      };
-    } catch (e) {
-      return {
-        'success': false,
-        'message': _friendlyNetworkMessage(e),
-      };
-    }
+    return _getQuery('/news/feed', params);
   }
 
   static Future<Map<String, dynamic>> getPost(String id) async =>
@@ -631,9 +640,7 @@ class ApiService {
       if (language != null && language != 'all') 'language': language,
       if (category != null && category.trim().isNotEmpty) 'category': category,
     };
-    final uri = Uri.parse('${AppConstants.baseUrl}/political-videos/feed')
-        .replace(queryParameters: params);
-    final res = await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
-    return jsonDecode(res.body);
+
+    return _getQuery('/political-videos/feed', params);
   }
 }

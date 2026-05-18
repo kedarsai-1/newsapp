@@ -115,12 +115,12 @@ class PoliticalVideosProvider extends ChangeNotifier {
         }
         _error = res['message']?.toString() ?? 'Could not load political videos.';
       }
-    } catch (e) {
+    } catch (_) {
       if (reset) {
         _posts = [];
         _loadedLanguageTag = null;
       }
-      _error = e.toString();
+      _error = 'Could not load political videos. Check your connection and try again.';
     }
   }
 }

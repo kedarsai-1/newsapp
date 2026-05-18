@@ -14,10 +14,13 @@ const TTL_MATCH_MS = 60 * 1000;
 const TTL_SERIES_MS = 6 * 60 * 60 * 1000;
 const TTL_STALE_MS = 24 * 60 * 60 * 1000;
 
-/** Fallback when /series search is rate-limited — IPL 2025 on CricAPI. */
+/** Last-resort series ids when /series search fails. */
 const DEFAULT_LEAGUE_SERIES_IDS = [
-  'd5a498c8-7596-4b93-8ab0-e0efc3345312',
+  '87c62aac-bc3c-4738-ab93-19da0690488f', // IPL 2026
+  'd5a498c8-7596-4b93-8ab0-e0efc3345312', // IPL 2025
 ];
+
+const FINISHED_IPL_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 const client = axios.create({
   baseURL: BASE,
@@ -161,6 +164,50 @@ function yearFromName(name) {
   return m ? Number(m[1]) : 0;
 }
 
+/** IPL season label year (Mar–May window; Jan–Feb still prior season). */
+function currentIplSeasonYear() {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  return month < 2 ? y - 1 : y;
+}
+
+function matchSeasonYear(match) {
+  const fromSeries = yearFromName(match?.series || match?.name || '');
+  if (fromSeries) return fromSeries;
+  const t = new Date(match?.dateTimeGMT || match?.dateTimeGmt || match?.date || 0).getTime();
+  if (Number.isFinite(t) && t > 0) return new Date(t).getUTCFullYear();
+  return 0;
+}
+
+function matchTimeMs(match) {
+  const t = new Date(match?.dateTimeGMT || match?.dateTimeGmt || match?.date || 0).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function formatScorecardField(val) {
+  if (val == null || val === '') return null;
+  if (typeof val === 'string') {
+    const s = val.trim();
+    return s && s !== '[object Object]' ? s : null;
+  }
+  if (typeof val === 'number' && Number.isFinite(val)) return String(val);
+  if (typeof val === 'object') {
+    const parts = [];
+    for (const [k, v] of Object.entries(val)) {
+      if (v == null || v === '') continue;
+      const label = String(k)
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .trim();
+      parts.push(`${label}: ${v}`);
+    }
+    return parts.length ? parts.join(', ') : null;
+  }
+  const s = String(val).trim();
+  return s && s !== '[object Object]' ? s : null;
+}
+
 function configuredLeagueSeriesIds() {
   const raw = process.env.CRICAPI_LEAGUE_SERIES_IDS || process.env.CRICAPI_IPL_SERIES_ID || '';
   const fromEnv = raw
@@ -174,7 +221,7 @@ async function findLatestLeagueSeries(search) {
   const body = await cricGet('/series', { search });
   const list = (body.data || []).filter((s) => {
     const name = String(s.name || '').toLowerCase();
-    if (search === 'IPL') {
+    if (search === 'IPL' || /^indian premier league/i.test(String(search))) {
       return /indian premier league|\(ipl\)/i.test(name);
     }
     if (search === 'WPL') {
@@ -198,26 +245,38 @@ async function fetchSeriesMatchList(seriesId) {
 }
 
 /** IPL/WPL fixtures from series_info (currentMatches often omits them). */
+async function resolveLeagueSeriesIds() {
+  const cacheKey = 'sports:resolvedLeagueSeriesIds';
+  const hit = memoryCache.get(cacheKey);
+  if (hit) return hit;
+
+  const ids = new Set(configuredLeagueSeriesIds());
+  const seasonYear = currentIplSeasonYear();
+  try {
+    for (const search of [
+      `Indian Premier League ${seasonYear}`,
+      'IPL',
+      'WPL',
+    ]) {
+      const series = await findLatestLeagueSeries(search);
+      if (series?.id) ids.add(String(series.id));
+    }
+  } catch (e) {
+    console.warn('[cricapi] series search skipped:', e.message);
+  }
+
+  const out = [...ids];
+  memoryCache.set(cacheKey, out, TTL_SERIES_MS);
+  return out;
+}
+
 async function fetchLeagueSeriesMatches() {
   const cacheKey = 'sports:leagueSeriesMatches';
   const cached = memoryCache.get(cacheKey);
   if (cached) return cached;
 
-  const ids = new Set(configuredLeagueSeriesIds());
-  // Series search costs extra quota — only when no IDs configured in env.
-  if (!process.env.CRICAPI_LEAGUE_SERIES_IDS?.trim()) {
-    try {
-      for (const search of ['IPL', 'WPL']) {
-        const series = await findLatestLeagueSeries(search);
-        if (series?.id) ids.add(String(series.id));
-      }
-    } catch (e) {
-      console.warn('[cricapi] series search skipped:', e.message);
-    }
-  }
-
   const merged = [];
-  for (const seriesId of ids) {
+  for (const seriesId of await resolveLeagueSeriesIds()) {
     try {
       const rows = await fetchSeriesMatchList(seriesId);
       merged.push(...rows);
@@ -232,27 +291,34 @@ async function fetchLeagueSeriesMatches() {
 
 function leagueMatchesForFeed(rawList) {
   const now = Date.now();
-  const live = rawList.filter((m) => m.matchStarted && !m.matchEnded);
-  const upcoming = rawList.filter((m) => {
+  const seasonYear = currentIplSeasonYear();
+  const inSeason = (m) => {
+    const y = matchSeasonYear(m);
+    return !y || y >= seasonYear - 1;
+  };
+  const relevant = rawList.filter(inSeason);
+
+  const live = relevant.filter((m) => m.matchStarted && !m.matchEnded);
+  const upcoming = relevant.filter((m) => {
     if (m.matchEnded) return false;
     if (!m.matchStarted) return true;
-    const t = new Date(m.dateTimeGMT || m.dateTimeGmt || m.date || 0).getTime();
-    if (!Number.isFinite(t) || t === 0) {
+    const t = matchTimeMs(m);
+    if (!t) {
       return /starts at|not started/i.test(String(m.status || ''));
     }
     return t >= now - 6 * 60 * 60 * 1000;
   });
   if (live.length || upcoming.length) return [...live, ...upcoming];
 
-  // Season complete — still surface recent IPL fixtures in the app.
-  return rawList
+  // Off-season / between matches: only very recent finished games (not last year's full slate).
+  return relevant
     .filter((m) => m.matchEnded)
-    .sort(
-      (a, b) =>
-        new Date(b.dateTimeGMT || b.dateTimeGmt || b.date || 0) -
-        new Date(a.dateTimeGMT || a.dateTimeGmt || a.date || 0),
-    )
-    .slice(0, 8);
+    .filter((m) => {
+      const t = matchTimeMs(m);
+      return t > 0 && t >= now - FINISHED_IPL_MAX_AGE_MS;
+    })
+    .sort((a, b) => matchTimeMs(b) - matchTimeMs(a))
+    .slice(0, 6);
 }
 
 function normalizeBattingRow(row) {
@@ -282,8 +348,8 @@ function normalizeScorecardInnings(raw) {
   const innings = Array.isArray(raw?.scorecard) ? raw.scorecard : [];
   const normalized = innings.map((inn) => ({
     label: String(inn.inning || inn.team || 'Innings').trim(),
-    extras: inn.extras != null ? String(inn.extras) : null,
-    totals: inn.totals != null ? String(inn.totals) : null,
+    extras: formatScorecardField(inn.extras),
+    totals: formatScorecardField(inn.totals),
     batting: (inn.batting || []).map(normalizeBattingRow).filter((b) => b.name),
     bowling: (inn.bowling || []).map(normalizeBowlingRow).filter((b) => b.name),
   }));
@@ -359,7 +425,7 @@ function normalizeMatchSummary(match) {
       120,
     ),
     venue: String(match.venue || match.ground || '').slice(0, 120),
-    result: match.result || match.status || null,
+    result: formatScorecardField(match.result) || matchStatusText(match) || null,
   };
 }
 
@@ -428,25 +494,83 @@ function isIplMatchNormalized(m) {
   );
 }
 
+function seasonYearFromNormalized(m) {
+  return yearFromName(m.tournament) || (m.time ? new Date(m.time).getUTCFullYear() : 0);
+}
+
 function buildLivePayload(rawList) {
   rawList = sortMatchesForDisplay(rawList);
   const normalized = rawList.map(normalizeMatchSummary).filter((m) => m.id);
 
-  const live = normalized.filter((m) => m.status === 'live');
-  const upcoming = normalized.filter((m) => {
-    if (m.status !== 'upcoming') return false;
-    return !m.teams.some((t) => t.score != null && String(t.score).trim() !== '');
-  });
-  const finished = normalized.filter((m) => m.status === 'finished');
+  const live = [];
+  const upcoming = [];
+  const liveIds = new Set();
+  const upcomingIds = new Set();
 
-  const liveIds = new Set(live.map((m) => m.id));
-  const upcomingIds = new Set(upcoming.map((m) => m.id));
+  for (const m of normalized) {
+    if (m.status === 'live' && !liveIds.has(m.id)) {
+      live.push(m);
+      liveIds.add(m.id);
+    }
+  }
+  for (const m of normalized) {
+    if (m.status !== 'upcoming' || upcomingIds.has(m.id)) continue;
+    if (m.teams.some((t) => t.score != null && String(t.score).trim() !== '')) continue;
+    upcoming.push(m);
+    upcomingIds.add(m.id);
+  }
+
+  // Live/upcoming IPL must appear under "Live now" / "Upcoming", not only under IPL.
+  for (const m of normalized) {
+    if (!isIplMatchNormalized(m)) continue;
+    if (m.status === 'live' && !liveIds.has(m.id)) {
+      live.unshift(m);
+      liveIds.add(m.id);
+    } else if (m.status === 'upcoming' && !upcomingIds.has(m.id)) {
+      if (!m.teams.some((t) => t.score != null && String(t.score).trim() !== '')) {
+        upcoming.push(m);
+        upcomingIds.add(m.id);
+      }
+    }
+  }
+
+  const finished = normalized.filter((m) => m.status === 'finished');
+  const seasonYear = currentIplSeasonYear();
+  const now = Date.now();
 
   const ipl = normalized
     .filter((m) => isIplMatchNormalized(m) && !liveIds.has(m.id) && !upcomingIds.has(m.id))
-    .slice(0, 12);
+    .filter((m) => {
+      if (m.status === 'live' || m.status === 'upcoming') return true;
+      if (m.status !== 'finished') return false;
+      const y = seasonYearFromNormalized(m);
+      if (y && y < seasonYear - 1) return false;
+      const t = m.time ? new Date(m.time).getTime() : 0;
+      return Number.isFinite(t) && t > 0 && t >= now - FINISHED_IPL_MAX_AGE_MS;
+    })
+    .slice(0, 8);
 
-  return { live, upcoming, finished, ipl, fetchedAt: new Date().toISOString() };
+  const iplSeasonYear =
+    ipl.map(seasonYearFromNormalized).find((y) => y > 0)
+    || live.map(seasonYearFromNormalized).find((y) => y > 0)
+    || seasonYear;
+
+  const iplSectionTitle =
+    live.some(isIplMatchNormalized) || upcoming.some(isIplMatchNormalized)
+      ? `IPL ${iplSeasonYear}`
+      : ipl.length
+        ? `IPL ${iplSeasonYear} · Recent`
+        : `IPL ${iplSeasonYear}`;
+
+  return {
+    live,
+    upcoming,
+    finished,
+    ipl,
+    iplSeasonYear,
+    iplSectionTitle,
+    fetchedAt: new Date().toISOString(),
+  };
 }
 
 async function fetchCurrentMatches() {
@@ -488,9 +612,12 @@ async function fetchCurrentMatches() {
       rawList = mergeRawMatches([rawList, leagueRows]);
     }
 
-    // 3) Offline IPL snapshot only when API returned nothing at all
+    // 3) Offline IPL snapshot only when API returned nothing at all (never mix with live data)
     if (!rawList.length) {
-      const fallback = loadIplFallbackMatches();
+      const fallback = loadIplFallbackMatches().filter((m) => {
+        const y = matchSeasonYear(m);
+        return !y || y >= currentIplSeasonYear() - 1;
+      });
       if (fallback.length) {
         rawList = fallback;
         warning =

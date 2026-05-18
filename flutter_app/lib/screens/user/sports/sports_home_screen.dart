@@ -252,13 +252,14 @@ class _LiveSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    return Selector<SportsProvider, (List<SportsMatch>, List<SportsMatch>, List<SportsMatch>, String?)>(
-      selector: (_, p) => (p.live, p.upcoming, p.ipl, p.liveError),
+    return Selector<SportsProvider, (List<SportsMatch>, List<SportsMatch>, List<SportsMatch>, String, String?)>(
+      selector: (_, p) => (p.live, p.upcoming, p.ipl, p.iplSectionTitle, p.liveError),
       builder: (context, data, _) {
         final live = data.$1;
         final upcoming = data.$2;
         final ipl = data.$3;
-        final err = data.$4;
+        final iplTitle = data.$4;
+        final err = data.$5;
         if (live.isEmpty && upcoming.isEmpty && ipl.isEmpty) {
           return Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
@@ -291,7 +292,13 @@ class _LiveSection extends StatelessWidget {
               _matchRow(upcoming, height: 108),
             ],
             if (ipl.isNotEmpty) ...[
-              _sectionHeader(fx, title: 'IPL', badge: '${ipl.length} matches'),
+              _sectionHeader(
+                fx,
+                title: iplTitle,
+                badge: ipl.every((m) => m.status == SportsMatchStatus.finished)
+                    ? 'Recent'
+                    : '${ipl.length} matches',
+              ),
               _matchRow(ipl, height: 118),
             ],
           ],

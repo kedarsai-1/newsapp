@@ -12,6 +12,7 @@ class SportsProvider extends ChangeNotifier {
   List<SportsMatch> _live = [];
   List<SportsMatch> _upcoming = [];
   List<SportsMatch> _ipl = [];
+  String _iplSectionTitle = 'IPL';
   List<NewsPost> _posts = [];
 
   bool _loadingLive = false;
@@ -28,6 +29,7 @@ class SportsProvider extends ChangeNotifier {
   List<SportsMatch> get live => _live;
   List<SportsMatch> get upcoming => _upcoming;
   List<SportsMatch> get ipl => _ipl;
+  String get iplSectionTitle => _iplSectionTitle;
   List<NewsPost> get posts => _posts;
   bool get loadingLive => _loadingLive;
   bool get loadingNews => _loadingNews;
@@ -117,6 +119,8 @@ class SportsProvider extends ChangeNotifier {
     _live = _parseMatches(res['live']);
     _upcoming = _parseMatches(res['upcoming']);
     _ipl = _parseMatches(res['ipl']);
+    final title = res['iplSectionTitle']?.toString().trim();
+    if (title != null && title.isNotEmpty) _iplSectionTitle = title;
   }
 
   List<SportsMatch> _parseMatches(dynamic raw) {

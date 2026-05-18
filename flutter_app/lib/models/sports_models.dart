@@ -74,13 +74,33 @@ class SportsInningScorecard {
     this.bowling = const [],
   });
 
+  static String? _textField(dynamic v) {
+    if (v == null) return null;
+    if (v is String) {
+      final s = v.trim();
+      if (s.isEmpty || s == '[object Object]') return null;
+      return s;
+    }
+    if (v is num) return v.toString();
+    if (v is Map) {
+      final parts = <String>[];
+      v.forEach((k, val) {
+        if (val == null) return;
+        parts.add('$k: $val');
+      });
+      return parts.isEmpty ? null : parts.join(', ');
+    }
+    final s = v.toString().trim();
+    return s.isEmpty || s == '[object Object]' ? null : s;
+  }
+
   factory SportsInningScorecard.fromJson(Map<String, dynamic> j) {
     final batRaw = j['batting'];
     final bowlRaw = j['bowling'];
     return SportsInningScorecard(
       label: j['label']?.toString() ?? 'Innings',
-      extras: j['extras']?.toString(),
-      totals: j['totals']?.toString(),
+      extras: _textField(j['extras']),
+      totals: _textField(j['totals']),
       batting: batRaw is List
           ? batRaw
               .whereType<Map>()

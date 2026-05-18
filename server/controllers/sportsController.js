@@ -60,17 +60,28 @@ const getLive = async (req, res) => {
     const data = await cricApi.fetchCurrentMatches();
     const empty =
       !data.live?.length && !data.upcoming?.length && !(data.ipl || []).length;
+    const noIplLive =
+      !(data.live || []).some((m) => /ipl|indian premier league/i.test(`${m.tournament || ''}`))
+      && !(data.upcoming || []).some((m) => /ipl|indian premier league/i.test(`${m.tournament || ''}`));
+    let message = empty
+      ? 'No live or upcoming matches right now. Pull to refresh in a few minutes.'
+      : data.warning || null;
+    if (!empty && noIplLive && !(data.ipl || []).length) {
+      message =
+        'No live IPL match right now. The current season may be over — check back when IPL fixtures resume.';
+    }
+
     return res.json({
       success: true,
       live: data.live,
       upcoming: data.upcoming,
       ipl: data.ipl || [],
+      iplSectionTitle: data.iplSectionTitle || 'IPL',
+      iplSeasonYear: data.iplSeasonYear || null,
       cached: true,
       stale: Boolean(data.stale),
       warning: data.warning || null,
-      message: empty
-        ? 'No live or upcoming matches right now. Pull to refresh in a few minutes.'
-        : data.warning || null,
+      message,
       fetchedAt: data.fetchedAt,
     });
   } catch (e) {

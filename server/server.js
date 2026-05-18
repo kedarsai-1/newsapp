@@ -18,6 +18,9 @@ const reporterRoutes = require('./routes/reporter');
 const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
 const sportsRoutes = require('./routes/sports');
+const politicalVideoRoutes = require('./routes/politicalVideos');
+const { runPoliticalVideoIngestion } = require('./services/politicalVideoIngestionService');
+const { preloadPoliticalClassifier } = require('./services/politicalVideoClassifierService');
 
 const app = express();
 const server = http.createServer(app);
@@ -44,6 +47,7 @@ app.use('/api/reporter', reporterRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/sports', sportsRoutes);
+app.use('/api/political-videos', politicalVideoRoutes);
 
 // Liveness — always 200 once HTTP is up (Railway health checks hit this before Mongo is ready).
 app.get('/api/health', (req, res) => {
@@ -218,6 +222,51 @@ async function runBackgroundJobs() {
       }
     } else {
       console.log('[youtube] scheduler disabled (YOUTUBE_ENABLED=false or missing YOUTUBE_API_KEY)');
+    }
+
+    const politicalVideoEnabled = process.env.POLITICAL_VIDEO_ENABLED !== 'false';
+    const politicalCronExpr = process.env.POLITICAL_VIDEO_CRON || '*/15 * * * *';
+    const politicalRunOnStart = process.env.POLITICAL_VIDEO_RUN_ON_START === 'true';
+
+    async function runScheduledPoliticalVideo(triggeredBy) {
+      console.log(`[political-video] ingestion start (${triggeredBy})`);
+      const result = await runPoliticalVideoIngestion({ triggeredBy });
+      if (result.skipped) {
+        console.log(`[political-video] skipped: ${result.message || ''}`);
+        return;
+      }
+      if (!result.success) {
+        console.error('[political-video] failed:', result.error);
+        return;
+      }
+      const s = result.stats || {};
+      console.log(
+        `[political-video] done: saved=${s.saved ?? 0} fetched=${s.fetched ?? 0} `
+          + `keyword=${s.keywordAccepted ?? 0} ml=${s.mlAccepted ?? 0}`,
+      );
+    }
+
+    if (politicalVideoEnabled && process.env.YOUTUBE_API_KEY?.trim()) {
+      if (process.env.POLITICAL_ML_PRELOAD !== 'false') {
+        preloadPoliticalClassifier().catch((e) =>
+          console.warn('[political-ml] preload failed (will retry on cron):', e.message),
+        );
+      }
+      cron.schedule(politicalCronExpr, () => {
+        runScheduledPoliticalVideo('political-cron').catch((e) =>
+          console.error('[political-video] cron error:', e),
+        );
+      });
+      console.log(`[political-video] scheduler active with cron "${politicalCronExpr}"`);
+      if (politicalRunOnStart) {
+        setTimeout(() => {
+          runScheduledPoliticalVideo('political-startup').catch((e) =>
+            console.error('[political-video] startup error:', e),
+          );
+        }, 8000);
+      }
+    } else {
+      console.log('[political-video] disabled');
     }
 
     async function runRetention(triggeredBy) {

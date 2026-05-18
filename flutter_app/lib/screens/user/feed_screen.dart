@@ -366,12 +366,18 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 if (data.hidden) return const SizedBox.shrink();
                 final news = context.read<NewsProvider>();
                 return RepaintBoundary(
-                  child: FeedScopeChipBar(
-                    selectedScope: data.selectedScope,
-                    options: data.options,
-                    onSelected: data.onSelectPolitics
-                        ? news.selectPoliticsScope
-                        : news.selectLocalScope,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FeedScopeChipBar(
+                        selectedScope: data.selectedScope,
+                        options: data.options,
+                        onSelected: data.onSelectPolitics
+                            ? news.selectPoliticsScope
+                            : news.selectLocalScope,
+                      ),
+                      if (data.onSelectPolitics) const _PoliticalReelsEntry(),
+                    ],
                   ),
                 );
               },
@@ -713,6 +719,46 @@ class _SearchResultsState extends State<_SearchResults> {
           onTap: () => context.push('/article/${post.id}'),
         );
       },
+    );
+  }
+}
+
+class _PoliticalReelsEntry extends StatelessWidget {
+  const _PoliticalReelsEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Material(
+        color: fx.surface,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => context.push('/political-reels'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.play_circle_outline_rounded, color: fx.accent, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Political interviews & debates',
+                    style: TextStyle(
+                      color: fx.title,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: fx.iconFgMuted, size: 22),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

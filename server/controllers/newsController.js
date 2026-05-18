@@ -15,6 +15,7 @@ const {
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
 const { filterPostsForCategory } = require('../utils/categoryRelevance');
+const { POLITICAL_LABELS } = require('../config/politicalVideoConfig');
 
 function cleanTextForClient(input) {
   return String(input || '')
@@ -231,9 +232,15 @@ const getFeed = async (req, res) => {
       days,
       sourceTypes,
       hasVideo,
+      politicalOnly,
     } = req.query;
 
     const query = { status: 'approved' };
+    if (String(politicalOnly || '').toLowerCase() === 'true') {
+      query.videoCategory = { $in: POLITICAL_LABELS };
+      query.sourceType = 'youtube';
+      query['youtube.videoId'] = { $exists: true, $nin: [null, ''] };
+    }
     let categorySlugFilter = null;
     let politicsCategoryId = null;
     let localCategoryId = null;

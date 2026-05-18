@@ -6,6 +6,7 @@ import 'services/auth_provider.dart';
 import 'providers/news_provider.dart';
 import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
+import 'providers/political_videos_provider.dart';
 import 'providers/shorts_playback_controller.dart';
 import 'providers/sports_provider.dart';
 import 'models/sports_models.dart';
@@ -31,6 +32,7 @@ import 'widgets/dailyhunt/xpresso_menu_scope.dart';
 import 'widgets/dailyhunt/xpresso_side_menu.dart';
 import 'screens/user/dailyhunt_home_screen.dart';
 import 'screens/user/shorts_news_screen.dart';
+import 'screens/user/political_reels_screen.dart';
 import 'screens/user/quick_news_screen.dart';
 import 'screens/user/categories_screen.dart';
 import 'screens/user/sports/sports_home_screen.dart';
@@ -149,6 +151,7 @@ GoRouter createAppRouter(BuildContext context) {
       final goingToReporter = loc.startsWith('/reporter');
       final goingToUserRoute = loc == '/feed' ||
           loc == '/shorts' ||
+          loc == '/political-reels' ||
           loc == '/home' ||
           loc == '/quick-news' ||
           loc == '/categories' ||
@@ -272,6 +275,13 @@ GoRouter createAppRouter(BuildContext context) {
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
               child: const ShortsNewsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/political-reels',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const PoliticalReelsScreen(),
             ),
           ),
           GoRoute(
@@ -422,6 +432,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => NewsProvider()..init()),
         ChangeNotifierProvider(create: (_) => OnboardingDraftProvider()),
         ChangeNotifierProvider(create: (_) => ShortsProvider()),
+        ChangeNotifierProvider(create: (_) => PoliticalVideosProvider()),
         ChangeNotifierProvider(create: (_) => ShortsPlaybackController()),
         ChangeNotifierProvider(create: (_) => SportsProvider()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),

@@ -617,4 +617,23 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getIngestionStatus() async =>
       _get('/admin/ingestion/status');
+
+  // ─── Political video reels (classified YouTube) ───────────────────────────
+
+  static Future<Map<String, dynamic>> getPoliticalVideoFeed({
+    int page = 1,
+    String? language,
+    String? category,
+  }) async {
+    final params = {
+      'page': page.toString(),
+      'limit': AppConstants.pageSize.toString(),
+      if (language != null && language != 'all') 'language': language,
+      if (category != null && category.trim().isNotEmpty) 'category': category,
+    };
+    final uri = Uri.parse('${AppConstants.baseUrl}/political-videos/feed')
+        .replace(queryParameters: params);
+    final res = await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
+    return jsonDecode(res.body);
+  }
 }

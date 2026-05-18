@@ -117,6 +117,14 @@ const newsPostSchema = new mongoose.Schema({
   }],
   scrapedAt: { type: Date, default: null },
   scrapeConfidence: { type: Number, min: 0, max: 1, default: null },
+  /** YouTube political classifier label (interview / debate / press meet). */
+  videoCategory: { type: String, trim: true, lowercase: true, index: true, sparse: true },
+  videoClassificationMethod: {
+    type: String,
+    enum: ['keyword', 'ml'],
+    sparse: true,
+  },
+  videoClassificationScore: { type: Number, min: 0, max: 1, default: null, sparse: true },
 }, {
   timestamps: true,
 });

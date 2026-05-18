@@ -109,11 +109,19 @@ function interleaveFeedsByLanguageAndCategory(feeds) {
  */
 function createIngestBudget() {
   const raw = process.env.INGEST_MAX_RUNTIME_MS;
+  const onRailway = Boolean(
+    process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID,
+  );
   let ms;
   if (raw === undefined || raw === '') {
-    ms = 20 * 60 * 1000; // 20 minutes — enough for ~98 RSS feeds with en/hi/te interleave
+    ms = onRailway
+      ? 6 * 60 * 1000
+      : 20 * 60 * 1000; // Railway: 6 min default to avoid OOM on small instances
   } else {
     ms = Number(raw);
+    if (onRailway && Number.isFinite(ms) && ms > 10 * 60 * 1000) {
+      ms = 10 * 60 * 1000;
+    }
   }
   if (!Number.isFinite(ms) || ms <= 0) {
     return {

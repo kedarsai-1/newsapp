@@ -11,6 +11,7 @@ const { classifyByKeywords, isPoliticalLabel } = require('../utils/politicalKeyw
 const {
   preloadPoliticalClassifier,
   classifyVideosBatch,
+  isMlEnabled,
 } = require('./politicalVideoClassifierService');
 const {
   fetchLatestFromChannels,
@@ -159,7 +160,7 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
   };
 
   try {
-    if (process.env.POLITICAL_ML_ENABLED !== 'false') {
+    if (isMlEnabled()) {
       await preloadPoliticalClassifier();
     }
 
@@ -204,7 +205,7 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
     }
 
     let mlAccepted = [];
-    if (uncertain.length && process.env.POLITICAL_ML_ENABLED !== 'false') {
+    if (uncertain.length && isMlEnabled()) {
       stats.mlClassified = uncertain.length;
       const mlResults = await classifyVideosBatch(uncertain);
       for (const r of mlResults) {

@@ -20,7 +20,8 @@ const categoryRoutes = require('./routes/categories');
 const sportsRoutes = require('./routes/sports');
 const politicalVideoRoutes = require('./routes/politicalVideos');
 const { runPoliticalVideoIngestion } = require('./services/politicalVideoIngestionService');
-const { preloadPoliticalClassifier } = require('./services/politicalVideoClassifierService');
+const { preloadPoliticalClassifier, isMlEnabled } = require('./services/politicalVideoClassifierService');
+const { isRailwayHost } = require('./utils/isRailway');
 
 const app = express();
 const server = http.createServer(app);
@@ -84,7 +85,7 @@ io.on('connection', (socket) => {
 });
 
 const port = Number(process.env.PORT) || 5000;
-const isRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
+const isRailway = isRailwayHost();
 
 server.listen(port, () => {
   console.log(`Server listening on port ${port} (mongo connecting in background)`);
@@ -116,9 +117,9 @@ async function runBackgroundJobs() {
     // Production default: every 5 minutes (safe + fresh).
     const cronExpr = process.env.SCRAPER_CRON || '*/5 * * * *';
     const scrapingEnabled = process.env.SCRAPER_ENABLED !== 'false';
-    const runOnStart =
-      process.env.SCRAPER_RUN_ON_START === 'true'
-      || (!isRailway && process.env.SCRAPER_RUN_ON_START !== 'false');
+    const runOnStart = isRailway
+      ? process.env.SCRAPER_RUN_ON_START === 'true'
+      : process.env.SCRAPER_RUN_ON_START !== 'false';
 
     // Retention cleanup (production): delete ingested news older than N days + Cloudinary assets.
     const retentionEnabled = process.env.RETENTION_ENABLED !== 'false';
@@ -247,18 +248,26 @@ async function runBackgroundJobs() {
     }
 
     if (politicalVideoEnabled && process.env.YOUTUBE_API_KEY?.trim()) {
-      if (process.env.POLITICAL_ML_PRELOAD !== 'false') {
-        preloadPoliticalClassifier().catch((e) =>
-          console.warn('[political-ml] preload failed (will retry on cron):', e.message),
-        );
+      const mlMode = isMlEnabled() ? 'ml+keywords' : 'keywords-only (set POLITICAL_ML_ENABLED=true on Railway for MiniLM)';
+      const shouldPreload =
+        isMlEnabled()
+        && (isRailway
+          ? process.env.POLITICAL_ML_PRELOAD === 'true'
+          : process.env.POLITICAL_ML_PRELOAD !== 'false');
+      if (shouldPreload) {
+        setTimeout(() => {
+          preloadPoliticalClassifier().catch((e) =>
+            console.warn('[political-ml] preload failed (will retry on cron):', e.message),
+          );
+        }, isRailway ? 120_000 : 15_000);
       }
       cron.schedule(politicalCronExpr, () => {
         runScheduledPoliticalVideo('political-cron').catch((e) =>
           console.error('[political-video] cron error:', e),
         );
       });
-      console.log(`[political-video] scheduler active with cron "${politicalCronExpr}"`);
-      if (politicalRunOnStart) {
+      console.log(`[political-video] scheduler active (${mlMode}) cron="${politicalCronExpr}"`);
+      if (politicalRunOnStart && !isRailway) {
         setTimeout(() => {
           runScheduledPoliticalVideo('political-startup').catch((e) =>
             console.error('[political-video] startup error:', e),

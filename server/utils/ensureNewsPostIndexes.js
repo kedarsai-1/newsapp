@@ -20,14 +20,23 @@ async function cleanupPhantomYoutubeFields() {
 
 async function ensureNewsPostIndexes() {
   const collection = NewsPost.collection;
+  const indexes = await collection.indexes();
+  const ytIdx = indexes.find((i) => i.name === 'youtube.videoId_1');
+  const hasCorrectPartial = Boolean(ytIdx?.partialFilterExpression);
 
-  try {
-    await collection.dropIndex('youtube.videoId_1');
-  } catch (err) {
-    const code = err?.code;
-    const msg = String(err?.message || '');
-    if (code !== 27 && !msg.includes('index not found') && !msg.includes('ns not found')) {
-      throw err;
+  if (hasCorrectPartial) {
+    return { cleaned: 0, skipped: true };
+  }
+
+  if (ytIdx) {
+    try {
+      await collection.dropIndex('youtube.videoId_1');
+    } catch (err) {
+      const code = err?.code;
+      const msg = String(err?.message || '');
+      if (code !== 27 && !msg.includes('index not found') && !msg.includes('ns not found')) {
+        throw err;
+      }
     }
   }
 
@@ -44,7 +53,7 @@ async function ensureNewsPostIndexes() {
     },
   );
 
-  return { cleaned };
+  return { cleaned, skipped: false };
 }
 
 module.exports = {

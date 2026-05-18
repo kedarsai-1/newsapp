@@ -4,7 +4,7 @@
  */
 const path = require('path');
 const fs = require('fs');
-const { env, pipeline } = require('@xenova/transformers');
+const { isRailwayHost } = require('../utils/isRailway');
 const {
   LABEL_PROTOTYPES,
   POLITICAL_LABELS,
@@ -23,13 +23,28 @@ const CACHE_FILE =
 let embedder = null;
 let prototypeVectors = null;
 let preloadPromise = null;
+let transformersModule = null;
 
-function configureEnv() {
+function isMlEnabled() {
+  if (process.env.POLITICAL_ML_ENABLED === 'false') return false;
+  if (process.env.POLITICAL_ML_ENABLED === 'true') return true;
+  return !isRailwayHost();
+}
+
+async function loadTransformers() {
+  if (!transformersModule) {
+    transformersModule = await import('@xenova/transformers');
+  }
+  return transformersModule;
+}
+
+function configureEnv(tf) {
+  const { env } = tf;
   env.cacheDir = process.env.TRANSFORMERS_CACHE_DIR
     || path.join(__dirname, '../.cache/transformers');
   env.backends.onnx.wasm.numThreads = Math.max(
     1,
-    Math.min(4, Number(process.env.TRANSFORMERS_THREADS || 1)),
+    Math.min(2, Number(process.env.TRANSFORMERS_THREADS || (isRailwayHost() ? 1 : 2))),
   );
 }
 
@@ -42,8 +57,9 @@ function tensorToVector(output) {
 
 async function getEmbedder() {
   if (embedder) return embedder;
-  configureEnv();
-  embedder = await pipeline('feature-extraction', MODEL_ID, {
+  const tf = await loadTransformers();
+  configureEnv(tf);
+  embedder = await tf.pipeline('feature-extraction', MODEL_ID, {
     quantized: true,
   });
   return embedder;
@@ -109,6 +125,9 @@ async function buildPrototypeVectors() {
  * Preload model + prototype embeddings (call on server boot or first cron).
  */
 function preloadPoliticalClassifier() {
+  if (!isMlEnabled()) {
+    return Promise.resolve();
+  }
   if (!preloadPromise) {
     preloadPromise = buildPrototypeVectors()
       .then(() => {
@@ -128,6 +147,16 @@ function preloadPoliticalClassifier() {
  */
 async function classifyVideosBatch(items) {
   if (!items.length) return [];
+  if (!isMlEnabled()) {
+    return items.map((item) => ({
+      ...item,
+      category: null,
+      confidence: 0,
+      method: 'ml',
+      accepted: false,
+      scores: {},
+    }));
+  }
 
   const prototypes = await buildPrototypeVectors();
   const texts = items.map((v) => normalizeText(v.title, v.description));
@@ -172,4 +201,5 @@ module.exports = {
   preloadPoliticalClassifier,
   classifyVideosBatch,
   buildPrototypeVectors,
+  isMlEnabled,
 };

@@ -86,8 +86,23 @@ const runYoutubeIngestionCron = async (req, res) => {
 
 const runPoliticalVideosCron = async (req, res) => {
   try {
-    const result = await runPoliticalVideoIngestion({ triggeredBy: 'api-cron:political-videos' });
-    return sendCronResult(res, result);
+    const triggeredBy = 'api-cron:political-videos';
+
+    setImmediate(() => {
+      runPoliticalVideoIngestion({ triggeredBy })
+        .then((result) => {
+          console.log('[political-video] background cron result:', JSON.stringify(result));
+        })
+        .catch((error) => {
+          console.error('[political-video] background cron failed:', error.message);
+        });
+    });
+
+    return res.status(202).json({
+      success: true,
+      accepted: true,
+      message: 'Political video ingestion started.',
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }

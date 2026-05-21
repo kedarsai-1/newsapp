@@ -176,11 +176,19 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
     saved: 0,
     blacklisted: 0,
     uncertain: 0,
+    mlUnavailable: null,
   };
 
   try {
-    if (isMlEnabled()) {
-      await preloadPoliticalClassifier();
+    let mlAvailable = isMlEnabled();
+    if (mlAvailable) {
+      try {
+        await preloadPoliticalClassifier();
+      } catch (e) {
+        mlAvailable = false;
+        stats.mlUnavailable = e.message;
+        console.warn('[political-video] ML unavailable, continuing keyword-only:', e.message);
+      }
     }
 
     const channels = getPoliticalYoutubeChannels();
@@ -224,25 +232,31 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
     }
 
     let mlAccepted = [];
-    if (uncertain.length && isMlEnabled()) {
+    if (uncertain.length && mlAvailable) {
       stats.mlClassified = uncertain.length;
-      const mlResults = await classifyVideosBatch(uncertain);
-      for (const r of mlResults) {
-        if (r.accepted && isPoliticalLabel(r.category)) {
-          mlAccepted.push({
-            video: r,
-            classification: {
-              category: r.category,
-              method: 'ml',
-              confidence: r.confidence,
-              language: r.language,
-            },
-          });
-          stats.mlAccepted += 1;
-          toEmbedCheck.push(r);
-        } else {
-          stats.rejected += 1;
+      try {
+        const mlResults = await classifyVideosBatch(uncertain);
+        for (const r of mlResults) {
+          if (r.accepted && isPoliticalLabel(r.category)) {
+            mlAccepted.push({
+              video: r,
+              classification: {
+                category: r.category,
+                method: 'ml',
+                confidence: r.confidence,
+                language: r.language,
+              },
+            });
+            stats.mlAccepted += 1;
+            toEmbedCheck.push(r);
+          } else {
+            stats.rejected += 1;
+          }
         }
+      } catch (e) {
+        stats.mlUnavailable = e.message;
+        stats.rejected += uncertain.length;
+        console.warn('[political-video] ML classification failed, continuing keyword-only:', e.message);
       }
     } else {
       stats.rejected += uncertain.length;

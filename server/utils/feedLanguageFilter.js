@@ -1,5 +1,5 @@
 /**
- * MongoDB language clause for feed/sports queries (ISO 639-1 + legacy franc tags).
+ * Prisma language clause for feed/sports queries (ISO 639-1 + legacy franc tags).
  * @param {string|null|undefined} langParam - e.g. en, te, hi; null = no filter
  */
 function buildLanguageClause(langParam) {
@@ -7,33 +7,32 @@ function buildLanguageClause(langParam) {
   const lang = String(langParam).toLowerCase();
   if (lang === 'en') {
     return {
-      $or: [
+      OR: [
         { language: 'en' },
-        { language: { $exists: false } },
         { language: null },
       ],
     };
   }
   if (lang === 'te') {
     return {
-      $or: [
+      OR: [
         { language: 'te' },
         { originalLanguage: 'tel' },
         {
           sourceName:
-            /eenadu|sakshi|tv9\s*telugu|tv9telugu|123telugu|mana\s*telangana|andhra\s*jyothy|v6\s*velugu|10tv|ntv\s*telugu|ntvtelugu/i,
+            { contains: 'telugu', mode: 'insensitive' },
         },
       ],
     };
   }
   if (lang === 'hi') {
     return {
-      $or: [
+      OR: [
         { language: 'hi' },
         { originalLanguage: 'hin' },
         {
           sourceName:
-            /news18\s*hindi|hindi\.news18|amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar\.com|jagran|abp\s*news|abplive/i,
+            { contains: 'hindi', mode: 'insensitive' },
         },
       ],
     };
@@ -41,12 +40,12 @@ function buildLanguageClause(langParam) {
   return { language: lang };
 }
 
-/** Apply language filter to a base Mongo query object. */
+/** Apply language filter to a base Prisma where object. */
 function applyLanguageFilter(query, langParam) {
   const clause = buildLanguageClause(langParam);
   if (!clause) return query;
   const next = { ...query };
-  next.$and = [...(next.$and || []), clause];
+  next.AND = [...(next.AND || []), clause];
   return next;
 }
 

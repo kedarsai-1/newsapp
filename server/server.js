@@ -1,16 +1,12 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-const cron = require('node-cron');
+// const cron = require('node-cron'); // Internal cron disabled; use /api/cron routes.
 require('dotenv').config();
-const { runIngestion } = require('./services/newsIngestionService');
+const { prisma } = require('./config/prisma');
 const { setIngestionSocket } = require('./services/feedSocket');
-const { runYoutubeIngestion } = require('./services/youtubeIngestionService');
-const { purgeOldNews } = require('./services/retentionCleanupService');
 const { ensureDefaultCategories } = require('./utils/ensureDefaultData');
-const { ensureNewsPostIndexes } = require('./utils/ensureNewsPostIndexes');
 
 const authRoutes = require('./routes/auth');
 const newsRoutes = require('./routes/news');
@@ -19,9 +15,7 @@ const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
 const sportsRoutes = require('./routes/sports');
 const politicalVideoRoutes = require('./routes/politicalVideos');
-const { runPoliticalVideoIngestion } = require('./services/politicalVideoIngestionService');
-const { preloadPoliticalClassifier, isMlEnabled } = require('./services/politicalVideoClassifierService');
-const { isRailwayHost } = require('./utils/isRailway');
+const cronRoutes = require('./routes/cron');
 
 const app = express();
 const server = http.createServer(app);
@@ -49,20 +43,22 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/sports', sportsRoutes);
 app.use('/api/political-videos', politicalVideoRoutes);
+app.use('/api/cron', cronRoutes);
 
-// Liveness — always 200 once HTTP is up (Railway health checks hit this before Mongo is ready).
+let dbReady = false;
+
+// Liveness — always 200 once HTTP is up (Railway health checks hit this before DB is ready).
 app.get('/api/health', (req, res) => {
-  const mongoState = mongoose.connection.readyState;
   res.json({
     status: 'OK',
-    mongo: mongoState === 1 ? 'connected' : mongoState === 2 ? 'connecting' : 'disconnected',
+    postgres: dbReady ? 'connected' : 'disconnected',
     timestamp: new Date(),
   });
 });
 
 // Readiness — 503 until DB is ready (optional; do not point Railway healthcheck here).
 app.get('/api/ready', (req, res) => {
-  if (mongoose.connection.readyState === 1) {
+  if (dbReady) {
     return res.json({ ready: true, timestamp: new Date() });
   }
   return res.status(503).json({ ready: false, timestamp: new Date() });
@@ -85,15 +81,16 @@ io.on('connection', (socket) => {
 });
 
 const port = Number(process.env.PORT) || 5000;
-const isRailway = isRailwayHost();
 
 server.listen(port, () => {
-  console.log(`Server listening on port ${port} (mongo connecting in background)`);
+  console.log(`Server listening on port ${port} (PostgreSQL connecting in background)`);
 });
 
 process.on('SIGTERM', () => {
   console.log('[shutdown] SIGTERM received, closing HTTP server…');
-  server.close(() => process.exit(0));
+  server.close(() => {
+    prisma.$disconnect().finally(() => process.exit(0));
+  });
   setTimeout(() => process.exit(1), 12_000).unref();
 });
 
@@ -101,250 +98,33 @@ let backgroundJobsStarted = false;
 
 async function runBackgroundJobs() {
   if (backgroundJobsStarted) return;
-  if (mongoose.connection.readyState !== 1) return;
+  if (!dbReady) return;
   backgroundJobsStarted = true;
 
-  console.log('MongoDB connected');
+  console.log('PostgreSQL connected');
   await ensureDefaultCategories();
-    try {
-      const { cleaned } = await ensureNewsPostIndexes();
-      if (cleaned > 0) {
-        console.log(`[db] removed phantom youtube field from ${cleaned} post(s)`);
-      }
-    } catch (e) {
-      console.error('[db] NewsPost index setup failed:', e?.message || e);
-    }
-    // Production default: every 5 minutes (safe + fresh).
-    const cronExpr = process.env.SCRAPER_CRON || '*/5 * * * *';
-    const scrapingEnabled = process.env.SCRAPER_ENABLED !== 'false';
-    const runOnStart = isRailway
-      ? process.env.SCRAPER_RUN_ON_START === 'true'
-      : process.env.SCRAPER_RUN_ON_START !== 'false';
 
-    // Retention cleanup (production): delete ingested news older than N days + Cloudinary assets.
-    const retentionEnabled = process.env.RETENTION_ENABLED !== 'false';
-    const retentionDays = Number(process.env.RETENTION_DAYS || 7);
-    // Daily at 03:10 server local time (low traffic).
-    const retentionCron = process.env.RETENTION_CRON || '10 3 * * *';
-    const retentionRunOnStart = process.env.RETENTION_RUN_ON_START === 'true';
+  console.log('[cron] internal node-cron scheduling disabled; use /api/cron/* endpoints.');
+}
 
-    async function runScheduledIngestion(triggeredBy) {
-      console.log(`[scraper] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
-      const result = await runIngestion({ triggeredBy });
-      if (result.skipped) {
-        console.log(`[scraper] skipped (${triggeredBy}): ${result.message || 'ingestion already running'}`);
-        return;
-      }
-      if (!result.success) {
-        if (result.stats?.timedOut) {
-          console.warn('[scraper] time budget hit:', result.error || result.message);
-        } else {
-          console.error('[scraper] run failed:', result.error || result.message);
-        }
-      } else {
-        const s = result.stats || {};
-        console.log(
-          `[scraper] run completed (${triggeredBy}): inserted=${s.inserted ?? 0} fetched=${s.fetched ?? 0} duplicates=${s.duplicates ?? 0} skippedNoImage=${s.skippedNoImage ?? 0} categoryFiltered=${s.categoryFiltered ?? 0} failed=${s.failed ?? 0}`,
-        );
-        if (s.sourceRuns?.length) {
-          console.log('[scraper] details:', JSON.stringify(s.sourceRuns));
-        }
-      }
-    }
-
-    if (scrapingEnabled) {
-      cron.schedule(cronExpr, () => {
-        runScheduledIngestion('scheduler').catch((e) =>
-          console.error('[scraper] scheduler error:', e),
-        );
-      });
-      console.log(
-        `[scraper] scheduler active with cron "${cronExpr}" (node-cron uses server local time)`,
-      );
-
-      // Cron does NOT run immediately — wait up to one interval for first fetch.
-      // Run once after startup so new GNews/NewsAPI posts appear without waiting.
-      if (runOnStart) {
-        setTimeout(() => {
-          runScheduledIngestion('startup').catch((e) =>
-            console.error('[scraper] startup ingestion error:', e),
-          );
-        }, 2500);
-        console.log('[scraper] will run ingestion once ~2s after startup (set SCRAPER_RUN_ON_START=false to disable)');
-      }
-    } else {
-      console.log('[scraper] scheduler disabled by SCRAPER_ENABLED=false');
-    }
-
-    const youtubeEnabled = process.env.YOUTUBE_ENABLED !== 'false';
-    const youtubeCronExpr = process.env.YOUTUBE_CRON || '*/15 * * * *';
-    const youtubeRunOnStart =
-      process.env.YOUTUBE_RUN_ON_START === 'true'
-      || (!isRailway && process.env.YOUTUBE_RUN_ON_START !== 'false');
-
-    async function runScheduledYoutube(triggeredBy) {
-      console.log(`[youtube] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
-      const result = await runYoutubeIngestion({ triggeredBy });
-      if (result.skipped) {
-        console.log(`[youtube] skipped (${triggeredBy}): ${result.message || ''}`);
-        return;
-      }
-      if (!result.success) {
-        console.error('[youtube] run failed:', result.error);
-        return;
-      }
-      const s = result.stats || {};
-      console.log(
-        `[youtube] run completed (${triggeredBy}): inserted=${s.youtubeInserted ?? 0} `
-          + `fetched=${s.youtubeFetched ?? 0} duplicates=${s.youtubeDuplicates ?? 0} `
-          + `restricted=${s.youtubeSkippedRestricted ?? 0}`,
-      );
-      if ((s.youtubeInserted ?? 0) > 0) {
-        io.to('all').emit('feed_updated', {
-          inserted: s.youtubeInserted,
-          at: new Date(),
-        });
-      }
-    }
-
-    if (youtubeEnabled && process.env.YOUTUBE_API_KEY?.trim()) {
-      cron.schedule(youtubeCronExpr, () => {
-        runScheduledYoutube('youtube-cron').catch((e) =>
-          console.error('[youtube] scheduler error:', e),
-        );
-      });
-      console.log(`[youtube] scheduler active with cron "${youtubeCronExpr}"`);
-      if (youtubeRunOnStart) {
-        setTimeout(() => {
-          runScheduledYoutube('youtube-startup').catch((e) =>
-            console.error('[youtube] startup error:', e),
-          );
-        }, 5000);
-      }
-    } else {
-      console.log('[youtube] scheduler disabled (YOUTUBE_ENABLED=false or missing YOUTUBE_API_KEY)');
-    }
-
-    const politicalVideoEnabled = process.env.POLITICAL_VIDEO_ENABLED !== 'false';
-    const politicalCronExpr = process.env.POLITICAL_VIDEO_CRON || '*/15 * * * *';
-    const politicalRunOnStart = process.env.POLITICAL_VIDEO_RUN_ON_START === 'true';
-
-    async function runScheduledPoliticalVideo(triggeredBy) {
-      console.log(`[political-video] ingestion start (${triggeredBy})`);
-      const result = await runPoliticalVideoIngestion({ triggeredBy });
-      if (result.skipped) {
-        console.log(`[political-video] skipped: ${result.message || ''}`);
-        return;
-      }
-      if (!result.success) {
-        console.error('[political-video] failed:', result.error);
-        return;
-      }
-      const s = result.stats || {};
-      console.log(
-        `[political-video] done: saved=${s.saved ?? 0} fetched=${s.fetched ?? 0} `
-          + `keyword=${s.keywordAccepted ?? 0} ml=${s.mlAccepted ?? 0}`,
-      );
-    }
-
-    if (politicalVideoEnabled && process.env.YOUTUBE_API_KEY?.trim()) {
-      const mlMode = isMlEnabled() ? 'ml+keywords' : 'keywords-only (set POLITICAL_ML_ENABLED=true on Railway for MiniLM)';
-      const shouldPreload =
-        isMlEnabled()
-        && (isRailway
-          ? process.env.POLITICAL_ML_PRELOAD === 'true'
-          : process.env.POLITICAL_ML_PRELOAD !== 'false');
-      if (shouldPreload) {
-        setTimeout(() => {
-          preloadPoliticalClassifier().catch((e) =>
-            console.warn('[political-ml] preload failed (will retry on cron):', e.message),
-          );
-        }, isRailway ? 120_000 : 15_000);
-      }
-      cron.schedule(politicalCronExpr, () => {
-        runScheduledPoliticalVideo('political-cron').catch((e) =>
-          console.error('[political-video] cron error:', e),
-        );
-      });
-      console.log(`[political-video] scheduler active (${mlMode}) cron="${politicalCronExpr}"`);
-      if (politicalRunOnStart && !isRailway) {
-        setTimeout(() => {
-          runScheduledPoliticalVideo('political-startup').catch((e) =>
-            console.error('[political-video] startup error:', e),
-          );
-        }, 8000);
-      }
-    } else {
-      console.log('[political-video] disabled');
-    }
-
-    async function runRetention(triggeredBy) {
-      try {
-        const out = await purgeOldNews({
-          retentionDays,
-          limit: Number(process.env.RETENTION_BATCH || 2000),
-          keepManual: true,
-          dryRun: process.env.RETENTION_DRY_RUN === 'true',
-        });
-        console.log(
-          `[retention] ${triggeredBy}: matched=${out.matched} deleted=${out.deletedPosts} cutoff=${out.cutoff.toISOString()}`,
-        );
-        if (out.matched) {
-          console.log(
-            `[retention] cloudinary images: attempted=${out.cloudinary.images.attempted} deleted=${out.cloudinary.images.deleted} skipped=${Boolean(out.cloudinary.images.skipped)}`,
-          );
-          console.log(
-            `[retention] cloudinary videos: attempted=${out.cloudinary.videos.attempted} deleted=${out.cloudinary.videos.deleted} skipped=${Boolean(out.cloudinary.videos.skipped)}`,
-          );
-        }
-      } catch (e) {
-        console.error('[retention] failed:', e);
-      }
-    }
-
-    if (retentionEnabled) {
-      cron.schedule(retentionCron, () => runRetention('scheduler'));
-      console.log(`[retention] active with cron "${retentionCron}" days=${retentionDays}`);
-      if (retentionRunOnStart) {
-        setTimeout(() => runRetention('startup'), 4500);
-        console.log('[retention] will run once on startup (RETENTION_RUN_ON_START=true)');
-      }
-  } else {
-    console.log('[retention] disabled by RETENTION_ENABLED=false');
+async function schedulePostgresConnect() {
+  if (!process.env.DATABASE_URL?.trim()) {
+    console.error('[db] DATABASE_URL is not set. Set it in Railway Variables or server/.env.');
+    return;
+  }
+  try {
+    await prisma.$connect();
+    await prisma.$queryRaw`SELECT 1`;
+    dbReady = true;
+    await runBackgroundJobs();
+  } catch (err) {
+    dbReady = false;
+    backgroundJobsStarted = false;
+    console.error('[db] PostgreSQL connection error, retry in 10s:', err?.message || err);
+    setTimeout(schedulePostgresConnect, 10_000).unref();
   }
 }
 
-const mongoUri = process.env.MONGO_URI?.trim();
-const mongoOpts = {
-  serverSelectionTimeoutMS: Number(process.env.MONGO_CONNECT_TIMEOUT_MS) || 20_000,
-};
-
-function scheduleMongoConnect() {
-  if (!mongoUri) return;
-  mongoose
-    .connect(mongoUri, mongoOpts)
-    .then(() => runBackgroundJobs().catch((e) => {
-      backgroundJobsStarted = false;
-      console.error('[startup] background jobs failed:', e?.message || e);
-    }))
-    .catch((err) => {
-      console.error('[mongo] connection error, retry in 10s:', err?.message || err);
-      setTimeout(scheduleMongoConnect, 10_000).unref();
-    });
-}
-
-if (!mongoUri) {
-  console.error('[mongo] MONGO_URI is not set — API routes need a database. Set it in Railway Variables.');
-} else {
-  mongoose.connection.on('disconnected', () => {
-    console.warn('[mongo] disconnected');
-    backgroundJobsStarted = false;
-  });
-  mongoose.connection.on('reconnected', () => {
-    console.log('[mongo] reconnected');
-    runBackgroundJobs().catch((e) => console.error('[startup] background jobs failed:', e));
-  });
-  scheduleMongoConnect();
-}
+schedulePostgresConnect();
 
 module.exports = { app, io };

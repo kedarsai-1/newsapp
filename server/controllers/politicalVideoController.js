@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
-const NewsPost = require('../models/NewsPost');
+const { prisma } = require('../config/prisma');
 const { POLITICAL_LABELS } = require('../config/politicalVideoConfig');
 const { runPoliticalVideoIngestion } = require('../services/politicalVideoIngestionService');
+const { serializeNewsPost } = require('../utils/serializers');
+const { newsPostInclude } = require('../utils/prismaNewsPost');
 
 function toClientRow(post) {
   const o = post.toObject ? post.toObject() : post;
@@ -36,39 +37,41 @@ const getPoliticalFeed = async (req, res) => {
       category,
     } = req.query;
 
-    const query = {
+    const where = {
       status: 'approved',
       sourceType: 'youtube',
-      'youtube.videoId': { $exists: true, $nin: [null, ''] },
-      videoCategory: { $in: POLITICAL_LABELS },
+      youtubeVideoId: { not: null },
+      videoCategory: { in: POLITICAL_LABELS },
     };
 
     if (language && String(language).toLowerCase() !== 'all') {
-      query.language = String(language).toLowerCase();
+      where.language = String(language).toLowerCase();
     }
     if (category && POLITICAL_LABELS.includes(String(category).toLowerCase())) {
-      query.videoCategory = String(category).toLowerCase();
+      where.videoCategory = String(category).toLowerCase();
     }
 
     const lim = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (Math.max(1, parseInt(page, 10) || 1) - 1) * lim;
 
     const [rows, total] = await Promise.all([
-      NewsPost.find(query)
-        .sort({ sourcePublishedAt: -1, createdAt: -1 })
-        .skip(skip)
-        .limit(lim)
-        .populate('category', 'name slug')
-        .lean(),
-      NewsPost.countDocuments(query),
+      prisma.newsPost.findMany({
+        where,
+        include: newsPostInclude,
+        orderBy: [{ sourcePublishedAt: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: lim,
+      }),
+      prisma.newsPost.count({ where }),
     ]);
 
-    const videos = rows.map(toClientRow);
+    const posts = rows.map(serializeNewsPost);
+    const videos = posts.map(toClientRow);
 
     return res.json({
       success: true,
       videos,
-      posts: rows,
+      posts,
       page: parseInt(page, 10) || 1,
       pages: Math.ceil(total / lim) || 1,
       total,

@@ -1,7 +1,7 @@
-const NewsPost = require('../models/NewsPost');
-const User = require('../models/User');
-const Category = require('../models/Category');
+const bcrypt = require('bcryptjs');
+const { Prisma, prisma } = require('../config/prisma');
 const { canonicalizeUrl, hashUrl, normalizeTitle } = require('../utils/storyDedupe');
+const { createNewsPost } = require('../utils/prismaNewsPost');
 const {
   getYoutubeSearchPlan,
   getYoutubeChannelsByLanguage,
@@ -91,23 +91,31 @@ function handleYoutubeQuotaHit(stats, context) {
 }
 
 async function ensureSystemReporter() {
-  let reporter = await User.findOne({ email: SYSTEM_REPORTER_EMAIL });
+  let reporter = await prisma.user.findUnique({ where: { email: SYSTEM_REPORTER_EMAIL } });
   if (!reporter) {
-    reporter = await User.create({
-      name: 'News Ingestion Bot',
-      email: SYSTEM_REPORTER_EMAIL,
-      password: SYSTEM_REPORTER_PASSWORD,
-      role: 'reporter',
-      isVerified: true,
+    reporter = await prisma.user.create({
+      data: {
+        name: 'News Ingestion Bot',
+        email: SYSTEM_REPORTER_EMAIL,
+        password: await bcrypt.hash(SYSTEM_REPORTER_PASSWORD, 10),
+        role: 'reporter',
+        isVerified: true,
+      },
     });
   }
   return reporter;
 }
 
 async function getCategoryBySlug(slug) {
-  let category = await Category.findOne({ slug: slug || DEFAULT_CATEGORY_SLUG, isActive: true });
+  let category = await prisma.category.findFirst({
+    where: { slug: slug || DEFAULT_CATEGORY_SLUG, isActive: true },
+    orderBy: { order: 'asc' },
+  });
   if (!category) {
-    category = await Category.findOne({ isActive: true }).sort({ order: 1, createdAt: 1 });
+    category = await prisma.category.findFirst({
+      where: { isActive: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
   }
   if (!category) {
     throw new Error('No active category found. Seed categories before running YouTube ingestion.');
@@ -117,12 +125,12 @@ async function getCategoryBySlug(slug) {
 
 async function isYoutubeDuplicate(videoId, item) {
   if (videoId) {
-    if (await NewsPost.exists({ 'youtube.videoId': videoId })) return true;
+    if (await prisma.newsPost.findFirst({ where: { youtubeVideoId: videoId }, select: { id: true } })) return true;
   }
   const canonical = canonicalizeUrl(item?.sourceUrl || watchUrl(videoId));
   if (canonical) {
     const sourceUrlHash = hashUrl(canonical);
-    if (await NewsPost.exists({ sourceUrlHash })) return true;
+    if (await prisma.newsPost.findFirst({ where: { sourceUrlHash }, select: { id: true } })) return true;
   }
   return false;
 }
@@ -268,8 +276,8 @@ function toYoutubePostDoc(item, reporterId, categoryId, sourceName) {
     title: item.title.slice(0, 200),
     body: item.body || item.title,
     summary: item.summary,
-    reporter: reporterId,
-    category: categoryId,
+    reporterId,
+    categoryId,
     media: [{
       type: 'video',
       url: y.watchUrl,
@@ -317,8 +325,16 @@ async function insertNormalizedItem(item, reporter, stats) {
 
   const category = await getCategoryBySlug(normalized.categorySlug);
   const label = `YouTube · ${normalized.youtube.channelTitle}`;
-  const doc = toYoutubePostDoc(normalized, reporter._id, category._id, label);
-  await NewsPost.create(doc);
+  const doc = toYoutubePostDoc(normalized, reporter.id, category.id, label);
+  try {
+    await createNewsPost(doc);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      stats.youtubeDuplicates += 1;
+      return false;
+    }
+    throw error;
+  }
   stats.youtubeInserted += 1;
   stats.inserted += 1;
   return true;

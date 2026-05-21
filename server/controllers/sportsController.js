@@ -1,9 +1,9 @@
-const mongoose = require('mongoose');
-const Category = require('../models/Category');
-const NewsPost = require('../models/NewsPost');
+const { prisma } = require('../config/prisma');
 const memoryCache = require('../utils/memoryCache');
 const { applyLanguageFilter } = require('../utils/feedLanguageFilter');
 const cricApi = require('../services/cricApiService');
+const { serializeNewsPost } = require('../utils/serializers');
+const { newsPostInclude } = require('../utils/prismaNewsPost');
 
 const TTL_NEWS_MS = 10 * 60 * 1000;
 
@@ -37,10 +37,11 @@ async function resolveSportsCategoryId() {
   const cacheKey = 'sports:categoryId';
   const hit = memoryCache.get(cacheKey);
   if (hit) return hit;
-  const cat = await Category.findOne({ slug: 'sports', isActive: true })
-    .select('_id')
-    .lean();
-  const id = cat?._id ? String(cat._id) : null;
+  const cat = await prisma.category.findFirst({
+    where: { slug: 'sports', isActive: true },
+    select: { id: true },
+  });
+  const id = cat?.id ? String(cat.id) : null;
   memoryCache.set(cacheKey, id, TTL_NEWS_MS);
   return id;
 }
@@ -140,28 +141,30 @@ const getNews = async (req, res) => {
 
     const categoryId = await resolveSportsCategoryId();
     let query = { status: 'approved' };
-    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
-      query.category = new mongoose.Types.ObjectId(categoryId);
+    if (categoryId) {
+      query.categoryId = categoryId;
     } else {
-      query.$or = [
-        { tags: /cricket|ipl|sports|wpl|t20|odi/i },
-        { title: /cricket|ipl|wpl|t20|odi/i },
+      query.OR = [
+        { tags: { hasSome: ['cricket', 'ipl', 'sports', 'wpl', 't20', 'odi'] } },
+        { title: { contains: 'cricket', mode: 'insensitive' } },
+        { title: { contains: 'ipl', mode: 'insensitive' } },
       ];
     }
     query = applyLanguageFilter(query, langParam);
 
     const skip = (page - 1) * limit;
     const [posts, total] = await Promise.all([
-      NewsPost.find(query)
-        .sort({ sourcePublishedAt: -1, createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('category', 'name slug')
-        .lean(),
-      NewsPost.countDocuments(query),
+      prisma.newsPost.findMany({
+        where: query,
+        include: newsPostInclude,
+        orderBy: [{ sourcePublishedAt: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      prisma.newsPost.count({ where: query }),
     ]);
 
-    const items = posts.map(normalizeNewsPost);
+    const items = posts.map((post) => normalizeNewsPost(serializeNewsPost(post)));
     const pages = Math.ceil(total / limit) || 1;
     const payload = {
       success: true,

@@ -2,10 +2,7 @@
 [variables]
 NPM_CONFIG_CACHE = "/tmp/npm-cache"
 NODE_ENV = "production"
-# Avoid heavy RSS/YouTube/ML during deploy on small Railway instances (512MB).
-SCRAPER_RUN_ON_START = "false"
-YOUTUBE_RUN_ON_START = "false"
-POLITICAL_VIDEO_RUN_ON_START = "false"
+# Avoid heavy ML preload during deploy on small Railway instances (512MB).
 POLITICAL_ML_PRELOAD = "false"
 POLITICAL_ML_ENABLED = "false"
 INGEST_MAX_RUNTIME_MS = "360000"

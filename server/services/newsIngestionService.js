@@ -1,4 +1,5 @@
-const NewsPost = require('../models/NewsPost');
+const bcrypt = require('bcryptjs');
+const { Prisma, prisma } = require('../config/prisma');
 const {
   canonicalizeUrl,
   hashUrl,
@@ -8,8 +9,7 @@ const {
   summariesAreNearDuplicates,
 } = require('../utils/storyDedupe');
 const { passesIngestCategoryGate } = require('../utils/categoryRelevance');
-const User = require('../models/User');
-const Category = require('../models/Category');
+const { createNewsPost } = require('../utils/prismaNewsPost');
 const {
   fetchNewsApiItems,
   fetchGNewsItems,
@@ -24,8 +24,9 @@ const {
   normalizeRssItem,
   resolveGoogleNewsPublisherUrl,
   summarizeInputFromItem,
+  collectPlainTextForSummary,
   detectLanguage,
-  prepareForHfSummaryFromRssItem,
+  prepareForSummaryFromIngestItem,
   prepareForSummarization,
   summarizeForRssIngest,
   translateEnglishToFeedLanguage,
@@ -447,23 +448,31 @@ async function rehostExternalImageToCloudinary(imageUrl, { referer } = {}) {
 }
 
 async function ensureSystemReporter() {
-  let reporter = await User.findOne({ email: SYSTEM_REPORTER_EMAIL });
+  let reporter = await prisma.user.findUnique({ where: { email: SYSTEM_REPORTER_EMAIL } });
   if (!reporter) {
-    reporter = await User.create({
-      name: 'News Ingestion Bot',
-      email: SYSTEM_REPORTER_EMAIL,
-      password: SYSTEM_REPORTER_PASSWORD,
-      role: 'reporter',
-      isVerified: true,
+    reporter = await prisma.user.create({
+      data: {
+        name: 'News Ingestion Bot',
+        email: SYSTEM_REPORTER_EMAIL,
+        password: await bcrypt.hash(SYSTEM_REPORTER_PASSWORD, 10),
+        role: 'reporter',
+        isVerified: true,
+      },
     });
   }
   return reporter;
 }
 
 async function getCategoryBySlug(slug) {
-  let category = await Category.findOne({ slug: slug || DEFAULT_CATEGORY_SLUG, isActive: true });
+  let category = await prisma.category.findFirst({
+    where: { slug: slug || DEFAULT_CATEGORY_SLUG, isActive: true },
+    orderBy: { order: 'asc' },
+  });
   if (!category) {
-    category = await Category.findOne({ isActive: true }).sort({ order: 1, createdAt: 1 });
+    category = await prisma.category.findFirst({
+      where: { isActive: true },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+    });
   }
   if (!category) {
     throw new Error('No active category found. Seed categories before running ingestion.');
@@ -479,30 +488,36 @@ async function isDuplicate(item) {
   const canonical = canonicalizeUrl(item.sourceUrl);
   if (canonical) {
     const sourceUrlHash = hashUrl(canonical);
-    if (await NewsPost.exists({ sourceUrlHash, ...langClause })) return true;
+    if (await prisma.newsPost.findFirst({ where: { sourceUrlHash, ...langClause }, select: { id: true } })) return true;
   }
 
   const fp = titleFingerprint(item.title);
-  if (fp && await NewsPost.exists({ titleFingerprint: fp, ...langClause })) return true;
+  if (fp && await prisma.newsPost.findFirst({ where: { titleFingerprint: fp, ...langClause }, select: { id: true } })) return true;
 
   const sumFp = summaryFingerprint(item.summary);
-  if (sumFp && await NewsPost.exists({ summaryFingerprint: sumFp, ...langClause })) return true;
+  if (sumFp && await prisma.newsPost.findFirst({ where: { summaryFingerprint: sumFp, ...langClause }, select: { id: true } })) return true;
 
   const titleNorm = normalizeTitle(item.title);
   if (titleNorm.length >= 8) {
-    if (await NewsPost.exists({
-      titleNormalized: titleNorm,
-      createdAt: { $gte: windowStart },
-      ...langClause,
+    if (await prisma.newsPost.findFirst({
+      where: {
+        titleNormalized: titleNorm,
+        createdAt: { gte: windowStart },
+        ...langClause,
+      },
+      select: { id: true },
     })) {
       return true;
     }
   }
 
-  const existsByExactTitle = await NewsPost.exists({
-    title: item.title,
-    createdAt: { $gte: windowStart },
-    ...langClause,
+  const existsByExactTitle = await prisma.newsPost.findFirst({
+    where: {
+      title: item.title,
+      createdAt: { gte: windowStart },
+      ...langClause,
+    },
+    select: { id: true },
   });
   return !!existsByExactTitle;
 }
@@ -512,8 +527,8 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     title: item.title.slice(0, 200),
     body: item.body || item.title,
     summary: item.summary,
-    reporter: reporterId,
-    category: categoryId,
+    reporterId,
+    categoryId,
     media: item.mediaUrl ? [{ type: 'image', url: item.mediaUrl }] : [],
     status: SCRAPER_AUTO_APPROVE ? 'approved' : 'pending',
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
@@ -545,6 +560,28 @@ function summarizeForPost(text) {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
   if (!t) return null;
   return t.length > 280 ? `${t.slice(0, 277)}...` : t;
+}
+
+/** AI/extractive summary for ingest; respects budget and RSS_SKIP_AI_SUMMARY only. */
+async function summarizeIngestItem({
+  item,
+  rawRssItem = null,
+  feedLang = 'en',
+  budget = null,
+}) {
+  if (process.env.RSS_SKIP_AI_SUMMARY === 'true') return '';
+  if (budget?.limitMs != null && budget.remainingMs() < 45_000) return '';
+  const prep = prepareForSummaryFromIngestItem(item, rawRssItem);
+  if (!prep.textForSummary) return '';
+  try {
+    return await summarizeForRssIngest(
+      prep.textForSummary,
+      prep.originalLang,
+      feedLang,
+    );
+  } catch {
+    return '';
+  }
 }
 
 function getIngestPlans() {
@@ -714,8 +751,18 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                 continue;
               }
 
+              let apiSummary = item.summary;
+              const apiAiSummary = await summarizeIngestItem({
+                item,
+                feedLang: ingestLang,
+                budget,
+              });
+              if (apiAiSummary && String(apiAiSummary).trim()) {
+                apiSummary = String(apiAiSummary).trim();
+              }
+
               // Re-host external thumbnails on Cloudinary for reliability (no hotlink blocking).
-              let postFields = item;
+              let postFields = { ...item, summary: apiSummary };
               let mediaUrl = item.mediaUrl;
               if (mediaUrl && isUnusableFeedImageUrl(mediaUrl)) mediaUrl = null;
               if (!mediaUrl && item.sourceUrl) {
@@ -735,8 +782,16 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
               const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
               const { apiSourceName, ...postDocFields } = postFields;
-              await NewsPost.create(toPostDoc(postDocFields, reporter._id, category._id, label));
-              stats.inserted += 1;
+              try {
+                await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
+                stats.inserted += 1;
+              } catch (error) {
+                if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                  stats.duplicates += 1;
+                  continue;
+                }
+                throw error;
+              }
             }
 
             stats.sourceRuns.push({
@@ -870,11 +925,13 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               stats.categoryFiltered += 1;
               continue;
             }
-            const prep = prepareForHfSummaryFromRssItem(raw);
+            const prep = prepareForSummaryFromIngestItem(item, raw);
             const summaryInput = prep.textForSummary;
             const originalLang = prep.originalLang;
-            const fallbackSummary = String(item.summary || summarizeInputFromItem(raw)).slice(0, 150).trim();
-            const budgetTight = budget.limitMs != null && budget.remainingMs() < 120_000;
+            const fallbackSummary = summarizeForPost(
+              collectPlainTextForSummary(item.body, summarizeInputFromItem(raw), item.title),
+            ) || String(item.summary || '').trim();
+            const budgetTight = budget.limitMs != null && budget.remainingMs() < 45_000;
             let displayTitle = item.title;
             if (
               ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
@@ -891,11 +948,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
             }
 
             let summaryPrimary = '';
-            const skipAiSummary =
-              budgetTight
-              || fallbackSummary.length >= 120
-              || process.env.RSS_SKIP_AI_SUMMARY === 'true';
-            if (summaryInput && !skipAiSummary) {
+            if (summaryInput && process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
               try {
                 // eslint-disable-next-line no-await-in-loop
                 summaryPrimary = await summarizeForRssIngest(
@@ -976,13 +1029,18 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
               } catch { /* ignore */ }
             }
 
-            // RSS feeds sometimes provide only a one-line snippet.
-            // Enrich short bodies from the source URL so article detail isn't one-liner.
+            // Enrich short bodies from the source URL (full article → better AI summary).
+            const bodyTooShort = String(postFields.body || '').trim().length < 400;
+            const enrichForSummary =
+              process.env.RSS_ENRICH_FOR_SUMMARY !== 'false' && bodyTooShort;
             const shouldEnrichBody =
               !budgetTight
-              && process.env.RSS_ENRICH_BODY !== 'false'
               && postFields.sourceUrl
-              && String(postFields.body || '').trim().length < 260;
+              && bodyTooShort
+              && (
+                process.env.RSS_ENRICH_BODY !== 'false'
+                || enrichForSummary
+              );
             if (shouldEnrichBody) {
               try {
                 // eslint-disable-next-line no-await-in-loop
@@ -992,44 +1050,43 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
                   cacheTtlMs: Number(process.env.RSS_ENRICH_CACHE_TTL_MS || 30 * 60 * 1000),
                 });
                 const full = String(ext?.text || '').replace(/\s+/g, ' ').trim();
-                if (ext?.success && full.length > 320) {
-                  let summaryAfterEnrich = (summaryPrimary && String(summaryPrimary).trim())
-                    ? String(summaryPrimary).trim()
-                    : null;
-                  if (!summaryAfterEnrich) {
-                    const chunk = full.slice(0, 1000).trim();
-                    if (chunk.length >= 40) {
-                      try {
-                        const prepChunk = prepareForSummarization(chunk);
-                        if (prepChunk.textForSummary.length >= 40) {
-                          // eslint-disable-next-line no-await-in-loop
-                          const s2 = await summarizeForRssIngest(
-                            prepChunk.textForSummary,
-                            prepChunk.originalLang,
-                            feed.language || '',
-                          );
-                          if (s2 && String(s2).trim()) summaryAfterEnrich = String(s2).trim();
-                        }
-                        if (
-                          (!postFields.originalLanguage || postFields.originalLanguage === 'und')
-                          && prepChunk.originalLang
-                          && prepChunk.originalLang !== 'und'
-                        ) {
-                          postFields = { ...postFields, originalLanguage: prepChunk.originalLang };
-                        }
-                      } catch (e) {
-                        stats.fallbacks += 1;
-                        console.warn(
-                          `[rss] summary after enrich (${feed.name || 'RSS'}): ${e?.message || e}`,
+                if (ext?.success && full.length >= 80) {
+                  let summaryAfterEnrich = '';
+                  if (process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
+                    try {
+                      const prepFull = prepareForSummarization(full);
+                      if (prepFull.textForSummary) {
+                        // eslint-disable-next-line no-await-in-loop
+                        summaryAfterEnrich = await summarizeForRssIngest(
+                          prepFull.textForSummary,
+                          prepFull.originalLang,
+                          feed.language || '',
                         );
                       }
+                      if (
+                        (!postFields.originalLanguage || postFields.originalLanguage === 'und')
+                        && prepFull.originalLang
+                        && prepFull.originalLang !== 'und'
+                      ) {
+                        postFields = { ...postFields, originalLanguage: prepFull.originalLang };
+                      }
+                    } catch (e) {
+                      stats.fallbacks += 1;
+                      console.warn(
+                        `[rss] summary after enrich (${feed.name || 'RSS'}): ${e?.message || e}`,
+                      );
                     }
                   }
-                  if (!summaryAfterEnrich) summaryAfterEnrich = summarizeForPost(full);
+                  if (!summaryAfterEnrich || !String(summaryAfterEnrich).trim()) {
+                    summaryAfterEnrich =
+                      (summaryPrimary && String(summaryPrimary).trim())
+                      || summarizeForPost(full)
+                      || fallbackSummary;
+                  }
                   postFields = {
                     ...postFields,
                     body: full.slice(0, 10000),
-                    summary: summaryAfterEnrich,
+                    summary: String(summaryAfterEnrich).trim(),
                   };
                 }
               } catch { /* ignore */ }
@@ -1059,9 +1116,17 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
             const label = `RSS · ${feed.name || 'RSS'}`;
             const { apiSourceName, ...postDocFields } = postFields;
-            await NewsPost.create(toPostDoc(postDocFields, reporter._id, category._id, label));
-            stats.inserted += 1;
-            insertedThisFeed += 1;
+            try {
+              await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
+              stats.inserted += 1;
+              insertedThisFeed += 1;
+            } catch (error) {
+              if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                stats.duplicates += 1;
+                continue;
+              }
+              throw error;
+            }
           }
 
           console.log(

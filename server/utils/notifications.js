@@ -13,6 +13,7 @@ try {
   }
 } catch (e) {
   console.warn('Firebase not configured — push notifications disabled.');
+  admin = null;
 }
 
 // Send to a single device

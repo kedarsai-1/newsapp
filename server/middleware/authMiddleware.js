@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { prisma } = require('../config/prisma');
+const { serializeUser } = require('../utils/serializers');
 
 // Verify JWT token
 const protect = async (req, res, next) => {
@@ -14,7 +15,7 @@ const protect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'User not found.' });
@@ -24,7 +25,7 @@ const protect = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Account suspended.' });
     }
 
-    req.user = user;
+    req.user = serializeUser(user);
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
@@ -45,8 +46,8 @@ const optionalProtect = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select('-password');
-    req.user = user && user.isActive ? user : null;
+    const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+    req.user = user && user.isActive ? serializeUser(user) : null;
     next();
   } catch (_) {
     req.user = null;

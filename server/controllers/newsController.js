@@ -1,8 +1,4 @@
-const mongoose = require('mongoose');
-const NewsPost = require('../models/NewsPost');
-const User = require('../models/User');
-const Category = require('../models/Category');
-const Comment = require('../models/Comment');
+const { Prisma, prisma } = require('../config/prisma');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const {
   canonicalizeUrl,
@@ -16,6 +12,11 @@ const { extractReadableArticle } = require('../services/articleExtractionService
 const { translateTextForFeed } = require('../services/rssService');
 const { filterPostsForCategory } = require('../utils/categoryRelevance');
 const { POLITICAL_LABELS } = require('../config/politicalVideoConfig');
+const {
+  serializeNewsPost,
+  serializeComment,
+} = require('../utils/serializers');
+const { newsPostInclude } = require('../utils/prismaNewsPost');
 
 function cleanTextForClient(input) {
   return String(input || '')
@@ -30,7 +31,6 @@ function cleanTextForClient(input) {
     .trim();
 }
 
-/** Same filter as find(), but with ObjectId fields cast for aggregation $match. */
 function titleWordSet(title) {
   const norm = normalizeTitle(title);
   if (!norm) return new Set();
@@ -79,58 +79,59 @@ function dedupeFeedPosts(rows) {
   return out;
 }
 
+function containsInsensitive(value) {
+  return { contains: String(value), mode: 'insensitive' };
+}
+
+function languageWhere(langParam) {
+  if (!langParam) return null;
+  const lang = String(langParam).toLowerCase();
+  if (lang === 'en') {
+    return { OR: [{ language: 'en' }, { language: null }] };
+  }
+  if (lang === 'te') {
+    return {
+      OR: [
+        { language: 'te' },
+        { originalLanguage: 'tel' },
+        { sourceName: containsInsensitive('telugu') },
+        { sourceName: containsInsensitive('eenadu') },
+        { sourceName: containsInsensitive('sakshi') },
+      ],
+    };
+  }
+  if (lang === 'hi') {
+    return {
+      OR: [
+        { language: 'hi' },
+        { originalLanguage: 'hin' },
+        { sourceName: containsInsensitive('hindi') },
+        { sourceName: containsInsensitive('amar ujala') },
+        { sourceName: containsInsensitive('jagran') },
+        { sourceName: containsInsensitive('abp') },
+      ],
+    };
+  }
+  return { language: lang };
+}
+
 /** Politics tab scope filters — keeps AP/TG out of India/International buckets. */
-function politicsScopeMatchClause(scope, langParam) {
+function politicsScopeWhere(scope, langParam) {
   const ps = String(scope || '').toLowerCase().trim();
   if (!ps || ps === 'all') return null;
 
-  const regional = ['andhra', 'telangana', 'north', 'states', 'delhi'];
   if (ps === 'india') {
-    const indiaTitle =
-      /మోదీ|రాహుల్|కేంద్ర|లోక్‌సభ|రాజ్యసభ|ఢిల్లీ|జాతీయ|పార్లమెంట్|మంత్రిమండలి|मोदी|राहुल|संसद|लोकसभा|चुनाव|मंत्री|modi|rahul|parliament|lok sabha|election|minister|cabinet|bjp|congress/i;
-    const orBranches = [
-      { politicsScope: 'india' },
-      { politicsScope: 'all' },
-      {
-        politicsScope: { $nin: [...regional, 'international'] },
-        title: indiaTitle,
-      },
-    ];
-    if (langParam === 'te') {
-      orBranches.push({
-        language: 'te',
-        politicsScope: { $nin: [...regional, 'international'] },
-        sourceName: /tv9\s*telugu\s*-\s*politics|eenadu.*politics|sakshi.*politics/i,
-      });
-    }
-    if (langParam === 'hi') {
-      orBranches.push(
-        {
-          politicsScope: { $in: [null] },
-          $or: [
-            { sourceName: /abp\s*news\s*-\s*politics|bbc\s*hindi\s*-\s*india|indian\s*express|hindi/i },
-            { title: indiaTitle },
-          ],
-        },
-      );
-    }
-    return { $or: orBranches };
+    return { OR: [{ politicsScope: { in: ['india', 'all'] } }, { politicsScope: null }] };
   }
   if (ps === 'international') {
     return { politicsScope: 'international' };
   }
   if (ps === 'north') {
     return {
-      $or: [
-        { politicsScope: { $in: ['north', 'states', 'delhi'] } },
-        {
-          politicsScope: { $in: ['all', null] },
-          $or: [
-            { sourceName: /amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar|jagran|abp|prabhat\s*khabar|ndtv\s*khabar|abplive/i },
-            { title: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|uttar pradesh|punjab|haryana|rajasthan|bihar|lucknow|noida|ghaziabad|chandigarh/i },
-            { body: /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|uttar pradesh|punjab/i },
-          ],
-        },
+      OR: [
+        { politicsScope: { in: ['north', 'states', 'delhi'] } },
+        { title: containsInsensitive('uttar pradesh') },
+        { title: containsInsensitive('delhi') },
       ],
     };
   }
@@ -139,46 +140,24 @@ function politicsScopeMatchClause(scope, langParam) {
   }
   if (ps === 'andhra') {
     return {
-      $or: [
+      OR: [
         { politicsScope: 'andhra' },
-        {
-          politicsScope: { $in: ['all', null] },
-          $or: [
-            { sourceName: /andhra|amaravati|vijayawada|visakhapatnam|guntur|nellore|kurnool|eenadu|sakshi|tv9\s*telugu|andhra\s*jyothy|123telugu/i },
-            { title: /andhra|amaravati|ఆంధ్ర|విజయవాడ|విశాఖ/i },
-            { body: /andhra|amaravati|ఆంధ్ర/i },
-          ],
-        },
+        { title: containsInsensitive('andhra') },
+        { body: containsInsensitive('andhra') },
       ],
     };
   }
   if (ps === 'telangana') {
     return {
-      $or: [
+      OR: [
         { politicsScope: 'telangana' },
-        {
-          politicsScope: { $in: ['all', null] },
-          $or: [
-            { sourceName: /telangana|hyderabad|warangal|karimnagar|nizamabad|mana\s*telangana|v6\s*velugu|ntv\s*telugu/i },
-            { title: /telangana|hyderabad|తెలంగాణ|హైదరాబాద్/i },
-            { body: /telangana|hyderabad|తెలంగాణ/i },
-          ],
-        },
+        { title: containsInsensitive('telangana') },
+        { title: containsInsensitive('hyderabad') },
+        { body: containsInsensitive('telangana') },
       ],
     };
   }
   return null;
-}
-
-function feedMatchForAggregate(query) {
-  const m = { ...query };
-  if (m.category != null) {
-    const id = String(m.category);
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      m.category = new mongoose.Types.ObjectId(id);
-    }
-  }
-  return m;
 }
 
 function sanitizeStoryTextFields(post) {
@@ -235,11 +214,12 @@ const getFeed = async (req, res) => {
       politicalOnly,
     } = req.query;
 
-    const query = { status: 'approved' };
+    const where = { status: 'approved' };
+    const andFilters = [];
     if (String(politicalOnly || '').toLowerCase() === 'true') {
-      query.videoCategory = { $in: POLITICAL_LABELS };
-      query.sourceType = 'youtube';
-      query['youtube.videoId'] = { $exists: true, $nin: [null, ''] };
+      where.videoCategory = { in: POLITICAL_LABELS };
+      where.sourceType = 'youtube';
+      where.youtubeVideoId = { not: null };
     }
     let categorySlugFilter = null;
     let politicsCategoryId = null;
@@ -247,30 +227,28 @@ const getFeed = async (req, res) => {
 
     // Shorts / video feeds: only posts that include at least one video asset.
     if (String(hasVideo || '').toLowerCase() === 'true') {
-      query.media = {
-        $elemMatch: {
-          type: 'video',
-          url: { $exists: true, $nin: [null, ''] },
-        },
-      };
+      andFilters.push({
+        OR: [
+          { media: { some: { type: 'video', url: { not: '' } } } },
+          { youtubeVideoId: { not: null } },
+        ],
+      });
     }
     if (category) {
-      query.category = category;
-      if (mongoose.Types.ObjectId.isValid(String(category))) {
-        politicsCategoryId = new mongoose.Types.ObjectId(String(category));
-        const catDoc = await Category.findById(category).select('slug').lean();
+      where.categoryId = String(category);
+      if (String(category).length >= 20) {
+        politicsCategoryId = String(category);
+        const catDoc = await prisma.category.findUnique({ where: { id: String(category) }, select: { slug: true } });
         categorySlugFilter = catDoc?.slug ? String(catDoc.slug).toLowerCase() : null;
         if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
-          const localCat = await Category.findOne({ slug: 'local', isActive: true })
-            .select('_id')
-            .lean();
-          if (localCat?._id) localCategoryId = localCat._id;
+          const localCat = await prisma.category.findFirst({ where: { slug: 'local', isActive: true }, select: { id: true } });
+          if (localCat?.id) localCategoryId = localCat.id;
         }
       }
     }
-    if (city) query['location.city'] = new RegExp(city, 'i');
+    if (city) where.locationCity = containsInsensitive(city);
     if (constituency && String(constituency).trim().toLowerCase() !== 'all') {
-      query.constituency = new RegExp(`^${String(constituency).trim()}$`, 'i');
+      where.constituency = { equals: String(constituency).trim(), mode: 'insensitive' };
     }
     const langParam =
       language && String(language).toLowerCase() !== 'all'
@@ -279,8 +257,8 @@ const getFeed = async (req, res) => {
 
     const politicsScopeParam = String(politicsScope || '').toLowerCase().trim();
 
-    if (breaking === 'true') query.isBreaking = true;
-    if (featured === 'true') query.isFeatured = true;
+    if (breaking === 'true') where.isBreaking = true;
+    if (featured === 'true') where.isFeatured = true;
 
     // Restrict feed to specific sources (e.g. NewsAPI + reporter/manual).
     // Example: ?sourceTypes=api,manual
@@ -294,66 +272,26 @@ const getFeed = async (req, res) => {
       if (list.length) {
         // Treat missing/null sourceType as "manual" (older docs may not have it).
         if (list.includes('manual')) {
-          query.$and = [
-            ...(query.$and || []),
-            {
-              $or: [
-                { sourceType: { $in: list } },
-                { sourceType: { $exists: false } },
-                { sourceType: null },
-              ],
-            },
-          ];
+          andFilters.push({ OR: [{ sourceType: { in: list } }, { sourceType: null }] });
         } else {
-          query.sourceType = { $in: list };
+          where.sourceType = { in: list };
         }
       }
     }
 
     const searchOr = search
       ? [
-          { title: new RegExp(search, 'i') },
-          { body: new RegExp(search, 'i') },
-          { tags: new RegExp(search, 'i') },
+          { title: containsInsensitive(search) },
+          { body: containsInsensitive(search) },
+          { sourceName: containsInsensitive(search) },
         ]
       : null;
 
     /** ISO 639-1 feed filter + franc ISO 639-3 (`tel`/`hin`) so RSS/API rows still match. */
-    const languageClause = (() => {
-      if (!langParam) return null;
-      if (langParam === 'en') {
-        return {
-          $or: [
-            { language: 'en' },
-            { language: { $exists: false } },
-            { language: null },
-          ],
-        };
-      }
-      if (langParam === 'te') {
-        return {
-          $or: [
-            { language: 'te' },
-            { originalLanguage: 'tel' },
-            // Legacy rows: Telugu publishers tagged before language field was set.
-            { sourceName: /eenadu|sakshi|tv9\s*telugu|tv9telugu|123telugu|mana\s*telangana|andhra\s*jyothy|v6\s*velugu|10tv|ntv\s*telugu|ntvtelugu/i },
-          ],
-        };
-      }
-      if (langParam === 'hi') {
-        return {
-          $or: [
-            { language: 'hi' },
-            { originalLanguage: 'hin' },
-            { sourceName: /news18\s*hindi|hindi\.news18|amar\s*ujala|amarujala|dainik\s*bhaskar|bhaskar\.com|jagran|abp\s*news|abplive/i },
-          ],
-        };
-      }
-      return { language: langParam };
-    })();
+    const languageClause = languageWhere(langParam);
 
-    const filterAnd = [...(query.$and || [])];
-    if (searchOr) filterAnd.push({ $or: searchOr });
+    const filterAnd = [...andFilters];
+    if (searchOr) filterAnd.push({ OR: searchOr });
     if (languageClause) filterAnd.push(languageClause);
     const ps = politicsScopeParam;
     const regionalPolitics = ps === 'andhra' || ps === 'telangana' || ps === 'north';
@@ -367,31 +305,31 @@ const getFeed = async (req, res) => {
         || (langParam === 'en' && enHiScopes.has(ps))
         || (langParam !== 'te' && langParam !== 'en' && langParam !== 'hi');
       if (scopeOk) {
-        const scopeClause = politicsScopeMatchClause(ps, langParam);
+        const scopeClause = politicsScopeWhere(ps, langParam);
         if (
           regionalPolitics
           && categorySlugFilter === 'politics'
           && politicsCategoryId
           && localCategoryId
         ) {
-          delete query.category;
+          delete where.categoryId;
           const localBranch =
             ps === 'north'
-              ? { category: localCategoryId, politicsScope: { $in: ['north', 'states', 'delhi'] } }
-              : { category: localCategoryId, politicsScope: ps };
+              ? { categoryId: localCategoryId, politicsScope: { in: ['north', 'states', 'delhi'] } }
+              : { categoryId: localCategoryId, politicsScope: ps };
           const orBranches = [
             scopeClause
-              ? { $and: [{ category: politicsCategoryId }, scopeClause] }
-              : { category: politicsCategoryId },
+              ? { AND: [{ categoryId: politicsCategoryId }, scopeClause] }
+              : { categoryId: politicsCategoryId },
             localBranch,
           ];
-          filterAnd.push({ $or: orBranches });
+          filterAnd.push({ OR: orBranches });
         } else if (scopeClause) {
           filterAnd.push(scopeClause);
         }
       }
     }
-    if (filterAnd.length) query.$and = filterAnd;
+    if (filterAnd.length) where.AND = filterAnd;
 
     // Optional freshness window.
     // IMPORTANT: For "manual" posts we typically want to keep them visible even if older.
@@ -399,18 +337,16 @@ const getFeed = async (req, res) => {
     const daysNum = Number(days);
     if (Number.isFinite(daysNum) && daysNum > 0) {
       const cutoff = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000);
-      query.$and = [
-        ...(query.$and || []),
+      where.AND = [
+        ...(where.AND || []),
         {
-          $or: [
+          OR: [
             // Manual (reporter) posts: no cutoff.
             { sourceType: 'manual' },
-            { sourceType: { $exists: false } },
             { sourceType: null },
             // Ingested sources: use published time when available, otherwise createdAt.
-            { sourcePublishedAt: { $gte: cutoff } },
-            { sourcePublishedAt: null, createdAt: { $gte: cutoff } },
-            { sourcePublishedAt: { $exists: false }, createdAt: { $gte: cutoff } },
+            { sourcePublishedAt: { gte: cutoff } },
+            { sourcePublishedAt: null, createdAt: { gte: cutoff } },
           ],
         },
       ];
@@ -418,57 +354,22 @@ const getFeed = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const lim = parseInt(limit);
-    const match = feedMatchForAggregate(query);
-    const total = await NewsPost.countDocuments(match);
-
-    const userColl = User.collection.collectionName;
-    const catColl = Category.collection.collectionName;
-
-    const postsRaw = await NewsPost.aggregate([
-      { $match: match },
-      {
-        $addFields: {
-          _feedSort: {
-            $ifNull: [
-              '$sourcePublishedAt',
-              { $ifNull: ['$scrapedAt', '$createdAt'] },
-            ],
-          },
-        },
-      },
-      { $sort: { _feedSort: -1, _id: -1 } },
-      { $skip: skip },
-      { $limit: lim },
-      {
-        $lookup: {
-          from: userColl,
-          localField: 'reporter',
-          foreignField: '_id',
-          pipeline: [{ $project: { name: 1, avatar: 1 } }],
-          as: '_reporterArr',
-        },
-      },
-      {
-        $lookup: {
-          from: catColl,
-          localField: 'category',
-          foreignField: '_id',
-          pipeline: [{ $project: { name: 1, slug: 1, icon: 1, color: 1 } }],
-          as: '_categoryArr',
-        },
-      },
-      {
-        $set: {
-          reporter: { $arrayElemAt: ['$_reporterArr', 0] },
-          category: { $arrayElemAt: ['$_categoryArr', 0] },
-        },
-      },
-      {
-        $unset: ['_reporterArr', '_categoryArr', '_feedSort', 'likedBy', 'rejectionReason'],
-      },
+    const [total, rows] = await Promise.all([
+      prisma.newsPost.count({ where }),
+      prisma.newsPost.findMany({
+        where,
+        include: newsPostInclude,
+        orderBy: [
+          { sourcePublishedAt: 'desc' },
+          { scrapedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        skip,
+        take: lim,
+      }),
     ]);
 
-    let posts = dedupeFeedPosts(postsRaw).map(sanitizeStoryTextFields);
+    let posts = dedupeFeedPosts(rows.map((p) => serializeNewsPost(p))).map(sanitizeStoryTextFields);
     if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
       posts = filterPostsForCategory(posts, categorySlugFilter, {
         politicsScope: politicsScopeParam,
@@ -490,16 +391,20 @@ const getFeed = async (req, res) => {
 // GET /api/news/:id — single article
 const getPost = async (req, res) => {
   try {
-    const post = await NewsPost.findOne({ _id: req.params.id, status: 'approved' })
-      .populate('reporter', 'name avatar bio')
-      .populate('category', 'name slug icon color');
+    const post = await prisma.newsPost.findFirst({
+      where: { id: req.params.id, status: 'approved' },
+      include: newsPostInclude,
+    });
 
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
     // Increment view count (fire and forget)
-    NewsPost.findByIdAndUpdate(post._id, { $inc: { views: 1 } }).exec();
+    prisma.newsPost.update({
+      where: { id: post.id },
+      data: { views: { increment: 1 } },
+    }).catch(() => {});
 
-    res.json({ success: true, post: sanitizeStoryTextFields(post) });
+    res.json({ success: true, post: sanitizeStoryTextFields(serializeNewsPost(post)) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -511,22 +416,31 @@ const toggleLike = async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Login required to like posts.' });
     }
-    const post = await NewsPost.findById(req.params.id);
+    const post = await prisma.newsPost.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
     const userId = req.user._id;
-    const alreadyLiked = post.likedBy.includes(userId);
+    const existing = await prisma.postLike.findUnique({
+      where: { userId_postId: { userId, postId: post.id } },
+    });
+    const updated = await prisma.$transaction(async (tx) => {
+      if (existing) {
+        await tx.postLike.delete({ where: { userId_postId: { userId, postId: post.id } } });
+        return tx.newsPost.update({
+          where: { id: post.id },
+          data: { likes: { decrement: 1 } },
+          select: { likes: true },
+        });
+      }
+      await tx.postLike.create({ data: { userId, postId: post.id } });
+      return tx.newsPost.update({
+        where: { id: post.id },
+        data: { likes: { increment: 1 } },
+        select: { likes: true },
+      });
+    });
 
-    if (alreadyLiked) {
-      post.likedBy.pull(userId);
-      post.likes = Math.max(0, post.likes - 1);
-    } else {
-      post.likedBy.push(userId);
-      post.likes += 1;
-    }
-
-    await post.save();
-    res.json({ success: true, likes: post.likes, liked: !alreadyLiked });
+    res.json({ success: true, likes: Math.max(0, updated.likes), liked: !existing });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -538,17 +452,19 @@ const toggleBookmark = async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Login required to bookmark posts.' });
     }
-    const user = req.user;
     const postId = req.params.id;
-    const isBookmarked = user.bookmarks.includes(postId);
+    const post = await prisma.newsPost.findUnique({ where: { id: postId }, select: { id: true } });
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
+    const key = { userId_postId: { userId: req.user._id, postId } };
+    const existing = await prisma.userBookmark.findUnique({ where: key });
 
-    if (isBookmarked) {
-      await User.findByIdAndUpdate(user._id, { $pull: { bookmarks: postId } });
+    if (existing) {
+      await prisma.userBookmark.delete({ where: key });
     } else {
-      await User.findByIdAndUpdate(user._id, { $addToSet: { bookmarks: postId } });
+      await prisma.userBookmark.create({ data: { userId: req.user._id, postId } });
     }
 
-    res.json({ success: true, bookmarked: !isBookmarked });
+    res.json({ success: true, bookmarked: !existing });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -560,17 +476,12 @@ const getBookmarks = async (req, res) => {
     if (!req.user) {
       return res.json({ success: true, bookmarks: [] });
     }
-    const user = await User.findById(req.user._id)
-      .populate({
-        path: 'bookmarks',
-        populate: [
-          { path: 'reporter', select: 'name avatar' },
-          { path: 'category', select: 'name slug icon color' },
-        ],
-        match: { status: 'approved' },
-      });
-
-    const marks = user.bookmarks || [];
+    const rows = await prisma.userBookmark.findMany({
+      where: { userId: req.user._id, post: { status: 'approved' } },
+      include: { post: { include: newsPostInclude } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const marks = rows.map((row) => serializeNewsPost(row.post));
     res.json({
       success: true,
       bookmarks: marks.filter(Boolean).map(sanitizeStoryTextFields),
@@ -583,11 +494,13 @@ const getBookmarks = async (req, res) => {
 // GET /api/news/:id/comments
 const getComments = async (req, res) => {
   try {
-    const comments = await Comment.find({ post: req.params.id, isDeleted: false })
-      .populate('user', 'name avatar')
-      .sort({ createdAt: -1 })
-      .limit(50);
-    res.json({ success: true, comments });
+    const comments = await prisma.comment.findMany({
+      where: { postId: req.params.id, isDeleted: false },
+      include: { user: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json({ success: true, comments: comments.map(serializeComment) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -602,14 +515,16 @@ const addComment = async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ success: false, message: 'Comment text required.' });
 
-    const comment = await Comment.create({
-      post: req.params.id,
-      user: req.user._id,
-      text,
+    const comment = await prisma.comment.create({
+      data: {
+        postId: req.params.id,
+        userId: req.user._id,
+        text,
+      },
+      include: { user: true },
     });
 
-    await comment.populate('user', 'name avatar');
-    res.status(201).json({ success: true, comment });
+    res.status(201).json({ success: true, comment: serializeComment(comment) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

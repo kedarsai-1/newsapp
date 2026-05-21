@@ -1,4 +1,4 @@
-const NewsPost = require('../models/NewsPost');
+const { prisma } = require('../config/prisma');
 const { cloudinary } = require('../config/cloudinary');
 
 function clampInt(n, min, max, fallback) {
@@ -36,7 +36,7 @@ async function destroyCloudinaryPublicIds(publicIds, { resourceType = 'image' } 
 }
 
 /**
- * Delete ingested news older than N days from Mongo + remove their Cloudinary media.
+ * Delete ingested news older than N days from PostgreSQL + remove their Cloudinary media.
  *
  * We keep reporter/manual posts by default (production safety), and only purge:
  *   sourceType in ['api','rss','html','youtube']
@@ -57,21 +57,29 @@ async function purgeOldNews({
     ? ['api', 'rss', 'html', 'youtube']
     : ['api', 'rss', 'html', 'youtube', 'manual'];
 
-  const query = {
-    sourceType: { $in: sourceTypes },
-    $or: [
-      { sourcePublishedAt: { $lt: cutoff } },
-      { sourcePublishedAt: null, createdAt: { $lt: cutoff } },
-      { sourcePublishedAt: { $exists: false }, createdAt: { $lt: cutoff } },
+  const where = {
+    sourceType: { in: sourceTypes },
+    OR: [
+      { sourcePublishedAt: { lt: cutoff } },
+      { sourcePublishedAt: null, createdAt: { lt: cutoff } },
     ],
   };
 
-  const posts = await NewsPost.find(query)
-    .select('_id media sourceUrl sourceType sourcePublishedAt createdAt')
-    .sort({ sourcePublishedAt: 1, createdAt: 1 })
-    .limit(max);
+  const posts = await prisma.newsPost.findMany({
+    where,
+    select: {
+      id: true,
+      media: true,
+      sourceUrl: true,
+      sourceType: true,
+      sourcePublishedAt: true,
+      createdAt: true,
+    },
+    orderBy: [{ sourcePublishedAt: 'asc' }, { createdAt: 'asc' }],
+    take: max,
+  });
 
-  const ids = posts.map((p) => p._id);
+  const ids = posts.map((p) => p.id);
 
   const imgPublicIds = [];
   const videoPublicIds = [];
@@ -105,8 +113,8 @@ async function purgeOldNews({
     result.cloudinary.images = await destroyCloudinaryPublicIds(imgPublicIds, { resourceType: 'image' });
     result.cloudinary.videos = await destroyCloudinaryPublicIds(videoPublicIds, { resourceType: 'video' });
 
-    const del = await NewsPost.deleteMany({ _id: { $in: ids } });
-    result.deletedPosts = del.deletedCount || 0;
+    const del = await prisma.newsPost.deleteMany({ where: { id: { in: ids } } });
+    result.deletedPosts = del.count || 0;
   } else {
     result.cloudinary.images = { attempted: imgPublicIds.length, deleted: 0, skipped: true };
     result.cloudinary.videos = { attempted: videoPublicIds.length, deleted: 0, skipped: true };

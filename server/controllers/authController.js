@@ -1,5 +1,7 @@
-const User = require('../models/User');
+const bcrypt = require('bcryptjs');
+const { Prisma, prisma } = require('../config/prisma');
 const { generateToken } = require('../middleware/authMiddleware');
+const { serializeUser } = require('../utils/serializers');
 
 // POST /api/auth/register
 const register = async (req, res) => {
@@ -9,19 +11,29 @@ const register = async (req, res) => {
     // Prevent self-assigning admin role
     const assignedRole = role === 'admin' ? 'user' : (role || 'user');
 
-    const existingUser = await User.findOne({ email });
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'Email already registered.' });
     }
 
-    const user = await User.create({ name, email, password, role: assignedRole, phone });
-    const token = generateToken(user._id);
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: normalizedEmail,
+        password: hashedPassword,
+        role: assignedRole,
+        phone: phone || null,
+      },
+    });
+    const token = generateToken(user.id);
 
     res.status(201).json({
       success: true,
       message: 'Registration successful.',
       token,
-      user,
+      user: serializeUser(user),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -37,8 +49,10 @@ const login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and password required.' });
     }
 
-    const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
+    const user = await prisma.user.findUnique({
+      where: { email: String(email || '').trim().toLowerCase() },
+    });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
     }
 
@@ -46,8 +60,8 @@ const login = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Account suspended.' });
     }
 
-    const token = generateToken(user._id);
-    res.json({ success: true, token, user: user.toJSON() });
+    const token = generateToken(user.id);
+    res.json({ success: true, token, user: serializeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -62,7 +76,7 @@ const getMe = async (req, res) => {
 const updateFcmToken = async (req, res) => {
   try {
     const { fcmToken } = req.body;
-    await User.findByIdAndUpdate(req.user._id, { fcmToken });
+    await prisma.user.update({ where: { id: req.user._id }, data: { fcmToken } });
     res.json({ success: true, message: 'FCM token updated.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -73,13 +87,15 @@ const updateFcmToken = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { name, phone, bio } = req.body;
-    const updated = await User.findByIdAndUpdate(
-      req.user._id,
-      { name, phone, bio },
-      { new: true, runValidators: true }
-    );
-    res.json({ success: true, user: updated });
+    const updated = await prisma.user.update({
+      where: { id: req.user._id },
+      data: { name, phone, bio },
+    });
+    res.json({ success: true, user: serializeUser(updated) });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(400).json({ success: false, message: 'Email or phone already registered.' });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

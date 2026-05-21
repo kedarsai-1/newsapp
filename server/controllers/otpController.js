@@ -1,6 +1,8 @@
-const User = require('../models/User');
+const bcrypt = require('bcryptjs');
+const { Prisma, prisma } = require('../config/prisma');
 const { sendOtp, verifyOtp } = require('../utils/otpService');
 const { generateToken } = require('../middleware/authMiddleware');
+const { serializeUser } = require('../utils/serializers');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ const sendOtpHandler = async (req, res) => {
         ? { email: target.trim().toLowerCase() }
         : { phone: target.trim() };
 
-      const user = await User.findOne(query);
+      const user = await prisma.user.findFirst({ where: query });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -68,7 +70,7 @@ const sendOtpHandler = async (req, res) => {
         ? { email: target.trim().toLowerCase() }
         : { phone: target.trim() };
 
-      const existing = await User.findOne(query);
+      const existing = await prisma.user.findFirst({ where: query });
       if (existing) {
         return res.status(400).json({
           success: false,
@@ -118,13 +120,13 @@ const verifyLoginOtp = async (req, res) => {
       ? { email: target.trim().toLowerCase() }
       : { phone: target.trim() };
 
-    const user = await User.findOne(query);
+    const user = await prisma.user.findFirst({ where: query });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    const token = generateToken(user._id);
-    res.json({ success: true, token, user: user.toJSON() });
+    const token = generateToken(user.id);
+    res.json({ success: true, token, user: serializeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -157,19 +159,21 @@ const verifyRegisterOtp = async (req, res) => {
     const assignedRole = role === 'admin' ? 'user' : (role || 'user');
 
     // Create the user
-    const user = await User.create({
-      name: name.trim(),
-      email: email ? email.trim().toLowerCase() : undefined,
-      phone: phone ? phone.trim() : undefined,
-      password,
-      role: assignedRole,
-      isVerified: true, // OTP verified → mark account as verified
+    const user = await prisma.user.create({
+      data: {
+        name: name.trim(),
+        email: email ? email.trim().toLowerCase() : undefined,
+        phone: phone ? phone.trim() : undefined,
+        password: await bcrypt.hash(password, 10),
+        role: assignedRole,
+        isVerified: true, // OTP verified -> mark account as verified
+      },
     });
 
-    const token = generateToken(user._id);
-    res.status(201).json({ success: true, token, user: user.toJSON() });
+    const token = generateToken(user.id);
+    res.status(201).json({ success: true, token, user: serializeUser(user) });
   } catch (error) {
-    if (error.code === 11000) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(400).json({ success: false, message: 'An account with this email/phone already exists.' });
     }
     res.status(500).json({ success: false, message: error.message });

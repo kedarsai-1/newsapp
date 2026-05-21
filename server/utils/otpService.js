@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
-const Otp = require('../models/Otp');
+const { prisma } = require('../config/prisma');
 
 const OTP_LENGTH    = 6;
 const OTP_EXPIRES_M = 10; // minutes
@@ -155,18 +155,20 @@ const sendSmsOtp = async (phone, code, purpose) => {
 
 const createOtp = async (target, channel, purpose) => {
   // Delete any existing unexpired OTP for this target + purpose
-  await Otp.deleteMany({ target: target.toLowerCase(), purpose });
+  await prisma.otp.deleteMany({ where: { target: target.toLowerCase(), purpose } });
 
   const code = generateCode();
   const salt = await bcrypt.genSalt(10);
   const codeHash = await bcrypt.hash(code, salt);
 
-  await Otp.create({
-    target: target.toLowerCase(),
-    channel,
-    purpose,
-    codeHash,
-    expiresAt: new Date(Date.now() + OTP_EXPIRES_M * 60 * 1000),
+  await prisma.otp.create({
+    data: {
+      target: target.toLowerCase(),
+      channel,
+      purpose,
+      codeHash,
+      expiresAt: new Date(Date.now() + OTP_EXPIRES_M * 60 * 1000),
+    },
   });
 
   return code; // return plain code to be sent via email/SMS
@@ -194,11 +196,18 @@ const sendOtp = async (target, channel, purpose) => {
 // ── Public: verify OTP ────────────────────────────────────────────────────────
 
 const verifyOtp = async (target, code, purpose) => {
-  const record = await Otp.findOne({
-    target: target.toLowerCase(),
-    purpose,
-    verified: false,
-    expiresAt: { $gt: new Date() },
+  await prisma.otp.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+
+  const record = await prisma.otp.findFirst({
+    where: {
+      target: target.toLowerCase(),
+      purpose,
+      verified: false,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: 'desc' },
   });
 
   if (!record) {
@@ -206,16 +215,18 @@ const verifyOtp = async (target, code, purpose) => {
   }
 
   if (record.attempts >= MAX_ATTEMPTS) {
-    await Otp.deleteOne({ _id: record._id });
+    await prisma.otp.delete({ where: { id: record.id } });
     return { valid: false, error: 'Too many failed attempts. Please request a new OTP.' };
   }
 
   const isMatch = await bcrypt.compare(code, record.codeHash);
 
   if (!isMatch) {
-    record.attempts += 1;
-    await record.save();
-    const remaining = MAX_ATTEMPTS - record.attempts;
+    const updated = await prisma.otp.update({
+      where: { id: record.id },
+      data: { attempts: { increment: 1 } },
+    });
+    const remaining = MAX_ATTEMPTS - updated.attempts;
     return {
       valid: false,
       error: remaining > 0
@@ -225,7 +236,7 @@ const verifyOtp = async (target, code, purpose) => {
   }
 
   // Mark as verified and delete
-  await Otp.deleteOne({ _id: record._id });
+  await prisma.otp.delete({ where: { id: record.id } });
   return { valid: true };
 };
 

@@ -1,52 +1,56 @@
 // Run with: npm run seed  OR  node seed.js
 require('dotenv').config();
-const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
-const User = require('./models/User');
-const Category = require('./models/Category');
+const { prisma } = require('./config/prisma');
 const { defaultCategories } = require('./config/defaultCategories');
 
 const seed = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('Connected to MongoDB');
+    await prisma.$connect();
+    console.log('Connected to PostgreSQL');
 
-    await Category.deleteMany({});
-    await Category.insertMany(defaultCategories);
-    console.log(`✅ Seeded ${defaultCategories.length} categories`);
+    await prisma.category.deleteMany({});
+    await prisma.category.createMany({ data: defaultCategories, skipDuplicates: true });
+    console.log(`Seeded ${defaultCategories.length} categories`);
 
-    const existing = await User.findOne({ email: 'admin@newsapp.com' });
+    const existing = await prisma.user.findUnique({ where: { email: 'admin@newsapp.com' } });
     if (!existing) {
-      await User.create({
-        name: 'Super Admin',
-        email: 'admin@newsapp.com',
-        password: 'Admin@123',
-        role: 'admin',
-        isActive: true,
-        isVerified: true,
+      await prisma.user.create({
+        data: {
+          name: 'Super Admin',
+          email: 'admin@newsapp.com',
+          password: await bcrypt.hash('Admin@123', 10),
+          role: 'admin',
+          isActive: true,
+          isVerified: true,
+        },
       });
-      console.log('✅ Admin user created: admin@newsapp.com / Admin@123');
+      console.log('Admin user created: admin@newsapp.com / Admin@123');
     } else {
-      console.log('ℹ️  Admin user already exists');
+      console.log('Admin user already exists');
     }
 
-    const reporter = await User.findOne({ email: 'reporter@newsapp.com' });
+    const reporter = await prisma.user.findUnique({ where: { email: 'reporter@newsapp.com' } });
     if (!reporter) {
-      await User.create({
-        name: 'Sample Reporter',
-        email: 'reporter@newsapp.com',
-        password: 'Reporter@123',
-        role: 'reporter',
-        isActive: true,
-        isVerified: true,
+      await prisma.user.create({
+        data: {
+          name: 'Sample Reporter',
+          email: 'reporter@newsapp.com',
+          password: await bcrypt.hash('Reporter@123', 10),
+          role: 'reporter',
+          isActive: true,
+          isVerified: true,
+        },
       });
-      console.log('✅ Reporter created: reporter@newsapp.com / Reporter@123');
+      console.log('Reporter created: reporter@newsapp.com / Reporter@123');
     }
 
-    console.log('\n🎉 Database seeded successfully!');
+    console.log('\nDatabase seeded successfully!');
     process.exit(0);
   } catch (err) {
     console.error('Seed error:', err);
+    await prisma.$disconnect().catch(() => {});
     process.exit(1);
   }
 };

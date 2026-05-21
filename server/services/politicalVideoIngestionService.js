@@ -2,10 +2,8 @@
  * Political YouTube ingestion pipeline:
  * fetch → keyword → blacklist → MiniLM (uncertain only) → save political videos.
  */
-const PoliticalVideo = require('../models/PoliticalVideo');
-const NewsPost = require('../models/NewsPost');
-const User = require('../models/User');
-const Category = require('../models/Category');
+const bcrypt = require('bcryptjs');
+const { Prisma, prisma } = require('../config/prisma');
 const { getPoliticalYoutubeChannels } = require('../config/politicalVideoConfig');
 const { classifyByKeywords, isPoliticalLabel } = require('../utils/politicalKeywordFilter');
 const {
@@ -21,6 +19,7 @@ const { thumbnailUrl, watchUrl, embedUrl } = require('./youtubeIngestionService'
 const { emitFeedUpdated } = require('./feedSocket');
 const { hashUrl, canonicalizeUrl, normalizeTitle } = require('../utils/storyDedupe');
 const { isYoutubeQuotaBlocked } = require('../utils/youtubeQuota');
+const { createNewsPost } = require('../utils/prismaNewsPost');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
@@ -29,31 +28,39 @@ const SCRAPER_AUTO_APPROVE = process.env.SCRAPER_AUTO_APPROVE !== 'false';
 let ingestRunning = false;
 
 async function ensureSystemReporter() {
-  let reporter = await User.findOne({ email: SYSTEM_REPORTER_EMAIL });
+  let reporter = await prisma.user.findUnique({ where: { email: SYSTEM_REPORTER_EMAIL } });
   if (!reporter) {
-    reporter = await User.create({
-      name: 'Political Video Bot',
-      email: SYSTEM_REPORTER_EMAIL,
-      password: SYSTEM_REPORTER_PASSWORD,
-      role: 'reporter',
-      isVerified: true,
+    reporter = await prisma.user.create({
+      data: {
+        name: 'Political Video Bot',
+        email: SYSTEM_REPORTER_EMAIL,
+        password: await bcrypt.hash(SYSTEM_REPORTER_PASSWORD, 10),
+        role: 'reporter',
+        isVerified: true,
+      },
     });
   }
   return reporter;
 }
 
 async function getPoliticsCategory() {
-  let cat = await Category.findOne({ slug: 'politics', isActive: true });
+  let cat = await prisma.category.findFirst({
+    where: { slug: 'politics', isActive: true },
+    orderBy: { order: 'asc' },
+  });
   if (!cat) {
-    cat = await Category.findOne({ isActive: true }).sort({ order: 1 });
+    cat = await prisma.category.findFirst({
+      where: { isActive: true },
+      orderBy: { order: 'asc' },
+    });
   }
   if (!cat) throw new Error('No active category. Seed categories first.');
   return cat;
 }
 
 async function existsVideo(videoId) {
-  if (await PoliticalVideo.exists({ videoId })) return true;
-  if (await NewsPost.exists({ 'youtube.videoId': videoId })) return true;
+  if (await prisma.politicalVideo.findFirst({ where: { videoId }, select: { id: true } })) return true;
+  if (await prisma.newsPost.findFirst({ where: { youtubeVideoId: videoId }, select: { id: true } })) return true;
   return false;
 }
 
@@ -81,8 +88,8 @@ async function savePoliticalVideo(video, classification) {
     title: video.title,
     body: (video.description || video.title).slice(0, 2000),
     summary: (video.description || '').slice(0, 280) || null,
-    reporter: reporter._id,
-    category: category._id,
+    reporterId: reporter.id,
+    categoryId: category.id,
     media: [{
       type: 'video',
       url: youtube.watchUrl,
@@ -107,11 +114,11 @@ async function savePoliticalVideo(video, classification) {
     scrapeConfidence: classification.confidence,
   };
 
-  const post = await NewsPost.create(newsDoc);
+  const post = await createNewsPost(newsDoc);
 
-  await PoliticalVideo.findOneAndUpdate(
-    { videoId: video.videoId },
-    {
+  await prisma.politicalVideo.upsert({
+    where: { videoId: video.videoId },
+    create: {
       videoId: video.videoId,
       title: video.title,
       thumbnail: thumb,
@@ -123,10 +130,22 @@ async function savePoliticalVideo(video, classification) {
       classificationMethod: classification.method,
       classificationScore: classification.confidence,
       description: (video.description || '').slice(0, 500),
-      newsPostId: post._id,
+      newsPostId: post.id,
     },
-    { upsert: true, new: true },
-  );
+    update: {
+      title: video.title,
+      thumbnail: thumb,
+      channelName: video.channelName,
+      channelId: video.channelId,
+      language: classification.language || video.language || 'en',
+      publishedAt: video.publishedAt,
+      category: classification.category,
+      classificationMethod: classification.method,
+      classificationScore: classification.confidence,
+      description: (video.description || '').slice(0, 500),
+      newsPostId: post.id,
+    },
+  });
 
   return post;
 }

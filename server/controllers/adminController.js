@@ -1,6 +1,10 @@
-const NewsPost = require('../models/NewsPost');
-const User = require('../models/User');
-const Category = require('../models/Category');
+const { Prisma, prisma } = require('../config/prisma');
+const {
+  serializeCategory,
+  serializeNewsPost,
+  serializeUser,
+} = require('../utils/serializers');
+const { mediaCreate, newsPostInclude } = require('../utils/prismaNewsPost');
 const { sendToDevice, sendToTopic } = require('../utils/notifications');
 const {
   runIngestion,
@@ -59,26 +63,29 @@ async function rehostExternalImageToCloudinary(imageUrl, { referer } = {}) {
 const getDashboard = async (req, res) => {
   try {
     const [totalUsers, totalReporters, pendingPosts, approvedToday, totalPosts] = await Promise.all([
-      User.countDocuments({ role: 'user' }),
-      User.countDocuments({ role: 'reporter' }),
-      NewsPost.countDocuments({ status: 'pending' }),
-      NewsPost.countDocuments({
-        status: 'approved',
-        approvedAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      prisma.user.count({ where: { role: 'user' } }),
+      prisma.user.count({ where: { role: 'reporter' } }),
+      prisma.newsPost.count({ where: { status: 'pending' } }),
+      prisma.newsPost.count({
+        where: {
+          status: 'approved',
+          approvedAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        },
       }),
-      NewsPost.countDocuments(),
+      prisma.newsPost.count(),
     ]);
 
-    const recentActivity = await NewsPost.find({ status: 'pending' })
-      .populate('reporter', 'name avatar')
-      .populate('category', 'name icon')
-      .sort({ createdAt: -1 })
-      .limit(5);
+    const recentActivity = await prisma.newsPost.findMany({
+      where: { status: 'pending' },
+      include: newsPostInclude,
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
 
     res.json({
       success: true,
       stats: { totalUsers, totalReporters, pendingPosts, approvedToday, totalPosts },
-      recentActivity,
+      recentActivity: recentActivity.map(serializeNewsPost),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -90,16 +97,19 @@ const getPendingPosts = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const total = await NewsPost.countDocuments({ status: 'pending' });
+    const where = { status: 'pending' };
+    const [total, posts] = await Promise.all([
+      prisma.newsPost.count({ where }),
+      prisma.newsPost.findMany({
+        where,
+        include: newsPostInclude,
+        orderBy: { createdAt: 'asc' }, // oldest first for fair review
+        skip,
+        take: parseInt(limit),
+      }),
+    ]);
 
-    const posts = await NewsPost.find({ status: 'pending' })
-      .populate('reporter', 'name avatar email')
-      .populate('category', 'name icon color')
-      .sort({ createdAt: 1 }) // oldest first for fair review
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    res.json({ success: true, total, posts });
+    res.json({ success: true, total, posts: posts.map(serializeNewsPost) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -109,22 +119,24 @@ const getPendingPosts = async (req, res) => {
 const getAllPosts = async (req, res) => {
   try {
     const { page = 1, limit = 20, status, category, reporter } = req.query;
-    const query = {};
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (reporter) query.reporter = reporter;
+    const where = {};
+    if (status) where.status = status;
+    if (category) where.categoryId = String(category);
+    if (reporter) where.reporterId = String(reporter);
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const total = await NewsPost.countDocuments(query);
+    const [total, posts] = await Promise.all([
+      prisma.newsPost.count({ where }),
+      prisma.newsPost.findMany({
+        where,
+        include: newsPostInclude,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+    ]);
 
-    const posts = await NewsPost.find(query)
-      .populate('reporter', 'name avatar')
-      .populate('category', 'name icon color')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    res.json({ success: true, total, posts });
+    res.json({ success: true, total, posts: posts.map(serializeNewsPost) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -134,18 +146,18 @@ const getAllPosts = async (req, res) => {
 const approvePost = async (req, res) => {
   try {
     const { isBreaking, isFeatured } = req.body;
-    const post = await NewsPost.findByIdAndUpdate(
-      req.params.id,
-      {
+    const post = await prisma.newsPost.update({
+      where: { id: req.params.id },
+      data: {
         status: 'approved',
-        approvedBy: req.user._id,
+        approvedById: req.user._id,
         approvedAt: new Date(),
         isBreaking: !!isBreaking,
         isFeatured: !!isFeatured,
         rejectionReason: null,
       },
-      { new: true }
-    ).populate('reporter', 'name fcmToken').populate('category', 'name slug');
+      include: newsPostInclude,
+    });
 
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
@@ -155,7 +167,7 @@ const approvePost = async (req, res) => {
         post.reporter.fcmToken,
         'Story Published!',
         `Your story "${post.title}" is now live.`,
-        { postId: post._id.toString(), type: 'approved' }
+        { postId: post.id, type: 'approved' }
       );
     }
 
@@ -164,18 +176,18 @@ const approvePost = async (req, res) => {
       `category_${post.category.slug}`,
       isBreaking ? '🔴 Breaking News' : post.category.name,
       post.title,
-      { postId: post._id.toString(), type: 'news' }
+      { postId: post.id, type: 'news' }
     );
 
     // Emit real-time event via Socket.io
     req.io.to('all').emit('new_post', {
-      id: post._id,
+      id: post.id,
       title: post.title,
-      category: post.category,
+      category: serializeCategory(post.category),
       isBreaking: post.isBreaking,
     });
 
-    res.json({ success: true, message: 'Post approved and published.', post });
+    res.json({ success: true, message: 'Post approved and published.', post: serializeNewsPost(post) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -187,11 +199,11 @@ const rejectPost = async (req, res) => {
     const { reason } = req.body;
     if (!reason) return res.status(400).json({ success: false, message: 'Rejection reason required.' });
 
-    const post = await NewsPost.findByIdAndUpdate(
-      req.params.id,
-      { status: 'rejected', rejectionReason: reason },
-      { new: true }
-    ).populate('reporter', 'name fcmToken');
+    const post = await prisma.newsPost.update({
+      where: { id: req.params.id },
+      data: { status: 'rejected', rejectionReason: reason },
+      include: newsPostInclude,
+    });
 
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
@@ -201,11 +213,11 @@ const rejectPost = async (req, res) => {
         post.reporter.fcmToken,
         'Story Update',
         `Your story "${post.title}" needs revision. Reason: ${reason}`,
-        { postId: post._id.toString(), type: 'rejected' }
+        { postId: post.id, type: 'rejected' }
       );
     }
 
-    res.json({ success: true, message: 'Post rejected.', post });
+    res.json({ success: true, message: 'Post rejected.', post: serializeNewsPost(post) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -215,12 +227,12 @@ const rejectPost = async (req, res) => {
 const featurePost = async (req, res) => {
   try {
     const { isBreaking, isFeatured } = req.body;
-    const post = await NewsPost.findByIdAndUpdate(
-      req.params.id,
-      { isBreaking, isFeatured },
-      { new: true }
-    );
-    res.json({ success: true, post });
+    const post = await prisma.newsPost.update({
+      where: { id: req.params.id },
+      data: { isBreaking, isFeatured },
+      include: newsPostInclude,
+    });
+    res.json({ success: true, post: serializeNewsPost(post) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -230,22 +242,25 @@ const featurePost = async (req, res) => {
 const getUsers = async (req, res) => {
   try {
     const { role, page = 1, limit = 30, search } = req.query;
-    const query = {};
-    if (role) query.role = role;
-    if (search) query.$or = [
-      { name: new RegExp(search, 'i') },
-      { email: new RegExp(search, 'i') },
+    const where = {};
+    if (role) where.role = role;
+    if (search) where.OR = [
+      { name: { contains: String(search), mode: 'insensitive' } },
+      { email: { contains: String(search), mode: 'insensitive' } },
     ];
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const total = await User.countDocuments(query);
+    const [total, users] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+    ]);
 
-    const users = await User.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    res.json({ success: true, total, users });
+    res.json({ success: true, total, users: users.map(serializeUser) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -258,8 +273,8 @@ const updateUserRole = async (req, res) => {
     if (!['user', 'reporter', 'admin'].includes(role)) {
       return res.status(400).json({ success: false, message: 'Invalid role.' });
     }
-    const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true });
-    res.json({ success: true, user });
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { role } });
+    res.json({ success: true, user: serializeUser(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -268,11 +283,13 @@ const updateUserRole = async (req, res) => {
 // PUT /api/admin/users/:id/toggle-active
 const toggleUserActive = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
-    user.isActive = !user.isActive;
-    await user.save();
-    res.json({ success: true, message: `User ${user.isActive ? 'activated' : 'suspended'}.`, user });
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isActive: !user.isActive },
+    });
+    res.json({ success: true, message: `User ${updated.isActive ? 'activated' : 'suspended'}.`, user: serializeUser(updated) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -282,8 +299,16 @@ const toggleUserActive = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     const { name, slug, icon, color, order } = req.body;
-    const category = await Category.create({ name, slug, icon, color, order });
-    res.status(201).json({ success: true, category });
+    const category = await prisma.category.create({
+      data: {
+        name,
+        slug: String(slug || '').toLowerCase(),
+        icon,
+        color,
+        order,
+      },
+    });
+    res.status(201).json({ success: true, category: serializeCategory(category) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -343,17 +368,19 @@ const backfillThumbnails = async (req, res) => {
       .map((s) => String(s).trim().toLowerCase())
       .filter(Boolean);
 
-    const query = {
+    const where = {
       status: 'approved',
-      sourceType: { $in: sourceTypes },
-      sourceUrl: { $exists: true, $ne: null, $ne: '' },
-      $or: [{ media: { $exists: false } }, { media: { $size: 0 } }],
+      sourceType: { in: sourceTypes },
+      sourceUrl: { not: null },
+      media: { none: {} },
     };
 
-    const posts = await NewsPost.find(query)
-      .select('_id sourceUrl sourceType media createdAt')
-      .sort({ createdAt: -1 })
-      .limit(limit);
+    const posts = await prisma.newsPost.findMany({
+      where,
+      select: { id: true, sourceUrl: true, sourceName: true, sourceType: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
 
     let updated = 0;
     let failed = 0;
@@ -389,16 +416,22 @@ const backfillThumbnails = async (req, res) => {
         continue;
       }
 
-      p.sourceUrl = articleUrl;
-      p.media = [
-        {
-          type: 'image',
-          url: finalUrl,
-          ...(finalPublicId ? { publicId: finalPublicId } : {}),
-        },
-      ];
       // eslint-disable-next-line no-await-in-loop
-      await p.save();
+      await prisma.newsPost.update({
+        where: { id: p.id },
+        data: {
+          sourceUrl: articleUrl,
+          media: {
+            create: mediaCreate([
+              {
+                type: 'image',
+                url: finalUrl,
+                ...(finalPublicId ? { publicId: finalPublicId } : {}),
+              },
+            ]),
+          },
+        },
+      });
       updated += 1;
     }
 

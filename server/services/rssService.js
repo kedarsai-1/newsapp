@@ -49,17 +49,36 @@ function summarizeLocal(text) {
   return t.length > 280 ? `${t.slice(0, 277)}...` : t;
 }
 
-function summarizeInputFromItem(item) {
-  const raw = stripHtml(item?.content || item?.['content:encoded'] || item?.contentSnippet || item?.summary || '');
-  if (!raw) return '';
-  // Keep payload bounded for model latency/cost and to satisfy pipeline requirement.
-  const maxLen = 1000;
-  const minLen = 800;
-  if (raw.length <= maxLen) return raw;
-  const cut = raw.slice(0, maxLen);
+function summaryInputMaxChars() {
+  return Math.min(
+    4000,
+    Math.max(400, Number(process.env.RSS_SUMMARY_INPUT_MAX_CHARS || 2000)),
+  );
+}
+
+/** Join RSS/API fields and keep the longest useful plain-text block (bounded for HF). */
+function collectPlainTextForSummary(...parts) {
+  const maxLen = summaryInputMaxChars();
+  const blocks = parts
+    .map((p) => stripHtml(String(p || '')).replace(/\s+/g, ' ').trim())
+    .filter((t) => t.length > 0);
+  if (!blocks.length) return '';
+  const merged = [...new Set(blocks)].sort((a, b) => b.length - a.length)[0];
+  if (merged.length <= maxLen) return merged;
+  const cut = merged.slice(0, maxLen);
   const lastSpace = cut.lastIndexOf(' ');
-  if (lastSpace >= minLen) return cut.slice(0, lastSpace).trim();
+  if (lastSpace >= Math.floor(maxLen * 0.75)) return cut.slice(0, lastSpace).trim();
   return cut.trim();
+}
+
+function summarizeInputFromItem(item) {
+  return collectPlainTextForSummary(
+    item?.['content:encoded'],
+    item?.content,
+    item?.contentSnippet,
+    item?.summary,
+    item?.title,
+  );
 }
 
 function looksMojibake(text) {
@@ -252,19 +271,33 @@ async function translateTextForFeed(text, targetLanguage) {
   return translateEnglishToFeedLanguage(sourceForModel, target);
 }
 
-/** Detect language on first 800 chars; keep text in original language (no EN translate) for summarization. */
+/** Detect language on a sample; keep text in original language (no EN translate) for summarization. */
 function prepareForSummarization(strippedText) {
   const raw = String(strippedText || '').replace(/\s+/g, ' ').trim();
   if (!raw) return { textForSummary: '', originalLang: 'und' };
-  const limited = raw.length > 800 ? raw.slice(0, 800) : raw;
-  const lang = detectLanguage(limited);
+  const maxLen = summaryInputMaxChars();
+  const limited = raw.length > maxLen ? raw.slice(0, maxLen) : raw;
+  const langSample = limited.length > 800 ? limited.slice(0, 800) : limited;
+  const lang = detectLanguage(langSample);
   return { textForSummary: sanitizeForSummarization(limited), originalLang: lang };
 }
 
 function prepareForHfSummaryFromRssItem(item) {
-  const plain = stripHtml(
-    item?.contentSnippet || item?.content || item?.['content:encoded'] || item?.summary || '',
+  const plain = collectPlainTextForSummary(
+    item?.['content:encoded'],
+    item?.content,
+    item?.contentSnippet,
+    item?.summary,
+    item?.title,
   );
+  return prepareForSummarization(plain);
+}
+
+/** Best available text from a normalized ingest item (RSS/API). */
+function prepareForSummaryFromIngestItem(item = {}, rawRssItem = null) {
+  const fromNormalized = collectPlainTextForSummary(item.body, item.summary, item.title);
+  const fromRss = rawRssItem ? summarizeInputFromItem(rawRssItem) : '';
+  const plain = fromNormalized.length >= fromRss.length ? fromNormalized : fromRss;
   return prepareForSummarization(plain);
 }
 
@@ -274,7 +307,8 @@ function prepareForHfSummaryFromRssItem(item) {
  */
 async function summarizeForRssIngest(text, originalLang, feedLang) {
   const src = String(text || '').trim();
-  if (!src || src.length < 40) return '';
+  const minChars = Math.max(12, Number(process.env.RSS_SUMMARY_MIN_CHARS || 15));
+  if (!src || src.length < minChars) return '';
   const fl = String(feedLang || '').toLowerCase();
   const forceNativeForIndicFeed =
     (fl === 'te' || fl === 'hi') && isPrimarilyIndicScript(src);
@@ -306,7 +340,8 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
 
 function shouldUseHfSummarization(text, { language } = {}) {
   const t = String(text || '').trim();
-  if (!t || t.length < 40) return false;
+  const minChars = Math.max(12, Number(process.env.RSS_SUMMARY_MIN_CHARS || 15));
+  if (!t || t.length < minChars) return false;
 
   // Force-enable for explicitly English feeds, then let sanitize step clean mojibake.
   if (String(language || '').toLowerCase() === 'en') return true;
@@ -596,6 +631,9 @@ module.exports = {
   translateToEnglish,
   prepareForSummarization,
   prepareForHfSummaryFromRssItem,
+  prepareForSummaryFromIngestItem,
+  collectPlainTextForSummary,
+  summaryInputMaxChars,
   summarizeForRssIngest,
   translateEnglishToFeedLanguage,
   translateTextForFeed,

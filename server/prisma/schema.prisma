@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  name                String                  @db.VarChar(100)
+  email               String                  @unique
+  password            String
+  role                String                  @default("user")
+  avatar              String?
+  phone               String?                 @unique
+  bio                 String?                 @db.VarChar(300)
+  isActive            Boolean                 @default(true) @map("is_active")
+  isVerified          Boolean                 @default(false) @map("is_verified")
+  fcmToken            String?                 @map("fcm_token")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  reporterPosts       NewsPost[]              @relation("PostReporter")
+  approvedPosts       NewsPost[]              @relation("PostApprover")
+  comments            Comment[]
+  likes               PostLike[]
+  bookmarks           UserBookmark[]
+  preferredCategories UserPreferredCategory[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Category {
+  id             String                  @id @default(uuid()) @db.Uuid
+  name           String                  @unique
+  slug           String                  @unique
+  icon           String                  @default("news")
+  color          String                  @default("#1D9E75")
+  isActive       Boolean                 @default(true) @map("is_active")
+  order          Int                     @default(0)
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  posts          NewsPost[]
+  preferredBy    UserPreferredCategory[]
+
+  @@index([isActive, order, name])
+  @@map("categories")
+}
+
+model NewsPost {
+  id                        String           @id @default(uuid()) @db.Uuid
+  title                     String           @db.VarChar(200)
+  body                      String           @db.Text
+  summary                   String?          @db.VarChar(300)
+  reporterId                String           @map("reporter_id") @db.Uuid
+  categoryId                String           @map("category_id") @db.Uuid
+  status                    String           @default("pending")
+  rejectionReason           String?          @map("rejection_reason")
+  approvedById              String?          @map("approved_by_id") @db.Uuid
+  approvedAt                DateTime?        @map("approved_at")
+  views                     Int              @default(0)
+  likes                     Int              @default(0)
+  isFeatured                Boolean          @default(false) @map("is_featured")
+  isBreaking                Boolean          @default(false) @map("is_breaking")
+  tags                      String[]         @default([])
+  language                  String           @default("en")
+  originalLanguage          String?          @map("original_language") @db.VarChar(12)
+  sourceName                String?          @map("source_name")
+  sourceUrl                 String?          @map("source_url")
+  sourceUrlHash             String?          @unique @map("source_url_hash")
+  titleNormalized           String?          @map("title_normalized")
+  titleFingerprint          String?          @unique @map("title_fingerprint")
+  summaryFingerprint        String?          @map("summary_fingerprint")
+  sourcePublishedAt         DateTime?        @map("source_published_at")
+  sourceType                String           @default("manual") @map("source_type")
+  youtubeVideoId            String?          @unique @map("youtube_video_id")
+  youtubeChannelId          String?          @map("youtube_channel_id")
+  youtubeChannelTitle       String?          @map("youtube_channel_title")
+  youtubeEmbedUrl           String?          @map("youtube_embed_url")
+  youtubeWatchUrl           String?          @map("youtube_watch_url")
+  youtubeChannelUrl         String?          @map("youtube_channel_url")
+  youtubeDurationSeconds    Int?             @map("youtube_duration_seconds")
+  youtubeIsShort            Boolean?         @map("youtube_is_short")
+  youtubeEmbeddable         Boolean?         @map("youtube_embeddable")
+  youtubePrivacyStatus      String?          @map("youtube_privacy_status")
+  locationLatitude          Float?           @map("location_latitude")
+  locationLongitude         Float?           @map("location_longitude")
+  locationAddress           String?          @map("location_address")
+  locationCity              String?          @map("location_city")
+  locationState             String?          @map("location_state")
+  locationCountry           String?          @default("India") @map("location_country")
+  locationCapturedAt        DateTime?        @map("location_captured_at")
+  politicsScope             String?          @map("politics_scope")
+  constituency              String?          @default("Unknown")
+  scrapedAt                 DateTime?        @map("scraped_at")
+  scrapeConfidence          Float?           @map("scrape_confidence")
+  videoCategory             String?          @map("video_category")
+  videoClassificationMethod String?          @map("video_classification_method")
+  videoClassificationScore  Float?           @map("video_classification_score")
+  createdAt                 DateTime         @default(now()) @map("created_at")
+  updatedAt                 DateTime         @updatedAt @map("updated_at")
+  reporter                  User             @relation("PostReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  category                  Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  approvedBy                User?            @relation("PostApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  media                     NewsPostMedia[]
+  entities                  NewsPostEntity[]
+  comments                  Comment[]
+  likedBy                   PostLike[]
+  bookmarkedBy              UserBookmark[]
+  politicalVideo            PoliticalVideo?
+
+  @@index([status, createdAt])
+  @@index([categoryId, status, createdAt])
+  @@index([categoryId, status, sourcePublishedAt])
+  @@index([titleNormalized, status, createdAt])
+  @@index([reporterId, createdAt])
+  @@index([locationCity, status])
+  @@index([language, status, createdAt])
+  @@index([status, sourceType, sourcePublishedAt])
+  @@index([politicsScope])
+  @@index([constituency])
+  @@index([videoCategory])
+  @@map("news_posts")
+}
+
+model NewsPostMedia {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  type      String
+  url       String
+  thumbnail String?
+  publicId  String?  @map("public_id")
+  size      Int      @default(0)
+  duration  Int?
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  post      NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, order])
+  @@map("news_post_media")
+}
+
+model NewsPostEntity {
+  id     String   @id @default(uuid()) @db.Uuid
+  postId String   @map("post_id") @db.Uuid
+  text   String?
+  label  String?
+  post   NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("news_post_entities")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  text      String   @db.VarChar(1000)
+  likes     Int      @default(0)
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  post      NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+model Otp {
+  id        String   @id @default(uuid()) @db.Uuid
+  target    String
+  channel   String
+  purpose   String
+  codeHash  String   @map("code_hash")
+  expiresAt DateTime @map("expires_at")
+  attempts  Int      @default(0)
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([target, purpose])
+  @@index([expiresAt])
+  @@map("otps")
+}
+
+model PoliticalVideo {
+  id                   String    @id @default(uuid()) @db.Uuid
+  videoId              String    @unique @map("video_id")
+  title                String    @db.VarChar(200)
+  thumbnail            String?
+  channelName          String?   @map("channel_name")
+  channelId            String?   @map("channel_id")
+  language             String    @default("en")
+  publishedAt          DateTime? @map("published_at")
+  category             String?
+  classificationMethod String    @default("keyword") @map("classification_method")
+  classificationScore  Float?    @map("classification_score")
+  description          String?   @db.VarChar(500)
+  newsPostId           String?   @unique @map("news_post_id") @db.Uuid
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  newsPost             NewsPost? @relation(fields: [newsPostId], references: [id], onDelete: SetNull)
+
+  @@index([language, publishedAt])
+  @@index([category, publishedAt])
+  @@map("political_videos")
+}
+
+model PostLike {
+  userId    String   @map("user_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+  @@map("post_likes")
+}
+
+model UserBookmark {
+  userId    String   @map("user_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+  @@index([userId, createdAt])
+  @@map("user_bookmarks")
+}
+
+model UserPreferredCategory {
+  userId     String   @map("user_id") @db.Uuid
+  categoryId String   @map("category_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([userId, categoryId])
+  @@index([categoryId])
+  @@map("user_preferred_categories")
+}

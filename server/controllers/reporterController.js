@@ -1,12 +1,24 @@
-const NewsPost = require('../models/NewsPost');
+const { prisma } = require('../config/prisma');
 const { reverseGeocode } = require('../utils/geocode');
 const { sendToTopic } = require('../utils/notifications');
 const { cloudinary } = require('../config/cloudinary');
+const { serializeNewsPost } = require('../utils/serializers');
+const {
+  createNewsPost,
+  mediaCreate,
+  newsPostInclude,
+} = require('../utils/prismaNewsPost');
 
 // POST /api/reporter/posts — create a new post
 const createPost = async (req, res) => {
   try {
     const { title, body, summary, categoryId, latitude, longitude, tags, isDraft } = req.body;
+    if (!title || !body || !categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Title, body, and categoryId are required.',
+      });
+    }
 
     // Build location object via reverse geocoding
     let location = null;
@@ -29,24 +41,24 @@ const createPost = async (req, res) => {
       }
     }
 
-    const post = await NewsPost.create({
+    const post = await createNewsPost({
       title,
       body,
       summary,
-      reporter: req.user._id,
-      category: categoryId,
+      reporterId: req.user._id,
+      categoryId,
       media,
       location,
       status: isDraft === 'true' ? 'draft' : 'pending',
       tags: tags ? JSON.parse(tags) : [],
+    }, {
+      include: newsPostInclude,
     });
-
-    await post.populate('category', 'name slug icon');
 
     res.status(201).json({
       success: true,
       message: isDraft === 'true' ? 'Draft saved.' : 'Post submitted for review.',
-      post,
+      post: serializeNewsPost(post),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -57,19 +69,22 @@ const createPost = async (req, res) => {
 const getMyPosts = async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
-    const query = { reporter: req.user._id };
-    if (status) query.status = status;
+    const where = { reporterId: req.user._id };
+    if (status) where.status = status;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const total = await NewsPost.countDocuments(query);
+    const [total, posts] = await Promise.all([
+      prisma.newsPost.count({ where }),
+      prisma.newsPost.findMany({
+        where,
+        include: newsPostInclude,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parseInt(limit),
+      }),
+    ]);
 
-    const posts = await NewsPost.find(query)
-      .populate('category', 'name slug icon color')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    res.json({ success: true, total, posts });
+    res.json({ success: true, total, posts: posts.map(serializeNewsPost) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -78,7 +93,10 @@ const getMyPosts = async (req, res) => {
 // PUT /api/reporter/posts/:id — edit a draft or rejected post
 const updatePost = async (req, res) => {
   try {
-    const post = await NewsPost.findOne({ _id: req.params.id, reporter: req.user._id });
+    const post = await prisma.newsPost.findFirst({
+      where: { id: req.params.id, reporterId: req.user._id },
+      include: { media: true },
+    });
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
     if (!['draft', 'rejected'].includes(post.status)) {
@@ -86,30 +104,37 @@ const updatePost = async (req, res) => {
     }
 
     const { title, body, summary, categoryId, tags } = req.body;
-    if (title) post.title = title;
-    if (body) post.body = body;
-    if (summary) post.summary = summary;
-    if (categoryId) post.category = categoryId;
-    if (tags) post.tags = JSON.parse(tags);
+    const data = {};
+    if (title) data.title = title;
+    if (body) data.body = body;
+    if (summary) data.summary = summary;
+    if (categoryId) data.categoryId = categoryId;
+    if (tags) data.tags = JSON.parse(tags);
 
     // Add new media files if any
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const isVideo = file.mimetype.startsWith('video/');
-        post.media.push({
+        const newMedia = {
           type: isVideo ? 'video' : 'image',
           url: file.path,
           publicId: file.filename,
           size: file.size || 0,
-        });
+        };
+        data.media = data.media || { create: [] };
+        data.media.create.push(...mediaCreate([newMedia]));
       }
     }
 
-    post.status = 'pending'; // Re-submit for approval
-    post.rejectionReason = null;
-    await post.save();
+    data.status = 'pending'; // Re-submit for approval
+    data.rejectionReason = null;
+    const updated = await prisma.newsPost.update({
+      where: { id: post.id },
+      data,
+      include: newsPostInclude,
+    });
 
-    res.json({ success: true, message: 'Post re-submitted for review.', post });
+    res.json({ success: true, message: 'Post re-submitted for review.', post: serializeNewsPost(updated) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -118,10 +143,13 @@ const updatePost = async (req, res) => {
 // DELETE /api/reporter/posts/:id/media/:mediaId — remove a media item
 const deleteMedia = async (req, res) => {
   try {
-    const post = await NewsPost.findOne({ _id: req.params.id, reporter: req.user._id });
+    const post = await prisma.newsPost.findFirst({
+      where: { id: req.params.id, reporterId: req.user._id },
+      include: { media: true },
+    });
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
-    const mediaItem = post.media.id(req.params.mediaId);
+    const mediaItem = post.media.find((m) => m.id === req.params.mediaId);
     if (!mediaItem) return res.status(404).json({ success: false, message: 'Media not found.' });
 
     // Delete from Cloudinary
@@ -130,8 +158,7 @@ const deleteMedia = async (req, res) => {
       await cloudinary.uploader.destroy(mediaItem.publicId, { resource_type: resourceType });
     }
 
-    post.media.pull(req.params.mediaId);
-    await post.save();
+    await prisma.newsPostMedia.delete({ where: { id: req.params.mediaId } });
 
     res.json({ success: true, message: 'Media removed.' });
   } catch (error) {
@@ -143,19 +170,15 @@ const deleteMedia = async (req, res) => {
 const getStats = async (req, res) => {
   try {
     const reporterId = req.user._id;
-    const [total, pending, approved, rejected, views, likes] = await Promise.all([
-      NewsPost.countDocuments({ reporter: reporterId }),
-      NewsPost.countDocuments({ reporter: reporterId, status: 'pending' }),
-      NewsPost.countDocuments({ reporter: reporterId, status: 'approved' }),
-      NewsPost.countDocuments({ reporter: reporterId, status: 'rejected' }),
-      NewsPost.aggregate([
-        { $match: { reporter: reporterId } },
-        { $group: { _id: null, total: { $sum: '$views' } } },
-      ]),
-      NewsPost.aggregate([
-        { $match: { reporter: reporterId } },
-        { $group: { _id: null, total: { $sum: '$likes' } } },
-      ]),
+    const [total, pending, approved, rejected, sums] = await Promise.all([
+      prisma.newsPost.count({ where: { reporterId } }),
+      prisma.newsPost.count({ where: { reporterId, status: 'pending' } }),
+      prisma.newsPost.count({ where: { reporterId, status: 'approved' } }),
+      prisma.newsPost.count({ where: { reporterId, status: 'rejected' } }),
+      prisma.newsPost.aggregate({
+        where: { reporterId },
+        _sum: { views: true, likes: true },
+      }),
     ]);
 
     res.json({
@@ -165,8 +188,8 @@ const getStats = async (req, res) => {
         pending,
         approved,
         rejected,
-        totalViews: views[0]?.total || 0,
-        totalLikes: likes[0]?.total || 0,
+        totalViews: sums._sum.views || 0,
+        totalLikes: sums._sum.likes || 0,
       },
     });
   } catch (error) {

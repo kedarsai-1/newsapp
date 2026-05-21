@@ -87,7 +87,7 @@ function languageWhere(langParam) {
   if (!langParam) return null;
   const lang = String(langParam).toLowerCase();
   if (lang === 'en') {
-    return { OR: [{ language: 'en' }, { language: null }] };
+    return { language: 'en' };
   }
   if (lang === 'te') {
     return {
@@ -272,7 +272,7 @@ const getFeed = async (req, res) => {
       if (list.length) {
         // Treat missing/null sourceType as "manual" (older docs may not have it).
         if (list.includes('manual')) {
-          andFilters.push({ OR: [{ sourceType: { in: list } }, { sourceType: null }] });
+          andFilters.push({ sourceType: { in: list } });
         } else {
           where.sourceType = { in: list };
         }
@@ -343,7 +343,6 @@ const getFeed = async (req, res) => {
           OR: [
             // Manual (reporter) posts: no cutoff.
             { sourceType: 'manual' },
-            { sourceType: null },
             // Ingested sources: use published time when available, otherwise createdAt.
             { sourcePublishedAt: { gte: cutoff } },
             { sourcePublishedAt: null, createdAt: { gte: cutoff } },

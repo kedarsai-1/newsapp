@@ -6,12 +6,7 @@ function buildLanguageClause(langParam) {
   if (!langParam) return null;
   const lang = String(langParam).toLowerCase();
   if (lang === 'en') {
-    return {
-      OR: [
-        { language: 'en' },
-        { language: null },
-      ],
-    };
+    return { language: 'en' };
   }
   if (lang === 'te') {
     return {

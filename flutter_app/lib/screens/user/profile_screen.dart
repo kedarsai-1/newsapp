@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/news_provider.dart';
+import '../../providers/reporter_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/auth_provider.dart';
 import '../../utils/app_utils.dart';
@@ -283,7 +284,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    if (user == null) ...[
+                      DailyhuntSettingsSection(
+                        title: I18n.t(context, 'section_account'),
+                        child: XpressoSettingsRow(
+                          icon: Icons.mic_none_rounded,
+                          title: I18n.t(context, 'tile_become_reporter'),
+                          subtitle: I18n.t(context, 'reporter_register_note'),
+                          onTap: () => context.push('/register?role=reporter'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (user == null)
                       DailyhuntPrimaryButton(
                         label: I18n.t(context, 'action_signin'),
@@ -296,6 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onPressed: () async {
                             final auth = context.read<AuthProvider>();
                             await auth.logout();
+                            context.read<ReporterProvider>().reset();
                             if (!context.mounted) return;
                             context.go('/login');
                           },

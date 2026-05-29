@@ -6,6 +6,7 @@ import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../constants.dart';
 import '../../utils/i18n.dart';
+import '../onboarding/onboarding_design.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -145,7 +146,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_isTouched('pass')) return null;
     final val = v ?? '';
     if (val.isEmpty) return I18n.t(context, 'err_password_required');
-    if (val.length < 6) return I18n.t(context, 'err_password_min');
+    if (val.length < 8) return I18n.t(context, 'err_password_min');
     if (!RegExp(r'[A-Za-z]').hasMatch(val)) return I18n.t(context, 'err_password_letter');
     if (!RegExp(r'[0-9]').hasMatch(val)) return I18n.t(context, 'err_password_number');
     return null;
@@ -230,15 +231,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return GlassBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: GlassAppBar(title: const SizedBox.shrink(), showBack: true),
-        body: SafeArea(
-          top: true,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-            child: _buildForm(key: const ValueKey('form')),
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Scaffold(
+      backgroundColor: OnboardingDesign.background(context),
+      appBar: AppBar(
+        backgroundColor: OnboardingDesign.background(context),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: OnboardingDesign.titleColor(context),
+            size: 20,
+          ),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+      ),
+      body: SafeArea(
+        top: true,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    physics: const BouncingScrollPhysics(),
+                    child: _buildForm(key: const ValueKey('form')),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 8, 20, 12 + bottom),
+                  child: SizedBox(
+                    height: 52,
+                    child: FilledButton(
+                      onPressed: _loading ? null : _register,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: OnboardingDesign.accent(context),
+                        disabledBackgroundColor: OnboardingDesign.accent(context)
+                            .withValues(alpha: 0.55),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            OnboardingDesign.radiusButton,
+                          ),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              I18n.t(context, 'action_create_account'),
+                              style: OnboardingDesign.buttonLabel(context),
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -257,12 +315,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         key: key,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(I18n.t(context, 'reg_title'),
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800,
-                  color: GlassColors.textPrimary, letterSpacing: -0.3)),
-          const SizedBox(height: 4),
-          Text(I18n.t(context, 'reg_subtitle'),
-              style: const TextStyle(fontSize: 14, color: GlassColors.textTertiary)),
+          Text(
+            I18n.t(context, 'reg_title'),
+            style: OnboardingDesign.titleStyle(context),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            I18n.t(context, 'reg_subtitle'),
+            style: OnboardingDesign.subtitleStyle(context),
+          ),
           const SizedBox(height: 24),
 
           if (_apiError != null) ...[
@@ -373,7 +434,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             color: GlassColors.accentGreenSurface,
             child: Text(
               _role == 'reporter'
-                  ? '📸  Reporters can submit news stories with photos, videos, and GPS location tagging. Subject to admin review before publishing.'
+                  ? '📸  ${I18n.t(context, 'reporter_register_note')}'
                   : '📰  Readers can browse the news feed, like and bookmark stories, and comment.',
               style: const TextStyle(fontSize: 12, color: GlassColors.accentGreenLight, height: 1.5),
             ),
@@ -387,24 +448,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
           const SizedBox(height: 28),
 
-          GlassButton(
-            label: I18n.t(context, 'action_create_account'),
-            icon: Icons.person_add_rounded,
-            onPressed: _register,
-            loading: _loading,
-          ),
-          const SizedBox(height: 20),
-
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(I18n.t(context, 'reg_have_account'),
-                style: const TextStyle(color: GlassColors.textTertiary, fontSize: 14)),
-            GestureDetector(
-              onTap: () => context.go('/login'),
-              child: Text(I18n.t(context, 'action_signin'),
-                  style: const TextStyle(color: GlassColors.accentGreenLight,
-                      fontWeight: FontWeight.w700, fontSize: 14)),
+          Center(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  I18n.t(context, 'reg_have_account'),
+                  style: OnboardingDesign.subtitleStyle(context).copyWith(
+                    fontSize: 13.5,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () => context.go('/login'),
+                  child: Text(
+                    I18n.t(context, 'action_signin'),
+                    style: OnboardingDesign.subtitleStyle(context).copyWith(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: OnboardingDesign.accent(context),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ]),
+          ),
         ],
       ),
     );
@@ -442,7 +510,7 @@ class _RequirementsChecklist extends StatelessWidget {
   final String password;
   const _RequirementsChecklist({required this.password});
   static const _reqs = [
-    ('At least 6 characters',              r'.{6,}'),
+    ('At least 8 characters',              r'.{8,}'),
     ('Contains a letter',                  r'[A-Za-z]'),
     ('Contains a number',                  r'[0-9]'),
     ('Uppercase letter (bonus)',            r'[A-Z]'),
@@ -520,8 +588,25 @@ class _FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: GlassColors.textSecondary)),
-      if (required) ...[const SizedBox(width: 3), const Text('*', style: TextStyle(color: GlassColors.accentOrangeLight, fontSize: 13))],
+      Text(
+        label,
+        style: OnboardingDesign.subtitleStyle(context).copyWith(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: OnboardingDesign.titleColor(context),
+        ),
+      ),
+      if (required) ...[
+        const SizedBox(width: 3),
+        Text(
+          '*',
+          style: OnboardingDesign.subtitleStyle(context).copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: OnboardingDesign.accent(context),
+          ),
+        ),
+      ],
     ]);
   }
 }
@@ -531,15 +616,31 @@ class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message});
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      borderColor: GlassColors.accentOrangeBorder,
-      color: GlassColors.accentOrangeSurface,
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.error_outline, color: GlassColors.accentOrangeLight, size: 18),
-        const SizedBox(width: 10),
-        Expanded(child: Text(message, style: const TextStyle(color: GlassColors.accentOrangeLight, fontSize: 13, height: 1.4))),
-      ]),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline, size: 18, color: Colors.red.shade600),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.red.shade700,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

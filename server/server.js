@@ -2,10 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-// const cron = require('node-cron'); // Internal cron disabled; use /api/cron routes.
 require('dotenv').config();
 const { prisma } = require('./config/prisma');
 const { setIngestionSocket } = require('./services/feedSocket');
+const { startCronScheduler } = require('./services/cronScheduler');
 const { ensureDefaultCategories } = require('./utils/ensureDefaultData');
 
 const authRoutes = require('./routes/auth');
@@ -103,8 +103,7 @@ async function runBackgroundJobs() {
 
   console.log('PostgreSQL connected');
   await ensureDefaultCategories();
-
-  console.log('[cron] internal node-cron scheduling disabled; use /api/cron/* endpoints.');
+  startCronScheduler();
 }
 
 async function schedulePostgresConnect() {

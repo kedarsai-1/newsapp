@@ -43,6 +43,7 @@ import 'screens/user/profile_screen.dart';
 import 'screens/user/privacy_policy_screen.dart';
 import 'utils/i18n.dart';
 import 'screens/reporter/reporter_dashboard_screen.dart';
+import 'screens/reporter/reporter_profile_screen.dart';
 import 'screens/reporter/create_post_screen.dart';
 import 'screens/reporter/my_posts_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
@@ -174,6 +175,13 @@ GoRouter createAppRouter(BuildContext context) {
       if (loggedIn && goingToAdmin && !auth.isAdmin) return auth.homeRoute;
       if (loggedIn && goingToReporter && !auth.isReporter && !auth.isAdmin) {
         return auth.homeRoute;
+      }
+
+      if (loggedIn &&
+          auth.isReporter &&
+          !auth.isAdmin &&
+          goingToUserRoute) {
+        return '/reporter';
       }
 
       return null;
@@ -365,6 +373,15 @@ GoRouter createAppRouter(BuildContext context) {
                 _smoothAppPage(state: state, child: const CreatePostScreen()),
           ),
           GoRoute(
+            path: '/reporter/edit/:id',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: CreatePostScreen(
+                postId: state.pathParameters['id'],
+              ),
+            ),
+          ),
+          GoRoute(
             path: '/reporter/posts',
             pageBuilder: (context, state) =>
                 _smoothAppPage(state: state, child: const MyPostsScreen()),
@@ -372,8 +389,10 @@ GoRouter createAppRouter(BuildContext context) {
           // Reporter profile reuses the user profile screen
           GoRoute(
             path: '/reporter/settings',
-            pageBuilder: (context, state) =>
-                _smoothAppPage(state: state, child: const ProfileScreen()),
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const ReporterProfileScreen(),
+            ),
           ),
           // Backward-compatible route
           GoRoute(
@@ -670,74 +689,6 @@ class _UserShellState extends State<UserShell> {
   }
 }
 
-class _DockNavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _DockNavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final c = selected ? p.primary : p.textHint;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected
-                ? p.primary.withValues(alpha: 0.16)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: Icon(
-                  selected ? activeIcon : icon,
-                  key: ValueKey(selected),
-                  color: c,
-                  size: 26,
-                ),
-              ),
-              const SizedBox(height: 2),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 220),
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                  color: c,
-                ),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class ReporterShell extends StatelessWidget {
   final Widget child;
   const ReporterShell({super.key, required this.child});
@@ -750,16 +701,13 @@ class ReporterShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final p = context.palette;
-    int sel = 0;
+    int idx = 0;
     if (loc == '/reporter/posts') {
-      sel = 1;
+      idx = 1;
+    } else if (loc == '/reporter/new' || loc.startsWith('/reporter/edit/')) {
+      idx = 2;
     } else if (loc == '/reporter/settings') {
-      sel = 2;
-    } else if (loc == '/reporter/new') {
-      sel = -1;
-    } else {
-      sel = 0;
+      idx = 3;
     }
 
     final fx = FeedXpressoTheme.fx(context);
@@ -773,52 +721,46 @@ class ReporterShell extends StatelessWidget {
         ],
         child: child,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _goIfNeeded(context, loc, '/reporter/new'),
-        elevation: 4,
-        backgroundColor: p.accentGreen,
-        foregroundColor: Colors.white,
-        shape: const StadiumBorder(),
-        child: const Icon(Icons.add_rounded, size: 28),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        height: 58,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 7,
-        child: Row(
-          children: [
-            Expanded(
-              child: _DockNavItem(
-                icon: Icons.dashboard_outlined,
-                activeIcon: Icons.dashboard_rounded,
-                label: I18n.t(context, 'tab_home'),
-                selected: sel == 0,
-                onTap: () => _goIfNeeded(context, loc, '/reporter'),
-              ),
-            ),
-            const SizedBox(width: 78),
-            Expanded(
-              child: _DockNavItem(
-                icon: Icons.article_outlined,
-                activeIcon: Icons.article_rounded,
-                label: I18n.t(context, 'tab_my_posts'),
-                selected: sel == 1,
-                onTap: () => _goIfNeeded(context, loc, '/reporter/posts'),
-              ),
-            ),
-            Expanded(
-              child: _DockNavItem(
-                icon: Icons.person_outline,
-                activeIcon: Icons.person_rounded,
-                label: I18n.t(context, 'tab_settings'),
-                selected: sel == 2,
-                onTap: () => _goIfNeeded(context, loc, '/reporter/settings'),
-              ),
-            ),
-          ],
-        ),
+      bottomNavigationBar: XpressoBottomNavBar(
+        selectedIndex: idx,
+        onSelected: (i) {
+          switch (i) {
+            case 0:
+              _goIfNeeded(context, loc, '/reporter');
+              return;
+            case 1:
+              _goIfNeeded(context, loc, '/reporter/posts');
+              return;
+            case 2:
+              _goIfNeeded(context, loc, '/reporter/new');
+              return;
+            case 3:
+              _goIfNeeded(context, loc, '/reporter/settings');
+              return;
+          }
+        },
+        destinations: [
+          XpressoNavDestination(
+            icon: Icons.dashboard_outlined,
+            selectedIcon: Icons.dashboard_rounded,
+            label: I18n.t(context, 'tab_home'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.article_outlined,
+            selectedIcon: Icons.article_rounded,
+            label: I18n.t(context, 'tab_my_posts'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.add_circle_outline,
+            selectedIcon: Icons.add_circle_rounded,
+            label: I18n.t(context, 'tab_create_story'),
+          ),
+          XpressoNavDestination(
+            icon: Icons.person_outline,
+            selectedIcon: Icons.person_rounded,
+            label: I18n.t(context, 'tab_settings'),
+          ),
+        ],
       ),
     );
   }

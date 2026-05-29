@@ -2,26 +2,37 @@ const bcrypt = require('bcryptjs');
 const { Prisma, prisma } = require('../config/prisma');
 const { generateToken } = require('../middleware/authMiddleware');
 const { serializeUser } = require('../utils/serializers');
+const { validateRegisterPayload } = require('../utils/authValidation');
 
 // POST /api/auth/register
 const register = async (req, res) => {
   try {
-    const { name, email, password, role, phone } = req.body;
+    const validation = validateRegisterPayload(req.body);
+    if (!validation.ok) {
+      return res.status(400).json({ success: false, message: validation.message });
+    }
 
-    // Prevent self-assigning admin role
-    const assignedRole = role === 'admin' ? 'user' : (role || 'user');
+    const { name, email, password, role: assignedRole, phone } = validation.data;
 
-    const normalizedEmail = String(email || '').trim().toLowerCase();
-    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Email already registered.' });
+    if (email) {
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: 'Email already registered.' });
+      }
+    }
+
+    if (phone) {
+      const existingPhone = await prisma.user.findFirst({ where: { phone } });
+      if (existingPhone) {
+        return res.status(400).json({ success: false, message: 'Phone number already registered.' });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
         name,
-        email: normalizedEmail,
+        email,
         password: hashedPassword,
         role: assignedRole,
         phone: phone || null,

@@ -92,7 +92,7 @@ class MediaItem {
   });
 
   factory MediaItem.fromJson(Map<String, dynamic> json) => MediaItem(
-        id: json['_id'] ?? '',
+        id: (json['_id'] ?? json['id'] ?? '').toString(),
         type: json['type'] ?? 'image',
         url: json['url'] ?? '',
         thumbnail: json['thumbnail'],

@@ -3,6 +3,7 @@ const { Prisma, prisma } = require('../config/prisma');
 const { sendOtp, verifyOtp } = require('../utils/otpService');
 const { generateToken } = require('../middleware/authMiddleware');
 const { serializeUser } = require('../utils/serializers');
+const { validateOtpRegisterPayload } = require('../utils/authValidation');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -122,7 +123,11 @@ const verifyLoginOtp = async (req, res) => {
 
     const user = await prisma.user.findFirst({ where: query });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found.' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, message: 'Account suspended.' });
     }
 
     const token = generateToken(user.id);
@@ -140,12 +145,20 @@ const verifyRegisterOtp = async (req, res) => {
   try {
     const { name, email, phone, password, role, code } = req.body;
 
-    // Determine what target was used to request the OTP
-    const target = email || phone;
-    if (!target) {
-      return res.status(400).json({ success: false, message: 'email or phone is required.' });
+    const validation = validateOtpRegisterPayload({ name, email, phone, password, role });
+    if (!validation.ok) {
+      return res.status(400).json({ success: false, message: validation.message });
     }
 
+    const {
+      name: validName,
+      email: validEmail,
+      phone: validPhone,
+      password: validPassword,
+      role: assignedRole,
+    } = validation.data;
+
+    const target = validEmail || validPhone;
     if (!code) {
       return res.status(400).json({ success: false, message: 'OTP code is required.' });
     }
@@ -155,18 +168,14 @@ const verifyRegisterOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: result.error });
     }
 
-    // Prevent self-assigning admin
-    const assignedRole = role === 'admin' ? 'user' : (role || 'user');
-
-    // Create the user
     const user = await prisma.user.create({
       data: {
-        name: name.trim(),
-        email: email ? email.trim().toLowerCase() : undefined,
-        phone: phone ? phone.trim() : undefined,
-        password: await bcrypt.hash(password, 10),
+        name: validName,
+        email: validEmail || undefined,
+        phone: validPhone || undefined,
+        password: await bcrypt.hash(validPassword, 10),
         role: assignedRole,
-        isVerified: true, // OTP verified -> mark account as verified
+        isVerified: true,
       },
     });
 

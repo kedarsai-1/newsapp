@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
@@ -182,6 +182,28 @@ class ApiService {
       return {
         'success': false,
         'message': 'Request timed out. Try again in a few seconds.',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> _delete(String path) async {
+    try {
+      final res = await http
+          .delete(
+            Uri.parse('${AppConstants.baseUrl}$path'),
+            headers: _getHeaders,
+          )
+          .timeout(_httpTimeout);
+      return jsonDecode(res.body);
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'Request timed out. Try again in a few seconds.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _friendlyNetworkMessage(e),
       };
     }
   }
@@ -523,6 +545,93 @@ class ApiService {
 
   // ─── REPORTER ────────────────────────────────────────────────────────────
 
+  static Future<Map<String, dynamic>> _sendReporterMultipart({
+    required String method,
+    required Uri uri,
+    required Map<String, String> fields,
+    List<XFile> mediaFiles = const [],
+    String? operationLabel,
+  }) async {
+    final label = operationLabel ?? '$method ${uri.path}';
+    try {
+      final request = http.MultipartRequest(method, uri)
+        ..headers['Authorization'] = 'Bearer $_token'
+        ..fields.addAll(fields);
+
+      for (final file in mediaFiles) {
+        final name = file.name.toLowerCase();
+        final ext = name.contains('.') ? name.split('.').last : '';
+        final isVideo = ['mp4', 'mov', 'avi', 'mkv'].contains(ext);
+        final bytes = await file.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'media',
+            bytes,
+            filename: file.name.isEmpty ? 'media.$ext' : file.name,
+            contentType: MediaType(isVideo ? 'video' : 'image', ext),
+          ),
+        );
+      }
+
+      final streamed = await request.send().timeout(_httpTimeout);
+      final res = await http.Response.fromStream(streamed);
+
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        Map<String, dynamic> decoded = {};
+        try {
+          final parsed = jsonDecode(res.body);
+          if (parsed is Map<String, dynamic>) decoded = parsed;
+        } catch (_) {}
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message': decoded['message'] ??
+              'Server error ${res.statusCode} during $label.',
+        };
+      }
+
+      final body = res.body.trim();
+      if (body.isEmpty) {
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message': 'Empty response from server.',
+        };
+      }
+      if (body.startsWith('<')) {
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message': 'Server returned HTML instead of JSON.',
+        };
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return {'statusCode': res.statusCode, ...decoded};
+      }
+      return {'success': false, 'message': 'Unexpected response format.'};
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message':
+            'Request timed out. The API may be waking up — try again in a moment.',
+      };
+    } on FormatException {
+      return {
+        'success': false,
+        'message': 'Could not read data from the server (invalid JSON).',
+      };
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ApiService] $label failed: $e');
+      }
+      return {
+        'success': false,
+        'message': _friendlyNetworkMessage(e),
+      };
+    }
+  }
+
   static Future<Map<String, dynamic>> createPost({
     required String title,
     required String body,
@@ -534,37 +643,24 @@ class ApiService {
     List<XFile> mediaFiles = const [],
     bool isDraft = false,
   }) async {
-    final uri = Uri.parse('${AppConstants.baseUrl}/reporter/posts');
-    final request = http.MultipartRequest('POST', uri)
-      ..headers['Authorization'] = 'Bearer $_token'
-      ..fields['title'] = title
-      ..fields['body'] = body
-      ..fields['categoryId'] = categoryId
-      ..fields['isDraft'] = isDraft.toString()
-      ..fields['tags'] = jsonEncode(tags);
+    final fields = <String, String>{
+      'title': title,
+      'body': body,
+      'categoryId': categoryId,
+      'isDraft': isDraft.toString(),
+      'tags': jsonEncode(tags),
+    };
+    if (summary != null) fields['summary'] = summary;
+    if (latitude != null) fields['latitude'] = latitude.toString();
+    if (longitude != null) fields['longitude'] = longitude.toString();
 
-    if (summary != null) request.fields['summary'] = summary;
-    if (latitude != null) request.fields['latitude'] = latitude.toString();
-    if (longitude != null) request.fields['longitude'] = longitude.toString();
-
-    for (final file in mediaFiles) {
-      final name = file.name.toLowerCase();
-      final ext = name.contains('.') ? name.split('.').last : '';
-      final isVideo = ['mp4', 'mov', 'avi', 'mkv'].contains(ext);
-      final bytes = await file.readAsBytes();
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'media',
-          bytes,
-          filename: file.name.isEmpty ? 'media.$ext' : file.name,
-          contentType: MediaType(isVideo ? 'video' : 'image', ext),
-        ),
-      );
-    }
-
-    final streamed = await request.send();
-    final res = await http.Response.fromStream(streamed);
-    return jsonDecode(res.body);
+    return _sendReporterMultipart(
+      method: 'POST',
+      uri: Uri.parse('${AppConstants.baseUrl}/reporter/posts'),
+      fields: fields,
+      mediaFiles: mediaFiles,
+      operationLabel: 'createPost title="${title.trim()}"',
+    );
   }
 
   static Future<Map<String, dynamic>> getMyPosts(
@@ -581,6 +677,38 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getReporterStats() async =>
       _get('/reporter/stats');
+
+  static Future<Map<String, dynamic>> updatePost({
+    required String postId,
+    required String title,
+    required String body,
+    String? summary,
+    required String categoryId,
+    List<String> tags = const [],
+    List<XFile> mediaFiles = const [],
+  }) async {
+    final fields = <String, String>{
+      'title': title,
+      'body': body,
+      'categoryId': categoryId,
+      'tags': jsonEncode(tags),
+    };
+    if (summary != null) fields['summary'] = summary;
+
+    return _sendReporterMultipart(
+      method: 'PUT',
+      uri: Uri.parse('${AppConstants.baseUrl}/reporter/posts/$postId'),
+      fields: fields,
+      mediaFiles: mediaFiles,
+      operationLabel: 'updatePost postId=$postId title="${title.trim()}"',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deletePostMedia({
+    required String postId,
+    required String mediaId,
+  }) async =>
+      _delete('/reporter/posts/$postId/media/$mediaId');
 
   // ─── ADMIN ───────────────────────────────────────────────────────────────
 

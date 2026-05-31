@@ -1,4 +1,5 @@
 const { notifyFeedIngestion } = require('../utils/notifications');
+const { invalidateFeedCaches } = require('../utils/feedResponseCache');
 
 let ingestionSocket = null;
 
@@ -7,6 +8,7 @@ function setIngestionSocket(io) {
 }
 
 async function emitFeedUpdated(payload) {
+  invalidateFeedCaches();
   if (ingestionSocket) {
     ingestionSocket.to('all').emit('feed_updated', payload);
   }

@@ -17,6 +17,7 @@ const {
   serializeComment,
 } = require('../utils/serializers');
 const { newsPostInclude } = require('../utils/prismaNewsPost');
+const feedResponseCache = require('../utils/feedResponseCache');
 
 function cleanTextForClient(input) {
   return String(input || '')
@@ -197,6 +198,12 @@ const extractArticle = async (req, res) => {
 // GET /api/news/feed  — paginated, filterable by category and city
 const getFeed = async (req, res) => {
   try {
+    const cached = feedResponseCache.getCachedFeed(req.query);
+    if (cached) {
+      res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
+      return res.json({ ...cached.body, cached: true });
+    }
+
     const {
       page = 1,
       limit = 20,
@@ -375,13 +382,17 @@ const getFeed = async (req, res) => {
       });
     }
 
-    res.json({
+    const payload = {
       success: true,
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
       posts,
-    });
+      cached: false,
+    };
+    feedResponseCache.setCachedFeed(req.query, payload);
+    res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.feedTtlMs()));
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -390,8 +401,19 @@ const getFeed = async (req, res) => {
 // GET /api/news/:id — single article
 const getPost = async (req, res) => {
   try {
+    const postId = String(req.params.id || '').trim();
+    const cached = feedResponseCache.getCachedPost(postId);
+    if (cached) {
+      res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
+      prisma.newsPost.update({
+        where: { id: postId },
+        data: { views: { increment: 1 } },
+      }).catch(() => {});
+      return res.json({ ...cached.body, cached: true });
+    }
+
     const post = await prisma.newsPost.findFirst({
-      where: { id: req.params.id, status: 'approved' },
+      where: { id: postId, status: 'approved' },
       include: newsPostInclude,
     });
 
@@ -403,7 +425,14 @@ const getPost = async (req, res) => {
       data: { views: { increment: 1 } },
     }).catch(() => {});
 
-    res.json({ success: true, post: sanitizeStoryTextFields(serializeNewsPost(post)) });
+    const payload = {
+      success: true,
+      post: sanitizeStoryTextFields(serializeNewsPost(post)),
+      cached: false,
+    };
+    feedResponseCache.setCachedPost(postId, payload);
+    res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.postTtlMs()));
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

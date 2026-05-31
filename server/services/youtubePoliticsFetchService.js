@@ -6,6 +6,7 @@ const {
   isYoutubeQuotaError,
   markYoutubeQuotaBlocked,
 } = require('../utils/youtubeQuota');
+const { parseIso8601Duration } = require('./youtubeIngestionService');
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -110,7 +111,12 @@ async function filterEmbeddableVideos(videos) {
         if (!meta) continue;
         if (meta.status?.embeddable === false) continue;
         if (meta.status?.privacyStatus !== 'public') continue;
-        embeddable.push(v);
+        const durationSeconds = parseIso8601Duration(meta.contentDetails?.duration);
+        embeddable.push({
+          ...v,
+          durationSeconds,
+          isShort: durationSeconds != null && durationSeconds <= 60,
+        });
       }
     } catch (e) {
       if (isYoutubeQuotaError(e)) throw e;

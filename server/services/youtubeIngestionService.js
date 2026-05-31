@@ -6,6 +6,10 @@ const {
   getYoutubeSearchPlan,
   getYoutubeChannelsByLanguage,
 } = require('../config/youtubeIngestPlan');
+const {
+  resolveIngestLanguages,
+  filterByLanguages,
+} = require('../config/ingestLanguages');
 const { emitFeedUpdated } = require('./feedSocket');
 const {
   isYoutubeQuotaError,
@@ -337,17 +341,23 @@ async function insertNormalizedItem(item, reporter, stats) {
   }
   stats.youtubeInserted += 1;
   stats.inserted += 1;
+  if (normalized.youtube?.isShort) {
+    stats.youtubeShortsInserted += 1;
+  }
   return true;
 }
 
 /**
  * Ingest YouTube videos via Data API (metadata only — no video download).
  */
-async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
+async function runYoutubeIngestion({ triggeredBy = 'youtube', languages } = {}) {
+  const activeLanguages = resolveIngestLanguages({ languages });
   const stats = {
     triggeredBy,
+    languages: activeLanguages,
     youtubeFetched: 0,
     youtubeInserted: 0,
+    youtubeShortsInserted: 0,
     youtubeDuplicates: 0,
     youtubeSkippedRestricted: 0,
     youtubeFailed: 0,
@@ -386,8 +396,15 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
 
   try {
     const reporter = await ensureSystemReporter();
-    const channels = getYoutubeChannelsByLanguage();
+    const channels = filterByLanguages(
+      getYoutubeChannelsByLanguage(),
+      activeLanguages,
+    );
     let quotaHit = false;
+
+    console.log(
+      `[youtube] begin (${triggeredBy}) langs=${activeLanguages.join(',')} channels=${channels.length}`,
+    );
 
     for (const { channelId, language, categorySlug: channelCategorySlug } of channels) {
       if (quotaHit) break;
@@ -442,7 +459,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
     }
 
     if (isSearchEnabled() && !quotaHit) {
-      const plans = getYoutubeSearchPlan();
+      const plans = filterByLanguages(getYoutubeSearchPlan(), activeLanguages);
       for (const plan of plans) {
         if (quotaHit) break;
         let insertedFromSearch = 0;
@@ -503,8 +520,9 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube' } = {}) {
     }
 
     console.log(
-      `[youtube] done (${triggeredBy}): fetched=${stats.youtubeFetched} `
-        + `inserted=${stats.youtubeInserted} duplicates=${stats.youtubeDuplicates} `
+      `[youtube] done (${triggeredBy}): langs=${activeLanguages.join(',')} `
+        + `fetched=${stats.youtubeFetched} inserted=${stats.youtubeInserted} `
+        + `shorts=${stats.youtubeShortsInserted} duplicates=${stats.youtubeDuplicates} `
         + `restricted=${stats.youtubeSkippedRestricted} failed=${stats.youtubeFailed}`,
     );
     if (stats.youtubeInserted > 0) {

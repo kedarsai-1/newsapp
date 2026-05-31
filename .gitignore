@@ -1,0 +1,65 @@
+# ── OS ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# ── Environment & secrets (never commit) ─────────────────────
+.env
+.env.*
+!.env.example
+!**/.env.example
+**/.env.local
+**/.env.production
+**/.env.development
+**/.env.staging
+
+# ── Firebase / Google credentials ─────────────────────────────
+**/google-services.json
+!**/google-services.json.example
+**/GoogleService-Info.plist
+!**/GoogleService-Info.plist.example
+**/*firebase-adminsdk*.json
+**/firebase-service-account*.json
+**/serviceAccountKey.json
+
+# ── Apple / Android signing & push keys ───────────────────────
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+*.keystore
+*.jks
+**/key.properties
+
+# ── Node ──────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── Python (repo root scripts) ────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# ── Logs & temp ───────────────────────────────────────────────
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# ── Test / coverage ───────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── IDE (local editor state) ──────────────────────────────────
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example

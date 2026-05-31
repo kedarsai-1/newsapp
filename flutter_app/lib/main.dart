@@ -30,7 +30,6 @@ import 'widgets/feed/feed_xpresso_theme.dart';
 import 'widgets/dailyhunt/xpresso_bottom_nav_bar.dart';
 import 'widgets/dailyhunt/xpresso_menu_scope.dart';
 import 'widgets/dailyhunt/xpresso_side_menu.dart';
-import 'screens/user/dailyhunt_home_screen.dart';
 import 'screens/user/shorts_news_screen.dart';
 import 'screens/user/political_reels_screen.dart';
 import 'screens/user/quick_news_screen.dart';
@@ -52,6 +51,43 @@ import 'screens/admin/manage_users_screen.dart';
 import 'services/push_notifications.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Re-run [GoRouter] redirects only when auth or onboarding prefs change — not on every feed page.
+class _RouterRefreshListenable extends ChangeNotifier {
+  _RouterRefreshListenable(AuthProvider auth, NewsProvider news) {
+    _auth = auth;
+    _news = news;
+    _prefsLoaded = news.prefsLoaded;
+    _languageOnboardingCompleted = news.languageOnboardingCompleted;
+    auth.addListener(_onAuth);
+    news.addListener(_onNews);
+  }
+
+  late final AuthProvider _auth;
+  late final NewsProvider _news;
+  late bool _prefsLoaded;
+  late bool _languageOnboardingCompleted;
+
+  void _onAuth() => notifyListeners();
+
+  void _onNews() {
+    final prefs = _news.prefsLoaded;
+    final onboarding = _news.languageOnboardingCompleted;
+    if (prefs == _prefsLoaded && onboarding == _languageOnboardingCompleted) {
+      return;
+    }
+    _prefsLoaded = prefs;
+    _languageOnboardingCompleted = onboarding;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _auth.removeListener(_onAuth);
+    _news.removeListener(_onNews);
+    super.dispose();
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,7 +143,7 @@ GoRouter createAppRouter(BuildContext context) {
     initialLocation: auth.isLoggedIn && (auth.isAdmin || auth.isReporter)
         ? auth.homeRoute
         : '/splash',
-    refreshListenable: Listenable.merge([auth, news]),
+    refreshListenable: _RouterRefreshListenable(auth, news),
     redirect: (context, state) {
       final auth = context.read<AuthProvider>();
       final news = context.read<NewsProvider>();
@@ -299,10 +335,7 @@ GoRouter createAppRouter(BuildContext context) {
           ),
           GoRoute(
             path: '/home',
-            pageBuilder: (context, state) => _smoothAppPage(
-              state: state,
-              child: const DailyhuntHomeScreen(),
-            ),
+            redirect: (_, __) => '/feed',
           ),
           GoRoute(
             path: '/quick-news',
@@ -498,9 +531,10 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final news = context.watch<NewsProvider>();
-    final booting = !auth.initialized || !news.prefsLoaded;
+    final booting = context.select<AuthProvider, bool>(
+          (a) => !a.initialized,
+        ) ||
+        context.select<NewsProvider, bool>((n) => !n.prefsLoaded);
 
     final themeMode = context.watch<ThemeProvider>().themeMode;
 
@@ -620,13 +654,6 @@ class _UserShellState extends State<UserShell> {
     if (loc == '/categories') idx = 2;
     if (loc == '/bookmarks') idx = 3;
     if (loc == '/settings') idx = 4;
-
-    if (loc == '/home') {
-      return Scaffold(
-        backgroundColor: FeedXpressoTheme.fx(context).background,
-        body: widget.child,
-      );
-    }
 
     return XpressoMenuScope(
       openMenu: _openMenu,

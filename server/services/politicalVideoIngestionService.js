@@ -7,6 +7,11 @@ const { Prisma, prisma } = require('../config/prisma');
 const { getPoliticalYoutubeChannels } = require('../config/politicalVideoConfig');
 const { classifyByKeywords, isPoliticalLabel } = require('../utils/politicalKeywordFilter');
 const {
+  resolveIngestLanguages,
+  filterByLanguages,
+  lockKeyForLanguages,
+} = require('../config/ingestLanguages');
+const {
   preloadPoliticalClassifier,
   classifyVideosBatch,
   isMlEnabled,
@@ -25,7 +30,19 @@ const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsn
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
 const SCRAPER_AUTO_APPROVE = process.env.SCRAPER_AUTO_APPROVE !== 'false';
 
-let ingestRunning = false;
+let ingestRunningByLock = new Map();
+
+function getPoliticalLockState(lockKey) {
+  if (!ingestRunningByLock.has(lockKey)) {
+    ingestRunningByLock.set(lockKey, { isRunning: false });
+  }
+  return ingestRunningByLock.get(lockKey);
+}
+
+function isInterviewCategory(category) {
+  const c = String(category || '').toLowerCase();
+  return c.includes('interview') || c.includes('debate') || c.includes('press meet');
+}
 
 async function ensureSystemReporter() {
   let reporter = await prisma.user.findUnique({ where: { email: SYSTEM_REPORTER_EMAIL } });
@@ -68,6 +85,11 @@ async function savePoliticalVideo(video, classification) {
   const category = await getPoliticsCategory();
   const reporter = await ensureSystemReporter();
 
+  const durationSeconds = video.durationSeconds ?? null;
+  const isShort = video.isShort ?? (
+    durationSeconds != null && durationSeconds <= 60
+  );
+
   const youtube = {
     videoId: video.videoId,
     channelId: video.channelId,
@@ -75,8 +97,8 @@ async function savePoliticalVideo(video, classification) {
     embedUrl: embedUrl(video.videoId),
     watchUrl: watchUrl(video.videoId),
     channelUrl: video.channelId ? `https://www.youtube.com/channel/${video.channelId}` : null,
-    durationSeconds: null,
-    isShort: false,
+    durationSeconds,
+    isShort,
     embeddable: true,
     privacyStatus: 'public',
   };
@@ -150,9 +172,17 @@ async function savePoliticalVideo(video, classification) {
   return post;
 }
 
-async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {}) {
-  if (ingestRunning) {
-    return { success: false, skipped: true, message: 'Political ingestion already running' };
+async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron', languages } = {}) {
+  const activeLanguages = resolveIngestLanguages({ languages });
+  const lockKey = lockKeyForLanguages(activeLanguages);
+  const lockState = getPoliticalLockState(lockKey);
+
+  if (lockState.isRunning) {
+    return {
+      success: false,
+      skipped: true,
+      message: `Political ingestion already running (${lockKey})`,
+    };
   }
   if (process.env.POLITICAL_VIDEO_ENABLED === 'false') {
     return { success: true, skipped: true, message: 'Political video ingestion disabled' };
@@ -164,9 +194,11 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
     return { success: true, skipped: true, message: 'YouTube quota cooldown' };
   }
 
-  ingestRunning = true;
+  lockState.isRunning = true;
   const stats = {
     triggeredBy,
+    languages: activeLanguages,
+    lockKey,
     fetched: 0,
     keywordAccepted: 0,
     mlClassified: 0,
@@ -174,6 +206,8 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
     rejected: 0,
     duplicates: 0,
     saved: 0,
+    interviewsSaved: 0,
+    shortsSaved: 0,
     blacklisted: 0,
     uncertain: 0,
     mlUnavailable: null,
@@ -191,10 +225,18 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
       }
     }
 
-    const channels = getPoliticalYoutubeChannels();
+    const channels = filterByLanguages(
+      getPoliticalYoutubeChannels(),
+      activeLanguages,
+    );
     const maxPerChannel = Math.min(
       25,
       Math.max(5, Number(process.env.POLITICAL_VIDEOS_PER_CHANNEL || 12)),
+    );
+
+    console.log(
+      `[political-video] begin (${triggeredBy}) langs=${activeLanguages.join(',')} `
+        + `channels=${channels.length}`,
     );
 
     let candidates = await fetchLatestFromChannels(channels, maxPerChannel);
@@ -275,15 +317,20 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
         // eslint-disable-next-line no-await-in-loop
         await savePoliticalVideo(row.video, row.classification);
         stats.saved += 1;
+        if (row.video.isShort) stats.shortsSaved += 1;
+        if (isInterviewCategory(row.classification.category)) {
+          stats.interviewsSaved += 1;
+        }
       } catch (e) {
         console.warn('[political-video] save failed:', e.message);
       }
     }
 
     console.log(
-      `[political-video] done (${triggeredBy}): fetched=${stats.fetched} saved=${stats.saved} `
-        + `keyword=${stats.keywordAccepted} ml=${stats.mlAccepted} dup=${stats.duplicates} `
-        + `rejected=${stats.rejected}`,
+      `[political-video] done (${triggeredBy}): langs=${activeLanguages.join(',')} `
+        + `fetched=${stats.fetched} saved=${stats.saved} interviews=${stats.interviewsSaved} `
+        + `shorts=${stats.shortsSaved} keyword=${stats.keywordAccepted} ml=${stats.mlAccepted} `
+        + `dup=${stats.duplicates} rejected=${stats.rejected}`,
     );
 
     if (stats.saved > 0) {
@@ -295,7 +342,7 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron' } = {
     console.error('[political-video] ingestion error:', e.message);
     return { success: false, error: e.message, stats };
   } finally {
-    ingestRunning = false;
+    lockState.isRunning = false;
   }
 }
 

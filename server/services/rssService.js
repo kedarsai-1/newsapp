@@ -1,5 +1,13 @@
 const Parser = require('rss-parser');
 const { franc } = require('franc');
+const aiProvider = require('./aiProvider');
+const {
+  summarize: aiSummarize,
+  translateToEnglish: aiTranslateToEnglish,
+  translateToFeedLanguage: aiTranslateToFeedLanguage,
+  isAiSummaryEnabled,
+  isOllamaProvider,
+} = aiProvider;
 
 const parser = new Parser({
   timeout: 15000,
@@ -108,45 +116,16 @@ function detectLanguage(text) {
   return lang;
 }
 
-function parseHfTranslationJson(result) {
-  if (result == null) return '';
-  if (typeof result === 'string') return result.trim();
-  if (Array.isArray(result)) {
-    const first = result[0];
-    if (first && typeof first === 'object' && first.translation_text != null) {
-      return String(first.translation_text).trim();
-    }
-  }
-  if (typeof result === 'object' && result.translation_text != null) {
-    return String(result.translation_text).trim();
-  }
-  return '';
+async function translateToEnglish(text) {
+  return aiTranslateToEnglish(text);
 }
 
-async function translateToEnglish(text) {
-  const token = String(process.env.HF_TOKEN || '').trim();
-  if (!token) return String(text || '');
-  const input = String(text || '').slice(0, 800);
-  if (!input.trim()) return '';
-  try {
-    const response = await fetch(
-      'https://router.huggingface.co/hf-inference/models/Helsinki-NLP/opus-mt-mul-en',
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-        body: JSON.stringify({ inputs: input }),
-      },
-    );
-    if (!response.ok) throw new Error(`HF translate ${response.status}`);
-    const result = await response.json();
-    const out = parseHfTranslationJson(result);
-    return out || text;
-  } catch {
-    return String(text || '');
-  }
+async function translateEnglishToFeedLanguage(text, feedLang) {
+  return aiTranslateToFeedLanguage(text, feedLang);
+}
+
+async function summarize(text, feedLang = 'en') {
+  return aiSummarize(text, feedLang);
 }
 
 function extractiveSummaryNative(text, maxLen = 300) {
@@ -183,73 +162,7 @@ function isPrimarilyIndicScript(text) {
   return indic / (indic + latin) >= 0.35;
 }
 
-async function hfMarianTranslate(text, model, token) {
-  const input = String(text || '').trim().slice(0, 600);
-  if (!input) return '';
-  const response = await fetch(
-    `https://router.huggingface.co/hf-inference/models/${model}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-      body: JSON.stringify({ inputs: input }),
-    },
-  );
-  if (!response.ok) throw new Error(String(response.status));
-  const result = await response.json();
-  return parseHfTranslationJson(result) || '';
-}
-
-async function hfNllbToTelugu(text, token) {
-  const input = String(text || '').trim().slice(0, 512);
-  if (!input) return '';
-  const response = await fetch(
-    'https://router.huggingface.co/hf-inference/models/facebook/nllb-200-distilled-600M',
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      method: 'POST',
-      body: JSON.stringify({
-        inputs: input,
-        parameters: { src_lang: 'eng_Latn', tgt_lang: 'tel_Telu' },
-      }),
-    },
-  );
-  if (!response.ok) throw new Error(String(response.status));
-  const result = await response.json();
-  return parseHfTranslationJson(result) || '';
-}
-
-/**
- * When the RSS feed is tagged hi/te but the article text is English, localize summary/title for display.
- */
-async function translateEnglishToFeedLanguage(text, feedLang) {
-  const raw = String(text || '').trim();
-  if (!raw) return '';
-  const token = String(process.env.HF_TOKEN || '').trim();
-  if (!token) return raw;
-  const code = String(feedLang || '').toLowerCase();
-  try {
-    if (code === 'hi') {
-      const out = await hfMarianTranslate(raw, 'Helsinki-NLP/opus-mt-en-hi', token);
-      return out || raw;
-    }
-    if (code === 'te') {
-      const out = await hfNllbToTelugu(raw, token);
-      return out || raw;
-    }
-  } catch {
-    return raw;
-  }
-  return raw;
-}
-
-/**
- * Generic translation helper for UI/API use.
+/** Generic translation helper for UI/API use.
  * Supports target: en, hi, te. Falls back to input when unsupported/failure.
  */
 async function translateTextForFeed(text, targetLanguage) {
@@ -301,35 +214,104 @@ function prepareForSummaryFromIngestItem(item = {}, rawRssItem = null) {
   return prepareForSummarization(plain);
 }
 
+/** True when franc language code is Hindi (`hin`) or Telugu (`tel`). */
+function isIndicFrancLang(lang) {
+  const l = String(lang || '').toLowerCase();
+  return l === 'hin' || l === 'tel';
+}
+
+function isIndicAiSummaryEnabled() {
+  if (process.env.RSS_INDIC_AI_SUMMARY === 'false') return false;
+  return isAiSummaryEnabled();
+}
+
+/** Ollama: one multilingual call. HF: translate → EN → summarize → translate back. */
+async function summarizeIndicViaEnglish(src, feedLang) {
+  const raw = String(src || '').trim();
+  if (!raw) return '';
+  const fl = String(feedLang || 'en').toLowerCase();
+
+  if (isOllamaProvider()) {
+    try {
+      const out = await aiSummarize(raw, fl);
+      return out ? clipSummarySchema(out, 300) : '';
+    } catch {
+      return '';
+    }
+  }
+
+  let en = await translateToEnglish(raw);
+  en = sanitizeForSummarization(en);
+  const minChars = Math.max(12, Number(process.env.RSS_SUMMARY_MIN_CHARS || 15));
+  if (!en || en.length < minChars) return '';
+
+  let summaryEn = '';
+  try {
+    summaryEn = await aiSummarize(en, 'en');
+  } catch {
+    summaryEn = '';
+  }
+  if (!summaryEn) return '';
+
+  summaryEn = clipSummarySchema(summaryEn, 300);
+  if (fl === 'hi' || fl === 'te') {
+    try {
+      const localized = await translateEnglishToFeedLanguage(summaryEn, fl);
+      if (localized && localized.trim()) {
+        return clipSummarySchema(localized, 300);
+      }
+    } catch { /* keep English summary */ }
+  }
+  return summaryEn;
+}
+
 /**
- * English → HF abstractive summary; Indic/other → extractive summary in the original script.
- * If feed is hi/te but franc says English, translate summary to that language.
+ * RSS ingest summarization: English → Ollama/HF in feed language, else extractive.
+ * Indic (hi/te) with RSS_INDIC_AI_SUMMARY → summarizeIndicViaEnglish (Ollama: one call in
+ * target language; HF: translate → EN → summarize → translate back). Always falls back to
+ * extractive, then summarizeLocal. English summaries may be translated to hi/te when needed.
  */
 async function summarizeForRssIngest(text, originalLang, feedLang) {
   const src = String(text || '').trim();
   const minChars = Math.max(12, Number(process.env.RSS_SUMMARY_MIN_CHARS || 15));
   if (!src || src.length < minChars) return '';
   const fl = String(feedLang || '').toLowerCase();
-  const forceNativeForIndicFeed =
-    (fl === 'te' || fl === 'hi') && isPrimarilyIndicScript(src);
+  const isIndicScript = isPrimarilyIndicScript(src);
+  const isIndicContent = isIndicFrancLang(originalLang) || isIndicScript;
 
   let summary = '';
-  if (originalLang === 'eng' && !forceNativeForIndicFeed) {
-    if (shouldUseHfSummarization(src, { language: 'en' })) {
+
+  if (originalLang === 'eng' && !isIndicScript) {
+    const useAi = isOllamaProvider() || shouldUseHfSummarization(src, { language: 'en' });
+    if (useAi && isAiSummaryEnabled()) {
       try {
-        summary = await summarize(src);
+        summary = await aiSummarize(src, fl || 'en');
       } catch {
         summary = '';
       }
     }
     if (!summary) summary = extractiveSummaryNative(src, 300);
+  } else if (isIndicAiSummaryEnabled() && (isIndicContent || fl === 'hi' || fl === 'te')) {
+    try {
+      summary = await summarizeIndicViaEnglish(src, fl);
+    } catch {
+      summary = '';
+    }
+    if (!summary) summary = extractiveSummaryNative(src, 300);
   } else {
     summary = extractiveSummaryNative(src, 300);
   }
+
   if (!summary) summary = summarizeLocal(src) || '';
   summary = clipSummarySchema(summary, 300);
 
-  if ((fl === 'hi' || fl === 'te') && originalLang === 'eng' && summary && !forceNativeForIndicFeed) {
+  if (
+    (fl === 'hi' || fl === 'te')
+    && originalLang === 'eng'
+    && summary
+    && !isIndicScript
+    && !isIndicFrancLang(originalLang)
+  ) {
     try {
       const tr = await translateEnglishToFeedLanguage(summary, fl);
       if (tr && tr.trim()) summary = clipSummarySchema(tr, 300);
@@ -353,65 +335,6 @@ function shouldUseHfSummarization(text, { language } = {}) {
 
   // sshleifer/distilbart-cnn-12-6 is English-focused; avoid low-quality output on Indic-heavy text.
   return latinRatio >= 0.65;
-}
-
-function parseHfSummarizationJson(result) {
-  if (result == null) return '';
-  if (typeof result === 'string') return result.trim();
-  if (Array.isArray(result)) {
-    const first = result[0];
-    if (first && typeof first === 'object' && first.summary_text != null) {
-      return String(first.summary_text).trim();
-    }
-  }
-  if (typeof result === 'object' && result.summary_text != null) {
-    return String(result.summary_text).trim();
-  }
-  return '';
-}
-
-async function summarize(text) {
-  const input = sanitizeForSummarization(text);
-  if (!input) return '';
-  const token = String(process.env.HF_TOKEN || '').trim();
-  if (!token) {
-    throw new Error('HF_TOKEN is missing');
-  }
-  try {
-    const hfMs = Math.min(
-      120000,
-      Math.max(5000, Number(process.env.HF_SUMMARY_TIMEOUT_MS || 22000)),
-    );
-    const ac = new AbortController();
-    const to = setTimeout(() => ac.abort(), hfMs);
-    try {
-      const response = await fetch(
-        'https://router.huggingface.co/hf-inference/models/sshleifer/distilbart-cnn-12-6',
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          method: 'POST',
-          body: JSON.stringify({ inputs: input }),
-          signal: ac.signal,
-        },
-      );
-      if (!response.ok) {
-        const body = await response.text().catch(() => '');
-        const detail = body ? ` - ${body.slice(0, 240)}` : '';
-        throw new Error(`HF ${response.status}${detail}`);
-      }
-      const result = await response.json();
-      const out = parseHfSummarizationJson(result);
-      if (!out || looksMojibake(out)) return '';
-      return out;
-    } finally {
-      clearTimeout(to);
-    }
-  } catch (e) {
-    throw new Error(`HuggingFace summarization failed: ${e.message || e}`);
-  }
 }
 
 function normalizeMediaUrl(url) {
@@ -635,6 +558,10 @@ module.exports = {
   collectPlainTextForSummary,
   summaryInputMaxChars,
   summarizeForRssIngest,
+  summarizeIndicViaEnglish,
+  isIndicAiSummaryEnabled,
+  isIndicFrancLang,
+  isPrimarilyIndicScript,
   translateEnglishToFeedLanguage,
   translateTextForFeed,
   extractiveSummaryNative,

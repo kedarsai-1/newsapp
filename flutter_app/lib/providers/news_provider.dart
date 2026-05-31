@@ -7,6 +7,7 @@ import '../services/push_notifications.dart';
 import '../constants.dart';
 import '../utils/feed_dedupe.dart';
 import '../utils/feed_language.dart';
+import '../utils/api_memory_cache.dart';
 
 class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
@@ -17,6 +18,10 @@ class NewsProvider extends ChangeNotifier {
   String _selectedPoliticsScope = 'all';
   String _selectedLocalScope = 'all';
   String? _searchQuery;
+  List<NewsPost> _searchResults = [];
+  bool _searchLoading = false;
+  String? _searchError;
+  int _searchRequestId = 0;
   int _page = 1;
   bool _hasMore = true;
   bool _loading = false;
@@ -25,6 +30,9 @@ class NewsProvider extends ChangeNotifier {
   String? _categoriesError;
 
   List<NewsPost> get posts => _posts;
+  List<NewsPost> get searchResults => _searchResults;
+  bool get searchLoading => _searchLoading;
+  String? get searchError => _searchError;
   List<Category> get categories => _categories;
   String? get selectedCategoryId => _selectedCategoryId;
 
@@ -143,6 +151,8 @@ class NewsProvider extends ChangeNotifier {
     if (kIsWeb) return;
     SocketService.connect();
     SocketService.onFeedUpdated((_) {
+      ApiMemoryCache.invalidatePrefix('/news/feed');
+      ApiMemoryCache.invalidatePrefix('/categories');
       if (_refreshing || _loading) return;
       refresh();
     });
@@ -350,9 +360,29 @@ class NewsProvider extends ChangeNotifier {
     }
   }
 
+  void _clearSearchState() {
+    _searchRequestId += 1;
+    _searchQuery = null;
+    _searchResults = [];
+    _searchLoading = false;
+    _searchError = null;
+  }
+
+  /// Clears search overlay results without reloading the main feed.
+  void endSearch() {
+    if (_searchQuery == null &&
+        _searchResults.isEmpty &&
+        !_searchLoading &&
+        _searchError == null) {
+      return;
+    }
+    _clearSearchState();
+    notifyListeners();
+  }
+
   Future<void> selectCategory(String? categoryId) async {
     _selectedCategoryId = categoryId;
-    _searchQuery = null;
+    _clearSearchState();
     _selectedPoliticsScope = 'all';
     _selectedLocalScope = 'all';
     if (isPoliticsMode || isLocalMode) {
@@ -367,9 +397,59 @@ class NewsProvider extends ChangeNotifier {
   }
 
   Future<void> search(String query) async {
-    _searchQuery = query.isEmpty ? null : query;
-    _selectedCategoryId = null;
-    await refresh();
+    final q = query.trim();
+    if (q.isEmpty) {
+      endSearch();
+      return;
+    }
+    _searchQuery = q;
+    final requestId = ++_searchRequestId;
+    _searchLoading = true;
+    _searchError = null;
+    notifyListeners();
+    try {
+      final res = await ApiService.getFeed(
+        page: 1,
+        categoryId: _selectedCategoryId,
+        language: selectedLanguage,
+        constituency:
+            shouldShowAndhraConstituencyFilter ? selectedConstituency : 'all',
+        politicsScope: regionScopeForApi,
+        city: _cityForFeedQuery(),
+        search: q,
+        days: 30,
+        sourceTypes: const ['api', 'manual', 'rss', 'html'],
+      );
+      if (requestId != _searchRequestId) return;
+      if (res['success'] == true) {
+        var fetched = (res['posts'] as List)
+            .map((p) => NewsPost.fromJson(Map<String, dynamic>.from(p as Map)))
+            .toList();
+        if (selectedLanguage != 'all') {
+          fetched = fetched
+              .where((p) => postMatchesFeedLanguage(p, selectedLanguage))
+              .toList();
+        }
+        fetched.sort((a, b) => b.displayTime.compareTo(a.displayTime));
+        _searchResults = dedupeNewsPosts(fetched);
+        _searchError = null;
+      } else {
+        _searchResults = [];
+        _searchError = (res['message']?.toString().trim().isNotEmpty == true)
+            ? res['message'].toString().trim()
+            : 'Search failed.';
+      }
+    } catch (e) {
+      if (requestId != _searchRequestId) return;
+      _searchResults = [];
+      _searchError = _formatError(
+        e,
+        fallback: 'Search failed. Check your connection.',
+      );
+    }
+    if (requestId != _searchRequestId) return;
+    _searchLoading = false;
+    notifyListeners();
   }
 
   Future<void> selectLanguage(String languageCode) async {
@@ -556,7 +636,7 @@ class NewsProvider extends ChangeNotifier {
             shouldShowAndhraConstituencyFilter ? selectedConstituency : 'all',
         politicsScope: regionScopeForApi,
         city: _cityForFeedQuery(),
-        search: _searchQuery,
+        search: null,
         // Keep the feed fresh by default (Way2News behavior).
         // Only limit *ingested* news; manual reporter posts remain visible (backend handles this).
         // RSS items in your DB are ~15 days old, so 7 days hides everything.

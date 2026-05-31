@@ -26,6 +26,22 @@ class MemoryCache {
   del(key) {
     this._store.delete(key);
   }
+
+  deleteByPrefix(prefix) {
+    if (!prefix) return 0;
+    let n = 0;
+    for (const key of [...this._store.keys()]) {
+      if (key.startsWith(prefix)) {
+        this._store.delete(key);
+        n += 1;
+      }
+    }
+    return n;
+  }
+
+  clear() {
+    this._store.clear();
+  }
 }
 
 module.exports = new MemoryCache();

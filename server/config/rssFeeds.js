@@ -168,11 +168,18 @@ function getRssFeedsFromEnv() {
   }
 }
 
-function getRssFeeds() {
+function getRssFeeds({ languages } = {}) {
   const fromEnv = getRssFeedsFromEnv();
   // Empty array from RSS_FEEDS_JSON='[]' would otherwise silence all RSS ingestion.
-  if (Array.isArray(fromEnv) && fromEnv.length > 0) return fromEnv;
-  return defaultRssFeeds;
+  let feeds = (Array.isArray(fromEnv) && fromEnv.length > 0) ? fromEnv : defaultRssFeeds;
+
+  if (languages?.length) {
+    const set = new Set(
+      languages.map((l) => String(l || '').trim().toLowerCase()).filter(Boolean),
+    );
+    feeds = feeds.filter((f) => set.has(String(f.language || 'en').toLowerCase()));
+  }
+  return feeds;
 }
 
 module.exports = { getRssFeeds };

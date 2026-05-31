@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../theme/dailyhunt_theme.dart';
@@ -396,27 +397,26 @@ class _Thumb extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return _ThumbFallback();
     }
-    return Image.network(
-      url,
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheWidth = (70 * dpr).round().clamp(140, 720);
+    return CachedNetworkImage(
+      imageUrl: url,
       fit: BoxFit.cover,
-      cacheWidth: 720,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => _ThumbFallback(),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: cs.surfaceContainerHighest,
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: DailyhuntTheme.accentGreen(context).withValues(alpha: 0.6),
-            ),
+      memCacheWidth: cacheWidth,
+      fadeInDuration: const Duration(milliseconds: 120),
+      placeholder: (_, __) => Container(
+        color: cs.surfaceContainerHighest,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: DailyhuntTheme.accentGreen(context).withValues(alpha: 0.6),
           ),
-        );
-      },
+        ),
+      ),
+      errorWidget: (_, __, ___) => _ThumbFallback(),
     );
   }
 }

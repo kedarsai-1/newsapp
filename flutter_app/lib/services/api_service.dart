@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import '../models/models.dart';
+import '../utils/api_memory_cache.dart';
 
 class ApiService {
   /// Render / free tiers can cold-start; keep this generous.
@@ -119,16 +120,36 @@ class ApiService {
     }
   }
 
+  static String _queryCacheKey(String path, Map<String, String> queryParams) {
+    final entries = queryParams.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    final qs = entries.map((e) => '${e.key}=${e.value}').join('&');
+    return qs.isEmpty ? path : '$path?$qs';
+  }
+
   static Future<Map<String, dynamic>> _getQuery(
     String path,
-    Map<String, String> queryParams,
-  ) async {
+    Map<String, String> queryParams, {
+    Duration? memoryCacheTtl,
+  }) async {
+    String? cacheKey;
+    if (memoryCacheTtl != null) {
+      cacheKey = _queryCacheKey(path, queryParams);
+      final cached = ApiMemoryCache.get<Map<String, dynamic>>(cacheKey);
+      if (cached != null) return Map<String, dynamic>.from(cached);
+    }
     try {
       final uri = Uri.parse('${AppConstants.baseUrl}$path')
           .replace(queryParameters: queryParams);
       final res =
           await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
-      return _decodeGetResponse(res);
+      final decoded = await _decodeGetResponse(res);
+      if (cacheKey != null &&
+          memoryCacheTtl != null &&
+          decoded['success'] == true) {
+        ApiMemoryCache.set(cacheKey, decoded, memoryCacheTtl);
+      }
+      return decoded;
     } on TimeoutException {
       return {
         'success': false,
@@ -317,7 +338,13 @@ class ApiService {
       if (hasVideo) 'hasVideo': 'true',
       if (politicalOnly) 'politicalOnly': 'true',
     };
-    return _getQuery('/news/feed', params);
+    final useClientCache =
+        (search == null || search.trim().isEmpty) && page <= 1;
+    return _getQuery(
+      '/news/feed',
+      params,
+      memoryCacheTtl: useClientCache ? const Duration(seconds: 30) : null,
+    );
   }
 
   static Future<Map<String, dynamic>> getPost(String id) async =>
@@ -524,8 +551,16 @@ class ApiService {
   // ─── CATEGORIES ──────────────────────────────────────────────────────────
 
   /// Full JSON from GET /categories (for error messages).
-  static Future<Map<String, dynamic>> getCategoriesJson() async =>
-      _get('/categories');
+  static Future<Map<String, dynamic>> getCategoriesJson() async {
+    const cacheKey = '/categories';
+    final cached = ApiMemoryCache.get<Map<String, dynamic>>(cacheKey);
+    if (cached != null) return Map<String, dynamic>.from(cached);
+    final data = await _get('/categories');
+    if (data['success'] == true) {
+      ApiMemoryCache.set(cacheKey, data, const Duration(minutes: 5));
+    }
+    return data;
+  }
 
   /// GET /categories/by-slug/:slug — single category when list cache misses.
   static Future<Map<String, dynamic>> getCategoryBySlug(String slug) async {

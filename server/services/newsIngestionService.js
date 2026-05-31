@@ -20,6 +20,12 @@ const { newsApiIngestPlan } = require('../config/newsApiIngestPlan');
 const { cloudinary } = require('../config/cloudinary');
 const { getRssFeeds } = require('../config/rssFeeds');
 const {
+  resolveIngestLanguages,
+  lockKeyForLanguages,
+  getIngestBudgetMs,
+  INGEST_LANGS,
+} = require('../config/ingestLanguages');
+const {
   fetchRssItems,
   normalizeRssItem,
   resolveGoogleNewsPublisherUrl,
@@ -42,6 +48,22 @@ let ingestState = {
   lastSummary: null,
   lastError: null,
 };
+
+const ingestStateByLock = new Map();
+
+function getIngestLockState(lockKey) {
+  if (!ingestStateByLock.has(lockKey)) {
+    ingestStateByLock.set(lockKey, {
+      lockKey,
+      isRunning: false,
+      lastRunAt: null,
+      lastSuccessAt: null,
+      lastSummary: null,
+      lastError: null,
+    });
+  }
+  return ingestStateByLock.get(lockKey);
+}
 
 const { setIngestionSocket, emitFeedUpdated } = require('./feedSocket');
 
@@ -108,23 +130,9 @@ function interleaveFeedsByLanguageAndCategory(feeds) {
  * RSS-only runs with many feeds + og:image + body enrich + HF summarize can exceed 15–30+ minutes otherwise.
  * Set INGEST_MAX_RUNTIME_MS=0 for no limit (not recommended on PaaS).
  */
-function createIngestBudget() {
-  const raw = process.env.INGEST_MAX_RUNTIME_MS;
-  const onRailway = Boolean(
-    process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID,
-  );
-  let ms;
-  if (raw === undefined || raw === '') {
-    ms = onRailway
-      ? 6 * 60 * 1000
-      : 20 * 60 * 1000; // Railway: 6 min default to avoid OOM on small instances
-  } else {
-    ms = Number(raw);
-    if (onRailway && Number.isFinite(ms) && ms > 10 * 60 * 1000) {
-      ms = 10 * 60 * 1000;
-    }
-  }
-  if (!Number.isFinite(ms) || ms <= 0) {
+function createIngestBudget({ language } = {}) {
+  const ms = getIngestBudgetMs(language);
+  if (ms == null) {
     return {
       limitMs: null,
       throwIfExpired() {},
@@ -141,9 +149,9 @@ function createIngestBudget() {
     throwIfExpired(phase) {
       if (Date.now() - started > ms) {
         throw new Error(
-          `[ingest] time budget exceeded (${ms}ms) at ${phase || '?'}. `
-            + 'Set INGEST_MAX_RUNTIME_MS higher, or lower RSS_INSERTS_PER_FEED / RSS_SCAN_PER_FEED, '
-            + 'or RSS_ENRICH_BODY=false / RSS_OG_FALLBACK=false.',
+          `[ingest${language ? `:${language}` : ''}] time budget exceeded (${ms}ms) at ${phase || '?'}. `
+            + 'Set INGEST_MAX_RUNTIME_MS or INGEST_MAX_RUNTIME_MS_EN|HI|TE higher, '
+            + 'or lower RSS_INSERTS_PER_FEED / RSS_SCAN_PER_FEED.',
         );
       }
     },
@@ -591,17 +599,11 @@ function getIngestPlans() {
   return newsApiIngestPlan;
 }
 
-/** Languages for API ingestion — en/te/hi by default, plus any RSS feed languages. */
-function getIngestLanguages() {
-  const raw = process.env.GNEWS_INGEST_LANGS?.trim() || process.env.INGEST_LANGUAGES?.trim();
-  if (raw) {
-    return [...new Set(
-      raw
-        .split(',')
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean),
-    )];
-  }
+/** Languages for API ingestion — scoped by run or env (en/te/hi). */
+function getIngestLanguages(options = {}) {
+  const active = resolveIngestLanguages(options);
+  if (active.length) return active;
+
   const langs = new Set(['en', 'te', 'hi']);
   if (process.env.RSS_ENABLED !== 'false') {
     for (const feed of getRssFeeds()) {
@@ -612,22 +614,40 @@ function getIngestLanguages() {
   return [...langs];
 }
 
-async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
-  if (ingestState.isRunning) {
+async function runIngestion({
+  triggeredBy = 'scheduler',
+  languages,
+  includeYoutube,
+  includePolitical,
+} = {}) {
+  const activeLanguages = getIngestLanguages({ languages });
+  const lockKey = lockKeyForLanguages(activeLanguages);
+  const lockState = lockKey === 'global' ? ingestState : getIngestLockState(lockKey);
+
+  if (lockState.isRunning) {
     return {
       success: false,
       skipped: true,
-      message: 'Ingestion already running.',
-      state: ingestState,
+      message: `Ingestion already running (${lockKey}).`,
+      state: lockState,
     };
   }
 
-  ingestState.isRunning = true;
-  ingestState.lastRunAt = new Date();
-  ingestState.lastError = null;
+  lockState.isRunning = true;
+  lockState.lastRunAt = new Date();
+  lockState.lastError = null;
+  if (lockKey === 'global') {
+    ingestState.isRunning = true;
+    ingestState.lastRunAt = lockState.lastRunAt;
+    ingestState.lastError = null;
+  }
 
-  const     stats = {
+  const budgetLang = activeLanguages.length === 1 ? activeLanguages[0] : null;
+
+  const stats = {
     triggeredBy,
+    languages: activeLanguages,
+    lockKey,
     startedAt: new Date(),
     fetched: 0,
     inserted: 0,
@@ -648,16 +668,16 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     const useGNews = Boolean(process.env.GNEWS_API_KEY?.trim());
     const useNewsApi = Boolean(process.env.NEWSAPI_KEY?.trim());
     const rssEnabled = process.env.RSS_ENABLED !== 'false';
-    const budget = createIngestBudget();
+    const budget = createIngestBudget({ language: budgetLang });
 
     console.log(
-      `[ingest] begin (${triggeredBy}) maxRuntime=${budget.describe()} `
-        + `api=${Boolean(useGNews || useNewsApi)} rss=${rssEnabled}`,
+      `[ingest] begin (${triggeredBy}) langs=${activeLanguages.join(',')} lock=${lockKey} `
+        + `maxRuntime=${budget.describe()} api=${Boolean(useGNews || useNewsApi)} rss=${rssEnabled}`,
     );
 
     if (!useGNews && !useNewsApi && !rssEnabled) {
       const msg =
-        'Set GNEWS_API_KEY or NEWSAPI_KEY, or leave RSS enabled (RSS_ENABLED not false).';
+        'Enable RSS (RSS_ENABLED not false) or set GNEWS_API_KEY / NEWSAPI_KEY for API headlines.';
       ingestState.lastError = msg;
       stats.endedAt = new Date();
       return { success: false, error: msg, stats };
@@ -692,7 +712,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       }
 
       // Same language list for both providers so Telugu/Hindi feeds fill when using NewsAPI too (where supported).
-      const ingestLanguages = getIngestLanguages();
+      const ingestLanguages = activeLanguages;
       if (!useGNews) {
         console.log(
           '[ingest] NewsAPI: fetching en, te, hi per plan (unsupported langs return 0 articles). '
@@ -818,7 +838,10 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
 
     // RSS ingestion (second source): reliable thumbnails + extra coverage.
     if (rssEnabled) {
-      const feeds = interleaveFeedsByLanguageAndCategory(getRssFeeds());
+      const rssSource = getRssFeeds({ languages: activeLanguages });
+      const feeds = activeLanguages.length === 1
+        ? interleaveFeedsByCategory(rssSource)
+        : interleaveFeedsByLanguageAndCategory(rssSource);
       budget.throwIfExpired('rss:before-loop');
       const maxPerFeed = Math.min(
         50,
@@ -839,8 +862,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
       }, {});
       console.log(
         `[ingest] RSS processing ${feeds.length} feeds `
-          + `(scan up to ${maxScanPerFeed}, target ${targetInsertsPerFeed} new/feed, `
-          + `interleaved en/hi/te then category; counts: ${JSON.stringify(langCounts)})`,
+          + `(langs=${activeLanguages.join(',')}, scan up to ${maxScanPerFeed}, `
+          + `target ${targetInsertsPerFeed} new/feed; counts: ${JSON.stringify(langCounts)})`,
       );
 
       let feedIdx = 0;
@@ -1153,11 +1176,15 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     }
 
     // YouTube: optional during scraper runs (dedicated YOUTUBE_CRON handles it by default).
-    const youtubeWithScraper = process.env.YOUTUBE_INGEST_WITH_SCRAPER === 'true';
+    const youtubeWithScraper = includeYoutube !== false
+      && process.env.YOUTUBE_INGEST_WITH_SCRAPER === 'true';
     if (process.env.YOUTUBE_ENABLED !== 'false' && youtubeWithScraper) {
       try {
         budget.throwIfExpired('youtube:start');
-        const yt = await runYoutubeIngestion({ triggeredBy: `${triggeredBy}:youtube` });
+        const yt = await runYoutubeIngestion({
+          triggeredBy: `${triggeredBy}:youtube`,
+          languages: activeLanguages,
+        });
         if (yt?.stats) {
           stats.youtubeInserted = yt.stats.youtubeInserted || 0;
           stats.youtubeDuplicates = yt.stats.youtubeDuplicates || 0;
@@ -1189,6 +1216,8 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     }
     ingestState.lastSuccessAt = stats.endedAt;
     ingestState.lastSummary = stats;
+    lockState.lastSuccessAt = stats.endedAt;
+    lockState.lastSummary = stats;
     if (stats.inserted > 0) {
       emitFeedUpdated({
         inserted: stats.inserted,
@@ -1198,6 +1227,7 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     return { success: true, stats };
   } catch (error) {
     ingestState.lastError = error.message;
+    lockState.lastError = error.message;
     stats.endedAt = new Date();
     if (String(error.message || '').includes('time budget exceeded')) {
       stats.timedOut = true;
@@ -1205,12 +1235,23 @@ async function runIngestion({ triggeredBy = 'scheduler' } = {}) {
     }
     return { success: false, error: error.message, stats };
   } finally {
-    ingestState.isRunning = false;
+    lockState.isRunning = false;
+    if (lockKey === 'global') {
+      ingestState.isRunning = false;
+    }
   }
 }
 
 function getIngestionStatus() {
-  return { ...ingestState };
+  return {
+    global: { ...ingestState },
+    byLock: Object.fromEntries(
+      [...ingestStateByLock.entries()].map(([k, v]) => [k, { ...v }]),
+    ),
+    perLanguage: Object.fromEntries(
+      INGEST_LANGS.map((lang) => [lang, { ...getIngestLockState(lang) }]),
+    ),
+  };
 }
 
 module.exports = {

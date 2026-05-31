@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timeago/timeago.dart' as timeago;
 
 import '../../constants.dart';
 import '../../models/models.dart';
@@ -20,6 +19,8 @@ import '../../widgets/feed/feed_list_view.dart';
 import '../../widgets/feed/feed_scope_chip_bar.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
+import '../../widgets/feed/dailyhunt_feed_article_card.dart';
+import '../../widgets/feed/feed_list_tuning.dart';
 import '../../widgets/dailyhunt/xpresso_side_menu.dart';
 import '../../widgets/premium_news_ui.dart';
 
@@ -638,8 +639,27 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
 
 class FeedSearchDelegate extends SearchDelegate<String> {
   final NewsProvider provider;
+  final void Function(NewsPost) onOpen;
+  final Future<bool> Function(NewsPost) onLike;
+  final Future<bool> Function(NewsPost) onBookmark;
+  final void Function(NewsPost) onShare;
+  final Map<String, bool> likedByPostId;
+  final Map<String, bool> bookmarkedByPostId;
 
-  FeedSearchDelegate(this.provider);
+  FeedSearchDelegate({
+    required this.provider,
+    required this.onOpen,
+    required this.onLike,
+    required this.onBookmark,
+    required this.onShare,
+    required this.likedByPostId,
+    required this.bookmarkedByPostId,
+  });
+
+  void _exit(BuildContext context) {
+    provider.endSearch();
+    close(context, '');
+  }
 
   @override
   List<Widget> buildActions(BuildContext context) => [
@@ -651,72 +671,145 @@ class FeedSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
-        onPressed: () => close(context, ''),
+        onPressed: () => _exit(context),
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
       );
 
   @override
   Widget buildResults(BuildContext context) =>
-      _SearchResults(provider: provider, query: query);
+      _SearchResults(
+        provider: provider,
+        query: query,
+        onOpen: onOpen,
+        onLike: onLike,
+        onBookmark: onBookmark,
+        onShare: onShare,
+        likedByPostId: likedByPostId,
+        bookmarkedByPostId: bookmarkedByPostId,
+      );
 
   @override
   Widget buildSuggestions(BuildContext context) => query.isEmpty
       ? const Center(child: Text('Search news, topics, places...'))
-      : _SearchResults(provider: provider, query: query);
+      : buildResults(context);
 }
 
 class _SearchResults extends StatefulWidget {
   final NewsProvider provider;
   final String query;
+  final void Function(NewsPost) onOpen;
+  final Future<bool> Function(NewsPost) onLike;
+  final Future<bool> Function(NewsPost) onBookmark;
+  final void Function(NewsPost) onShare;
+  final Map<String, bool> likedByPostId;
+  final Map<String, bool> bookmarkedByPostId;
 
-  const _SearchResults({required this.provider, required this.query});
+  const _SearchResults({
+    required this.provider,
+    required this.query,
+    required this.onOpen,
+    required this.onLike,
+    required this.onBookmark,
+    required this.onShare,
+    required this.likedByPostId,
+    required this.bookmarkedByPostId,
+  });
 
   @override
   State<_SearchResults> createState() => _SearchResultsState();
 }
 
 class _SearchResultsState extends State<_SearchResults> {
+  static const _debounceDuration = Duration(milliseconds: 300);
+
   bool _loading = true;
+  Timer? _debounce;
+  int _searchGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _run();
+    _scheduleSearch();
   }
 
   @override
   void didUpdateWidget(covariant _SearchResults oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.query != widget.query) _run();
+    if (oldWidget.query != widget.query) _scheduleSearch();
   }
 
-  Future<void> _run() async {
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleSearch() {
+    _debounce?.cancel();
+    final q = widget.query.trim();
+    if (q.isEmpty) {
+      widget.provider.endSearch();
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     setState(() => _loading = true);
-    await widget.provider.search(widget.query);
-    if (mounted) setState(() => _loading = false);
+    _debounce = Timer(_debounceDuration, () {
+      if (mounted) _runSearch(q);
+    });
+  }
+
+  Future<void> _runSearch(String query) async {
+    final gen = ++_searchGeneration;
+    await widget.provider.search(query);
+    if (!mounted || gen != _searchGeneration) return;
+    setState(() => _loading = false);
+  }
+
+  Future<void> _runImmediate() async {
+    _debounce?.cancel();
+    final q = widget.query.trim();
+    if (q.isEmpty) {
+      widget.provider.endSearch();
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    setState(() => _loading = true);
+    await _runSearch(q);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (widget.provider.posts.isEmpty) {
+    final provider = widget.provider;
+    if (_loading || provider.searchLoading) {
+      return const DailyhuntFeedSkeleton(rowCount: 6);
+    }
+    if (provider.searchError != null) {
+      return ErrorState(
+        message: provider.searchError!,
+        onRetry: _runImmediate,
+        dark: FeedXpressoTheme.isDark(context),
+      );
+    }
+    final posts = provider.searchResults;
+    if (posts.isEmpty) {
       return const EmptyState(icon: Icons.search_off, title: 'No results');
     }
     return ListView.builder(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: ClampingScrollPhysics(),
-      ),
-      padding: const EdgeInsets.all(12),
-      itemCount: widget.provider.posts.length,
+      physics: FeedListTuning.scrollPhysics,
+      cacheExtent: FeedListTuning.cacheExtent,
+      padding: FeedListTuning.listPadding,
+      itemCount: posts.length,
       itemBuilder: (context, index) {
-        final post = widget.provider.posts[index];
-        return DhNewsCard(
-          title: post.title,
-          summary: premiumSnippet(post, maxLength: 120),
-          imageUrl: premiumImageUrl(post),
-          sourceLabel: post.sourceName ?? post.category?.name ?? 'News',
-          timeLabel: timeago.format(post.displayTime),
-          onTap: () => context.push('/article/${post.id}'),
+        final post = posts[index];
+        return DailyhuntFeedArticleCard(
+          key: ValueKey('search-${post.id}'),
+          post: post,
+          liked: widget.likedByPostId[post.id] ?? false,
+          saved: widget.bookmarkedByPostId[post.id] ?? false,
+          onOpen: () => widget.onOpen(post),
+          onLike: () => widget.onLike(post),
+          onBookmark: () => widget.onBookmark(post),
+          onShare: () => widget.onShare(post),
         );
       },
     );
@@ -763,7 +856,26 @@ class _PoliticalReelsEntry extends StatelessWidget {
   }
 }
 
-void openFeedSearch(BuildContext context) {
+void openFeedSearch(
+  BuildContext context, {
+  required void Function(NewsPost) onOpen,
+  required Future<bool> Function(NewsPost) onLike,
+  required Future<bool> Function(NewsPost) onBookmark,
+  required void Function(NewsPost) onShare,
+  required Map<String, bool> likedByPostId,
+  required Map<String, bool> bookmarkedByPostId,
+}) {
   final provider = context.read<NewsProvider>();
-  showSearch(context: context, delegate: FeedSearchDelegate(provider));
+  showSearch<String>(
+    context: context,
+    delegate: FeedSearchDelegate(
+      provider: provider,
+      onOpen: onOpen,
+      onLike: onLike,
+      onBookmark: onBookmark,
+      onShare: onShare,
+      likedByPostId: likedByPostId,
+      bookmarkedByPostId: bookmarkedByPostId,
+    ),
+  ).then((_) => provider.endSearch());
 }

@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { runIngestion } = require('./newsIngestionService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('./politicalVideoIngestionService');
+const { runLanguageIngestion } = require('./languageIngestionService');
 const { purgeOldNews } = require('./retentionCleanupService');
 const { emitFeedUpdated } = require('./feedSocket');
 const {
@@ -9,12 +10,18 @@ const {
   isMlEnabled,
 } = require('./politicalVideoClassifierService');
 const { isRailwayHost } = require('../utils/isRailway');
+const {
+  isPerLanguageIngestEnabled,
+  getWorkerLanguages,
+  cronForLanguage,
+  defaultNewsCronForLanguage,
+} = require('../config/ingestLanguages');
 
 let started = false;
 
-async function runScheduledIngestion(triggeredBy) {
+async function runScheduledIngestion(triggeredBy, languages) {
   console.log(`[scraper] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
-  const result = await runIngestion({ triggeredBy });
+  const result = await runIngestion({ triggeredBy, languages });
   if (result.skipped) {
     console.log(`[scraper] skipped (${triggeredBy}): ${result.message || 'ingestion already running'}`);
     return;
@@ -29,7 +36,8 @@ async function runScheduledIngestion(triggeredBy) {
   }
   const s = result.stats || {};
   console.log(
-    `[scraper] run completed (${triggeredBy}): inserted=${s.inserted ?? 0} fetched=${s.fetched ?? 0} `
+    `[scraper] run completed (${triggeredBy}): langs=${(s.languages || []).join(',')} `
+      + `inserted=${s.inserted ?? 0} fetched=${s.fetched ?? 0} `
       + `duplicates=${s.duplicates ?? 0} skippedNoImage=${s.skippedNoImage ?? 0} `
       + `categoryFiltered=${s.categoryFiltered ?? 0} failed=${s.failed ?? 0}`,
   );
@@ -38,9 +46,9 @@ async function runScheduledIngestion(triggeredBy) {
   }
 }
 
-async function runScheduledYoutube(triggeredBy) {
+async function runScheduledYoutube(triggeredBy, languages) {
   console.log(`[youtube] ingestion start (${triggeredBy}) ${new Date().toISOString()}`);
-  const result = await runYoutubeIngestion({ triggeredBy });
+  const result = await runYoutubeIngestion({ triggeredBy, languages });
   if (result.skipped) {
     console.log(`[youtube] skipped (${triggeredBy}): ${result.message || ''}`);
     return;
@@ -51,7 +59,8 @@ async function runScheduledYoutube(triggeredBy) {
   }
   const s = result.stats || {};
   console.log(
-    `[youtube] run completed (${triggeredBy}): inserted=${s.youtubeInserted ?? 0} `
+    `[youtube] run completed (${triggeredBy}): langs=${(s.languages || []).join(',')} `
+      + `inserted=${s.youtubeInserted ?? 0} shorts=${s.youtubeShortsInserted ?? 0} `
       + `fetched=${s.youtubeFetched ?? 0} duplicates=${s.youtubeDuplicates ?? 0} `
       + `restricted=${s.youtubeSkippedRestricted ?? 0}`,
   );
@@ -60,9 +69,9 @@ async function runScheduledYoutube(triggeredBy) {
   }
 }
 
-async function runScheduledPoliticalVideo(triggeredBy) {
+async function runScheduledPoliticalVideo(triggeredBy, languages) {
   console.log(`[political-video] ingestion start (${triggeredBy})`);
-  const result = await runPoliticalVideoIngestion({ triggeredBy });
+  const result = await runPoliticalVideoIngestion({ triggeredBy, languages });
   if (result.skipped) {
     console.log(`[political-video] skipped: ${result.message || ''}`);
     return;
@@ -73,9 +82,17 @@ async function runScheduledPoliticalVideo(triggeredBy) {
   }
   const s = result.stats || {};
   console.log(
-    `[political-video] done: saved=${s.saved ?? 0} fetched=${s.fetched ?? 0} `
+    `[political-video] done: langs=${(s.languages || []).join(',')} saved=${s.saved ?? 0} `
+      + `interviews=${s.interviewsSaved ?? 0} shorts=${s.shortsSaved ?? 0} `
       + `keyword=${s.keywordAccepted ?? 0} ml=${s.mlAccepted ?? 0}`,
   );
+}
+
+async function runScheduledLanguagePipeline(language, triggeredBy) {
+  const result = await runLanguageIngestion(language, { triggeredBy });
+  if (!result.success) {
+    console.warn(`[ingest:${language}] pipeline issues:`, JSON.stringify(result.stats));
+  }
 }
 
 async function runRetention(triggeredBy) {
@@ -102,12 +119,40 @@ async function runRetention(triggeredBy) {
   }
 }
 
-function startCronScheduler() {
-  if (started) return;
-  started = true;
+function schedulePerLanguagePipelines(isRailway) {
+  const langs = getWorkerLanguages();
+  const runOnStart = isRailway
+    ? process.env.SCRAPER_RUN_ON_START === 'true'
+    : process.env.SCRAPER_RUN_ON_START !== 'false';
 
-  const isRailway = isRailwayHost();
+  for (const lang of langs) {
+    const cronExpr = cronForLanguage('SCRAPER_CRON', lang, defaultNewsCronForLanguage);
+    cron.schedule(cronExpr, () => {
+      runScheduledLanguagePipeline(lang, `scheduler:${lang}`).catch((e) =>
+        console.error(`[ingest:${lang}] scheduler error:`, e),
+      );
+    });
+    console.log(
+      `[ingest:${lang}] pipeline scheduler active cron="${cronExpr}" `
+        + '(news + youtube shorts + political interviews)',
+    );
+  }
 
+  if (runOnStart) {
+    langs.forEach((lang, idx) => {
+      setTimeout(() => {
+        runScheduledLanguagePipeline(lang, `startup:${lang}`).catch((e) =>
+          console.error(`[ingest:${lang}] startup error:`, e),
+        );
+      }, 2500 + idx * 2500);
+    });
+    console.log(
+      `[ingest] per-language pipelines will run on startup for: ${langs.join(', ')}`,
+    );
+  }
+}
+
+function scheduleLegacyIngestion(isRailway) {
   const scrapingEnabled = process.env.SCRAPER_ENABLED !== 'false';
   const cronExpr = process.env.SCRAPER_CRON || '*/5 * * * *';
   const runOnStart = isRailway
@@ -120,7 +165,7 @@ function startCronScheduler() {
         console.error('[scraper] scheduler error:', e),
       );
     });
-    console.log(`[scraper] scheduler active with cron "${cronExpr}" (node-cron uses server local time)`);
+    console.log(`[scraper] scheduler active with cron "${cronExpr}" (all languages combined)`);
 
     if (runOnStart) {
       setTimeout(() => {
@@ -128,7 +173,7 @@ function startCronScheduler() {
           console.error('[scraper] startup ingestion error:', e),
         );
       }, 2500);
-      console.log('[scraper] will run ingestion once ~2s after startup (set SCRAPER_RUN_ON_START=false to disable)');
+      console.log('[scraper] will run ingestion once ~2s after startup');
     }
   } else {
     console.log('[scraper] scheduler disabled by SCRAPER_ENABLED=false');
@@ -146,7 +191,7 @@ function startCronScheduler() {
         console.error('[youtube] scheduler error:', e),
       );
     });
-    console.log(`[youtube] scheduler active with cron "${youtubeCronExpr}"`);
+    console.log(`[youtube] scheduler active with cron "${youtubeCronExpr}" (all languages)`);
     if (youtubeRunOnStart) {
       setTimeout(() => {
         runScheduledYoutube('youtube-startup').catch((e) =>
@@ -194,6 +239,40 @@ function startCronScheduler() {
   } else {
     console.log('[political-video] disabled');
   }
+}
+
+function startCronScheduler() {
+  if (started) return;
+  started = true;
+
+  const isRailway = isRailwayHost();
+  const perLanguage = isPerLanguageIngestEnabled();
+
+  if (perLanguage) {
+    console.log(
+      `[ingest] per-language mode ON — workers: ${getWorkerLanguages().join(', ')} `
+        + `(set INGEST_WORKER_LANG=en|hi|te for single-language deployment)`,
+    );
+    if (process.env.SCRAPER_ENABLED !== 'false') {
+      schedulePerLanguagePipelines(isRailway);
+    } else {
+      console.log('[ingest] per-language pipelines disabled by SCRAPER_ENABLED=false');
+    }
+    if (process.env.POLITICAL_VIDEO_ENABLED !== 'false'
+      && process.env.YOUTUBE_API_KEY?.trim()
+      && isMlEnabled()
+      && (isRailway
+        ? process.env.POLITICAL_ML_PRELOAD === 'true'
+        : process.env.POLITICAL_ML_PRELOAD !== 'false')) {
+      setTimeout(() => {
+        preloadPoliticalClassifier().catch((e) =>
+          console.warn('[political-ml] preload failed:', e.message),
+        );
+      }, isRailway ? 120_000 : 15_000);
+    }
+  } else {
+    scheduleLegacyIngestion(isRailway);
+  }
 
   const retentionEnabled = process.env.RETENTION_ENABLED !== 'false';
   const retentionDays = Number(process.env.RETENTION_DAYS || 7);
@@ -212,4 +291,10 @@ function startCronScheduler() {
   }
 }
 
-module.exports = { startCronScheduler };
+module.exports = {
+  startCronScheduler,
+  runScheduledIngestion,
+  runScheduledYoutube,
+  runScheduledPoliticalVideo,
+  runScheduledLanguagePipeline,
+};

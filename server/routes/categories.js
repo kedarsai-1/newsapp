@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/prisma');
 const { serializeCategory } = require('../utils/serializers');
+const feedResponseCache = require('../utils/feedResponseCache');
 
 // GET /api/categories/by-slug/:slug — resolve topic grid taps when list cache is empty
 router.get('/by-slug/:slug', async (req, res) => {
@@ -21,11 +22,27 @@ router.get('/by-slug/:slug', async (req, res) => {
 // GET /api/categories — public
 router.get('/', async (req, res) => {
   try {
+    const hit = feedResponseCache.getCachedCategories();
+    if (hit?.body) {
+      res.set('Cache-Control', feedResponseCache.cacheControlHeader(hit.ttlMs));
+      return res.json({ ...hit.body, cached: true });
+    }
+
     const categories = await prisma.category.findMany({
       where: { isActive: true },
       orderBy: [{ order: 'asc' }, { name: 'asc' }],
     });
-    res.json({ success: true, categories: categories.map(serializeCategory) });
+    const payload = {
+      success: true,
+      categories: categories.map(serializeCategory),
+      cached: false,
+    };
+    feedResponseCache.setCachedCategories(payload);
+    res.set(
+      'Cache-Control',
+      feedResponseCache.cacheControlHeader(feedResponseCache.categoriesTtlMs()),
+    );
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

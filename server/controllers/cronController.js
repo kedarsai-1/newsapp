@@ -4,7 +4,9 @@ const {
 } = require('../services/newsIngestionService');
 const { runYoutubeIngestion } = require('../services/youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('../services/politicalVideoIngestionService');
+const { runLanguageIngestion } = require('../services/languageIngestionService');
 const { purgeOldNews } = require('../services/retentionCleanupService');
+const { normalizeLanguage, INGEST_LANGS } = require('../config/ingestLanguages');
 
 function getRequestSecret(req) {
   const auth = req.get('authorization') || '';
@@ -43,6 +45,13 @@ function requireCronSecret(req, res, next) {
   return next();
 }
 
+function parseLanguageParam(req) {
+  const raw = req.params?.lang || req.query?.lang || req.body?.lang;
+  const lang = normalizeLanguage(raw);
+  if (!lang || !INGEST_LANGS.includes(lang)) return null;
+  return lang;
+}
+
 function sendCronResult(res, result) {
   if (!result?.success && !result?.skipped) {
     return res.status(500).json(result);
@@ -60,7 +69,12 @@ const runNewsIngestionCron = async (req, res) => {
       });
     }
 
-    const result = await runIngestion({ triggeredBy: 'api-cron:news' });
+    const lang = parseLanguageParam(req);
+    const result = await runIngestion({
+      triggeredBy: lang ? `api-cron:news:${lang}` : 'api-cron:news',
+      languages: lang ? [lang] : undefined,
+      includeYoutube: false,
+    });
     return sendCronResult(res, result);
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -69,7 +83,11 @@ const runNewsIngestionCron = async (req, res) => {
 
 const runYoutubeIngestionCron = async (req, res) => {
   try {
-    const result = await runYoutubeIngestion({ triggeredBy: 'api-cron:youtube' });
+    const lang = parseLanguageParam(req);
+    const result = await runYoutubeIngestion({
+      triggeredBy: lang ? `api-cron:youtube:${lang}` : 'api-cron:youtube',
+      languages: lang ? [lang] : undefined,
+    });
 
     if (result?.success && !result?.skipped && (result.stats?.youtubeInserted ?? 0) > 0) {
       req.io?.to('all').emit('feed_updated', {
@@ -86,10 +104,16 @@ const runYoutubeIngestionCron = async (req, res) => {
 
 const runPoliticalVideosCron = async (req, res) => {
   try {
-    const triggeredBy = 'api-cron:political-videos';
+    const lang = parseLanguageParam(req);
+    const triggeredBy = lang
+      ? `api-cron:political-videos:${lang}`
+      : 'api-cron:political-videos';
 
     setImmediate(() => {
-      runPoliticalVideoIngestion({ triggeredBy })
+      runPoliticalVideoIngestion({
+        triggeredBy,
+        languages: lang ? [lang] : undefined,
+      })
         .then((result) => {
           console.log('[political-video] background cron result:', JSON.stringify(result));
         })
@@ -101,8 +125,37 @@ const runPoliticalVideosCron = async (req, res) => {
     return res.status(202).json({
       success: true,
       accepted: true,
-      message: 'Political video ingestion started.',
+      language: lang,
+      message: lang
+        ? `Political video ingestion started for ${lang}.`
+        : 'Political video ingestion started.',
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const runLanguageIngestionCron = async (req, res) => {
+  try {
+    const lang = parseLanguageParam(req);
+    if (!lang) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide lang query/path: en, hi, or te.',
+      });
+    }
+    if (process.env.SCRAPER_ENABLED === 'false') {
+      return res.json({
+        success: true,
+        skipped: true,
+        message: 'Ingestion disabled by SCRAPER_ENABLED=false.',
+      });
+    }
+
+    const result = await runLanguageIngestion(lang, {
+      triggeredBy: `api-cron:language:${lang}`,
+    });
+    return sendCronResult(res, result);
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -140,6 +193,9 @@ const getCronStatus = async (req, res) => {
     return res.json({
       success: true,
       ingestion: getIngestionStatus(),
+      perLanguageMode: process.env.INGEST_PER_LANGUAGE === 'true'
+        || Boolean(process.env.INGEST_WORKER_LANG?.trim()),
+      workerLanguage: process.env.INGEST_WORKER_LANG || null,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -151,6 +207,7 @@ module.exports = {
   runNewsIngestionCron,
   runYoutubeIngestionCron,
   runPoliticalVideosCron,
+  runLanguageIngestionCron,
   runRetentionCleanupCron,
   getCronStatus,
 };

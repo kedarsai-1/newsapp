@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
+import '../services/push_notifications.dart';
 import '../constants.dart';
 import '../utils/feed_dedupe.dart';
 import '../utils/feed_language.dart';
@@ -203,6 +204,9 @@ class NewsProvider extends ChangeNotifier {
       await prefs.remove(_onboardingCityKey);
     }
     await prefs.setBool(_onboardingNotifKey, notificationsEnabled);
+    if (notificationsEnabled) {
+      await PushNotifications.syncInterestTopics(interestSlugs);
+    }
 
     notifyListeners();
     await loadCategories();

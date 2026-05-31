@@ -1,14 +1,31 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 
+import '../firebase_options.dart';
+
+typedef void ArticleOpenCallback(String? postId);
+
 // Top-level handler for background messages (must be outside any class)
 @pragma('vm:entry-point')
 Future<void> firebaseBackgroundMessageHandler(RemoteMessage message) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (Firebase.apps.isEmpty) {
+    try {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    } catch (_) {
+      return;
+    }
+  }
   debugPrint('Background FCM: ${message.messageId}');
 }
 
 class NotificationService {
+  static ArticleOpenCallback? onOpenArticle;
+
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -90,16 +107,15 @@ class NotificationService {
   }
 
   static void _handleNotificationOpen(RemoteMessage message) {
-    final postId = message.data['postId'];
-    if (postId != null) {
-      // Navigate to article — handled by the router in main.dart
-      debugPrint('Open article: $postId');
-      // You can use a global navigator key here to push the route
-    }
+    final postId = message.data['postId']?.toString();
+    onOpenArticle?.call(postId);
   }
 
   static void _onNotificationTap(NotificationResponse response) {
-    debugPrint('Notification tapped: ${response.payload}');
+    final payload = response.payload;
+    if (payload != null && payload.isNotEmpty) {
+      onOpenArticle?.call(payload);
+    }
   }
 
   /// Get the FCM token for this device (send to backend after login)

@@ -1,6 +1,10 @@
 # .env file — never commit secrets
 assets/.env
 
+# Firebase platform config (download from Firebase Console)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
 # Flutter/Dart
 .dart_tool/
 .flutter-plugins

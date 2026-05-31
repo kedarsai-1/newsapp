@@ -49,10 +49,14 @@ import 'screens/reporter/my_posts_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/pending_posts_screen.dart';
 import 'screens/admin/manage_users_screen.dart';
+import 'services/push_notifications.dart';
+
+final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: 'assets/.env');
+  await PushNotifications.bootstrap();
   final themeProvider = ThemeProvider();
   await themeProvider.load();
   runApp(NewsApp(themeProvider: themeProvider));
@@ -99,6 +103,7 @@ GoRouter createAppRouter(BuildContext context) {
   final auth = context.read<AuthProvider>();
   final news = context.read<NewsProvider>();
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: auth.isLoggedIn && (auth.isAdmin || auth.isReporter)
         ? auth.homeRoute
         : '/splash',
@@ -475,6 +480,12 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
   void initState() {
     super.initState();
     _router = createAppRouter(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushNotifications.handlePendingNavigation((postId) {
+        if (!mounted) return;
+        _router?.go('/article/$postId');
+      });
+    });
   }
 
   @override

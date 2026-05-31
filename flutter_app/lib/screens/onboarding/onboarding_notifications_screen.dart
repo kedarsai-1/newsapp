@@ -1,9 +1,9 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/onboarding_draft_provider.dart';
+import '../../services/push_notifications.dart';
 import 'onboarding_design.dart';
 import 'widgets/onboarding_shell.dart';
 
@@ -12,20 +12,8 @@ class OnboardingNotificationsScreen extends StatelessWidget {
 
   Future<void> _enable(BuildContext context) async {
     final draft = context.read<OnboardingDraftProvider>();
-    var granted = false;
-    try {
-      final settings = await FirebaseMessaging.instance.requestPermission(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-      granted =
-          settings.authorizationStatus == AuthorizationStatus.authorized ||
-              settings.authorizationStatus == AuthorizationStatus.provisional;
-    } catch (_) {
-      granted = false;
-    }
-    draft.setNotificationsRequested(granted);
+    await PushNotifications.enableForGuest();
+    draft.setNotificationsRequested(true);
     if (!context.mounted) return;
     context.go('/onboarding/welcome');
   }

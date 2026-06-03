@@ -18,6 +18,7 @@ const {
   serializeComment,
 } = require('../utils/serializers');
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
+const { newsPostInclude } = require('../utils/prismaNewsPost');
 const feedResponseCache = require('../utils/feedResponseCache');
 const { getPublisherReferer } = require('../utils/publisherReferer');
 const {

@@ -445,6 +445,11 @@ async function resolveGoogleNewsPublisherUrl(googleNewsUrl, { preferredHost } = 
     });
     clearTimeout(to);
     if (!res.ok) return null;
+
+    if (res.url && res.url !== u && !res.url.includes('news.google.com')) {
+      return res.url;
+    }
+
     const html = await res.text();
 
     // Try to find the publisher link in HTML.

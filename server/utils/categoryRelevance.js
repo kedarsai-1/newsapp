@@ -180,11 +180,13 @@ function postMatchesRegionalPoliticsScope(p, politicsScope) {
   if (!ps || ps === 'all') return true;
   if (ps === 'andhra') {
     return rowScope === 'andhra'
-      || (AP_ONLY_REGIONAL_RE.test(text) && !TELANGANA_REGIONAL_RE.test(text));
+      || AP_ONLY_REGIONAL_RE.test(text)
+      || titleContainsAndhra(p);
   }
   if (ps === 'telangana') {
     return rowScope === 'telangana'
-      || TELANGANA_REGIONAL_RE.test(text);
+      || TELANGANA_REGIONAL_RE.test(text)
+      || titleContainsTelangana(p);
   }
   if (ps === 'north') {
     return ['north', 'states', 'delhi'].includes(rowScope)
@@ -196,6 +198,18 @@ function postMatchesRegionalPoliticsScope(p, politicsScope) {
 
 function storyTextFromPost(p) {
   return `${p?.title || ''} ${p?.summary || ''} ${p?.body || ''}`;
+}
+
+function titleContainsAndhra(p) {
+  const title = String(p?.title || '').toLowerCase();
+  const keywords = ['andhra', 'ఆంధ్ర', 'amaravati', 'అమరావతి', 'vijayawada', 'విజయవాడ', 'visakhapatnam', 'vizag'];
+  return keywords.some(kw => title.includes(kw));
+}
+
+function titleContainsTelangana(p) {
+  const title = String(p?.title || '').toLowerCase();
+  const keywords = ['telangana', 'తెలంగాణ', 'hyderabad', 'హైదరాబాద్', 'secunderabad'];
+  return keywords.some(kw => title.includes(kw));
 }
 
 /** Post-filter: keep International chip free of AP/TG/North/India-only rows (mis-tagged RSS). */
@@ -231,20 +245,12 @@ function postMatchesPoliticsScopeFilter(p, politicsScope) {
     if (worldMarkers && !/(మోదీ|राहुल|modi|rahul|parliament|lok sabha|ఎన్నిక|चुनाव|bjp|congress)/i.test(text)) {
       return false;
     }
-    if (apTgRegional || northRegional) return false;
+    if (['andhra', 'telangana', 'north', 'states', 'delhi'].includes(rowScope)) return false;
     return true;
   }
 
   if (ps === 'andhra' || ps === 'telangana' || ps === 'north') {
-    if (postMatchesRegionalPoliticsScope(p, ps)) return true;
-    if (ps === 'andhra' && AP_ONLY_REGIONAL_RE.test(text) && !TELANGANA_REGIONAL_RE.test(text)) {
-      return true;
-    }
-    if (ps === 'telangana' && TELANGANA_REGIONAL_RE.test(text)) {
-      return true;
-    }
-    if (ps === 'north' && northRegional) return true;
-    return false;
+    return postMatchesRegionalPoliticsScope(p, ps);
   }
 
   return true;

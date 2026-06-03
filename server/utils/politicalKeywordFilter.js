@@ -9,13 +9,24 @@ function normalizeText(title, description) {
   return `${title || ''} ${description || ''}`.replace(/\s+/g, ' ').trim();
 }
 
-function countMatches(text, keywords) {
+function countMatches(text, keywords, isEnglish = false) {
   const lower = text.toLowerCase();
   let hits = 0;
   for (const kw of keywords) {
-    const k = String(kw).toLowerCase();
+    const k = String(kw).toLowerCase().trim();
     if (k.length < 2) continue;
-    if (lower.includes(k)) hits += 1;
+    if (isEnglish) {
+      // Use regex word boundaries for English keywords to avoid false positives (e.g. "ramp" for "mp")
+      const escaped = k.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      if (k.length <= 4 || ['rally', 'speech', 'debate', 'polling'].includes(k)) {
+        const rx = new RegExp('\\b' + escaped + '\\b', 'i');
+        if (rx.test(lower)) hits += 1;
+      } else {
+        if (lower.includes(k)) hits += 1;
+      }
+    } else {
+      if (lower.includes(k)) hits += 1;
+    }
   }
   return hits;
 }
@@ -47,9 +58,9 @@ function classifyByKeywords(video) {
     return { stage: 'reject', reason: 'blacklist', blacklistHits };
   }
 
-  const enHits = countMatches(text, POLITICAL_KEYWORDS.en);
-  const teHits = countMatches(text, POLITICAL_KEYWORDS.te);
-  const hiHits = countMatches(text, POLITICAL_KEYWORDS.hi);
+  const enHits = countMatches(text, POLITICAL_KEYWORDS.en, true);
+  const teHits = countMatches(text, POLITICAL_KEYWORDS.te, false);
+  const hiHits = countMatches(text, POLITICAL_KEYWORDS.hi, false);
   const totalPolitical = enHits + teHits + hiHits;
 
   const language =

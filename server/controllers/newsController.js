@@ -106,7 +106,7 @@ function languageWhere(langParam) {
         { sourceName: containsInsensitive('ndtv khabar') },
         { sourceName: containsInsensitive('prabhat') },
         { sourceName: containsInsensitive('bhaskar') },
-        { sourceName: containsInsensitive('the print') },
+        { sourceName: containsInsensitive('the print hindi') },
         { sourceName: containsInsensitive('bbc hindi') },
         { sourceName: containsInsensitive('print hindi') },
       ],
@@ -115,7 +115,6 @@ function languageWhere(langParam) {
   return { language: lang };
 }
 
-/** Politics tab scope filters — keeps AP/TG out of India/International buckets. */
 function politicsScopeWhere(scope, langParam) {
   const ps = String(scope || '').toLowerCase().trim();
   if (!ps || ps === 'all') return null;
@@ -146,8 +145,17 @@ function politicsScopeWhere(scope, langParam) {
     return {
       OR: [
         { politicsScope: { in: ['north', 'states', 'delhi'] } },
-        { title: containsInsensitive('uttar pradesh') },
-        { title: containsInsensitive('delhi') },
+        {
+          politicsScope: { in: ['india', null] },
+          OR: [
+            { title: containsInsensitive('uttar pradesh') },
+            { title: containsInsensitive('delhi') },
+            { title: containsInsensitive('उत्तर प्रदेश') },
+            { title: containsInsensitive('दिल्ली') },
+            { title: containsInsensitive('पंजाब') },
+            { title: containsInsensitive('बिहार') },
+          ],
+        },
       ],
     };
   }
@@ -158,8 +166,19 @@ function politicsScopeWhere(scope, langParam) {
     return {
       OR: [
         { politicsScope: 'andhra' },
-        { title: containsInsensitive('andhra') },
-        { body: containsInsensitive('andhra') },
+        {
+          politicsScope: { in: ['india', null] },
+          OR: [
+            { title: containsInsensitive('andhra') },
+            { title: containsInsensitive('ఆంధ్ర') },
+            { title: containsInsensitive('amaravati') },
+            { title: containsInsensitive('అమరావతి') },
+            { title: containsInsensitive('vijayawada') },
+            { title: containsInsensitive('విజయవాడ') },
+            { title: containsInsensitive('visakhapatnam') },
+            { title: containsInsensitive('vizag') },
+          ],
+        },
       ],
     };
   }
@@ -167,9 +186,16 @@ function politicsScopeWhere(scope, langParam) {
     return {
       OR: [
         { politicsScope: 'telangana' },
-        { title: containsInsensitive('telangana') },
-        { title: containsInsensitive('hyderabad') },
-        { body: containsInsensitive('telangana') },
+        {
+          politicsScope: { in: ['india', null] },
+          OR: [
+            { title: containsInsensitive('telangana') },
+            { title: containsInsensitive('తెలంగాణ') },
+            { title: containsInsensitive('hyderabad') },
+            { title: containsInsensitive('హైదరాబాద్') },
+            { title: containsInsensitive('secunderabad') },
+          ],
+        },
       ],
     };
   }

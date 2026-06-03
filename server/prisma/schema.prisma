@@ -121,6 +121,11 @@ model NewsPost {
   @@index([politicsScope])
   @@index([constituency])
   @@index([videoCategory])
+  @@index([summaryFingerprint])
+  @@index([language, status, sourcePublishedAt])
+  @@index([status, sourcePublishedAt])
+  @@index([constituency, status, sourcePublishedAt])
+  @@index([locationCity, status, sourcePublishedAt])
   @@map("news_posts")
 }
 

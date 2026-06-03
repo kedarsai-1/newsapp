@@ -29,6 +29,24 @@ function parseAllowedOrigins() {
   return [...set];
 }
 
+function isLocalDevOrigin(origin) {
+  if (!origin || process.env.CORS_ALLOW_LOCALHOST === 'false') return false;
+  // Production: require explicit opt-in (avoids open CORS to any localhost port).
+  if (
+    process.env.NODE_ENV === 'production'
+    && process.env.CORS_ALLOW_LOCALHOST !== 'true'
+  ) {
+    return false;
+  }
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== 'http:' && protocol !== 'https:') return false;
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 function buildCorsOptions() {
   const allowed = parseAllowedOrigins();
 
@@ -53,6 +71,7 @@ function buildCorsOptions() {
     origin(origin, callback) {
       if (!origin) return callback(null, true);
       if (allowSet.has(origin)) return callback(null, true);
+      if (isLocalDevOrigin(origin)) return callback(null, true);
       return callback(new Error(`CORS blocked: ${origin}`));
     },
   };
@@ -61,11 +80,20 @@ function buildCorsOptions() {
 function socketCorsOrigins() {
   const allowed = parseAllowedOrigins();
   if (allowed === null || allowed.includes('*')) return '*';
-  return allowed.length ? allowed : false;
+  if (!allowed.length) return false;
+
+  const allowSet = new Set(allowed);
+  return (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowSet.has(origin)) return callback(null, true);
+    if (isLocalDevOrigin(origin)) return callback(null, true);
+    return callback(new Error(`CORS blocked: ${origin}`));
+  };
 }
 
 module.exports = {
   parseAllowedOrigins,
   buildCorsOptions,
   socketCorsOrigins,
+  isLocalDevOrigin,
 };

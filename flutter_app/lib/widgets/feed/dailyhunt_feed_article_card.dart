@@ -3,7 +3,8 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/models.dart';
 import '../../theme/app_palette.dart';
-import '../premium_news_ui.dart';
+import '../glass_scaffold.dart';
+import '../../widgets/premium_utils.dart';
 import 'compact_news_row.dart';
 
 /// API feed row — Dailyhunt layout with comment, share, and more actions.

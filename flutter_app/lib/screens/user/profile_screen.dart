@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../constants.dart';
 import '../../providers/news_provider.dart';
 import '../../providers/reporter_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -73,7 +74,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
     return Scaffold(
-      backgroundColor: fx.background,
+      backgroundColor: Colors.transparent,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
@@ -83,7 +84,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SliverAppBar(
                 pinned: true,
                 toolbarHeight: 46,
-                backgroundColor: fx.background,
+                backgroundColor: Colors.transparent,
                 surfaceTintColor: Colors.transparent,
                 elevation: 0,
                 foregroundColor: fx.title,
@@ -94,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(1),
-                  child: Divider(height: 1, thickness: 1, color: fx.divider),
+                  child: Divider(height: 1, thickness: 1, color: Colors.white.withOpacity(0.08)),
                 ),
                 actions: [
                   IconButton(
@@ -110,7 +111,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
               SliverPadding(
-                padding: EdgeInsets.fromLTRB(_padH, 4, _padH, bottomInset),
+                padding: EdgeInsets.fromLTRB(0, 4, 0, bottomInset),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     if (user == null)
@@ -180,6 +181,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onSelectionChanged: (modes) {
                           context.read<ThemeProvider>().setThemeMode(modes.first);
                         },
+                      ),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: 'App Skeleton Layout',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SegmentedButton<AppLayoutMode>(
+                            segments: const [
+                              ButtonSegment(
+                                value: AppLayoutMode.dualDeck,
+                                label: Text('Dual-Deck'),
+                                icon: Icon(Icons.swap_horiz_rounded, size: 16),
+                              ),
+                              ButtonSegment(
+                                value: AppLayoutMode.carouselWheel,
+                                label: Text('Carousel'),
+                                icon: Icon(Icons.view_carousel_rounded, size: 16),
+                              ),
+                              ButtonSegment(
+                                value: AppLayoutMode.sidebarPanel,
+                                label: Text('Sidebar'),
+                                icon: Icon(Icons.view_sidebar_rounded, size: 16),
+                              ),
+                            ],
+                            selected: {news.layoutMode},
+                            onSelectionChanged: (modes) {
+                              news.setLayoutMode(modes.first);
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            news.layoutMode == AppLayoutMode.dualDeck
+                                ? 'Swipe horizontally to discover categories.'
+                                : news.layoutMode == AppLayoutMode.carouselWheel
+                                    ? 'Scroll categories in a 3D dial wheel at the top.'
+                                    : 'Categories slide out from the left sidebar panel.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: fx.meta,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Theme(
@@ -358,52 +404,58 @@ class _UserIdentity extends StatelessWidget {
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: fx.iconSurface,
-            child: Text(
-              AppUtils.initials(userName),
-              style: TextStyle(
-                color: fx.title,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: GlassCard(
+        padding: const EdgeInsets.all(14),
+        radius: 14,
+        borderColor: Colors.white.withOpacity(0.12),
+        color: Colors.white.withOpacity(0.03),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: fx.iconSurface,
+              child: Text(
+                AppUtils.initials(userName),
+                style: TextStyle(
+                  color: fx.title,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  userName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    height: 1.15,
-                    color: fx.title,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    userName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      height: 1.15,
+                      color: fx.title,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  userEmail,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.2,
-                    color: fx.summary,
+                  const SizedBox(height: 2),
+                  Text(
+                    userEmail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.2,
+                      color: fx.summary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -418,53 +470,60 @@ class _GuestIdentity extends StatelessWidget {
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: fx.iconSurface,
-            child: Icon(
-              Icons.person_outline_rounded,
-              size: 22,
-              color: fx.iconFg,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: GlassCard(
+        padding: const EdgeInsets.all(14),
+        radius: 14,
+        borderColor: Colors.white.withOpacity(0.12),
+        color: Colors.white.withOpacity(0.03),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: fx.iconSurface,
+              child: Icon(
+                Icons.person_outline_rounded,
+                size: 22,
+                color: fx.iconFg,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  I18n.t(context, 'profile_guest_title'),
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
-                    color: fx.title,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    I18n.t(context, 'profile_guest_title'),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: fx.title,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  I18n.t(context, 'profile_guest_subtitle'),
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.25,
-                    color: fx.summary,
+                  const SizedBox(height: 2),
+                  Text(
+                    I18n.t(context, 'profile_guest_subtitle'),
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 1.25,
+                      color: fx.summary,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: onSignIn,
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              foregroundColor: fx.iconFg,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onSignIn,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                foregroundColor: fx.iconFg,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: Text(I18n.t(context, 'action_signin')),
             ),
-            child: Text(I18n.t(context, 'action_signin')),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

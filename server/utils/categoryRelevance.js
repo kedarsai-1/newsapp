@@ -2,6 +2,8 @@
  * Keep ingested stories in the RSS feed's target category (reject obvious mismatches).
  */
 
+const { isPoliticalNoise } = require('./politicalStoryFilter');
+
 const EXCLUDE_BY_CATEGORY = {
   business: [
     /\b(cricket|football|soccer|tennis|hockey|ipl\b|premier league|world cup|match report|wicket|stumps|innings|goal scored)\b/i,
@@ -92,18 +94,19 @@ function passesCategoryExclusions(item, categorySlug) {
 }
 
 /**
- * Ingest gate: trust RSS/API categorySlug by default; only drop obvious cross-topic noise.
- * Set INGEST_STRICT_CATEGORY_FILTER=true to require keyword signals (legacy behavior).
+ * Ingest gate: strict category matching by default (entertainment/sports/etc.).
+ * Set INGEST_STRICT_CATEGORY_FILTER=false to trust RSS tags for non-politics categories.
  */
 function passesIngestCategoryGate(item, categorySlug, { feedUrl } = {}) {
   const slug = String(categorySlug || 'general').toLowerCase();
   if (slug === 'general') return true;
   if (!passesCategoryExclusions(item, slug)) return false;
-  // Politics/local: always require on-topic keywords (RSS section feeds still leak crime/lifestyle).
+  // Politics/local: exclusions + keyword/section check (hi/te politics uses acceptPoliticsRssItem).
   if (slug === 'politics' || slug === 'local') {
     return matchesFeedCategory(item, categorySlug, { feedUrl });
   }
-  if (process.env.INGEST_STRICT_CATEGORY_FILTER === 'true') {
+  const strict = process.env.INGEST_STRICT_CATEGORY_FILTER !== 'false';
+  if (strict) {
     return matchesFeedCategory(item, categorySlug, { feedUrl });
   }
   return true;
@@ -127,7 +130,7 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
     sports:
       /\b(sport|cricket|football|tennis|hockey|match|tournament|league|ipl|goal|wicket|olympic|athlete|coach|stadium)\b|(క్రికెట్|ఐపీఎల్|క్రీడ|మ్యాచ్|फुटबॉल|क्रिकेट|खेल|मैच)/i,
     politics:
-      /\b(politics|election|government|minister|parliament|assembly|party|vote|poll|cabinet|policy|bjp|congress|modi|mla|mp|cm\b|chief minister|bjp|tdp|ysrcp|jagan|revanth|kcr|rahul)\b|(రాజకీయ|ఎన్నిక|మంత్రి|పార్టీ|శాసనసభ|ముఖ్యమంత్రి|సీఎం|ఎమ్మెల్యే|ఎంపీ|లోక్‌సభ|రాజ్యసభ|రేవంత్|జగన్|చంద్రబాబు|కేసిఆర్|राजनीति|चुनाव|मंत्री|सरकार)/i,
+      /\b(politics|election|government|minister|parliament|assembly|party|vote|poll|cabinet|policy|bjp|congress|modi|mla|mp|cm\b|chief minister|tdp|ysrcp|jagan|revanth|kcr|rahul|yogi|kejriwal|debate|manifesto|rally|speech)\b|(రాజకీయ|ఎన్నిక|మంత్రి|పార్టీ|శాసనసభ|ముఖ్యమంత్రి|సీఎం|ఎమ్మెల్యే|ఎంపీ|లోక్‌సభ|రాజ్యసభ|రేవంత్|జగన్|చంద్రబాబు|కేసిఆర్|ప్రభుత్వం|కేంద్ర|ఢిల్లీ|राजनीति|चुनाव|मंत्री|सरकार|संसद|लोकसभा|विधानसभा|कैबिनेट|दिल्ली|केंद्र)/i,
     technology:
       /\b(tech|technology|smartphone|android|ios|ai\b|artificial intelligence|software|hardware|gadget|cyber|semiconductor|chip)\b|(టెక్నాలజీ|స్మార్ట్|टेक्नोलॉजी|स्मार्टफोन)/i,
     entertainment:
@@ -153,6 +156,12 @@ const LEGACY_MISCATEGORIZED = [
   },
 ];
 
+/** AP-only vs Telangana markers (shared by regional scope filters). */
+const AP_ONLY_REGIONAL_RE =
+  /(ఆంధ్ర|andhra|amaravati|vijayawada|visakhapatnam|guntur|nellore|kurnool|అమరావతి|విజయవాడ)/i;
+const TELANGANA_REGIONAL_RE =
+  /(తెలంగాణ|telangana|hyderabad|warangal|karimnagar|secunderabad|హైదరాబాద్)/i;
+
 function isLegacyMiscategorized(post, categorySlug) {
   const slug = String(categorySlug || '').toLowerCase();
   const src = String(post?.sourceName || '');
@@ -167,10 +176,21 @@ function isLegacyMiscategorized(post, categorySlug) {
 function postMatchesRegionalPoliticsScope(p, politicsScope) {
   const ps = String(politicsScope || '').toLowerCase();
   const rowScope = String(p?.politicsScope || '').toLowerCase();
+  const text = storyTextFromPost(p);
   if (!ps || ps === 'all') return true;
-  if (ps === 'andhra') return rowScope === 'andhra';
-  if (ps === 'telangana') return rowScope === 'telangana';
-  if (ps === 'north') return ['north', 'states', 'delhi'].includes(rowScope);
+  if (ps === 'andhra') {
+    return rowScope === 'andhra'
+      || (AP_ONLY_REGIONAL_RE.test(text) && !TELANGANA_REGIONAL_RE.test(text));
+  }
+  if (ps === 'telangana') {
+    return rowScope === 'telangana'
+      || TELANGANA_REGIONAL_RE.test(text);
+  }
+  if (ps === 'north') {
+    return ['north', 'states', 'delhi'].includes(rowScope)
+      || /(उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|lucknow|chandigarh|noida|patna|jaipur)/.test(text)
+      || /\b(uttar pradesh|punjab|haryana|rajasthan|bihar|delhi)\b/i.test(text);
+  }
   return false;
 }
 
@@ -216,7 +236,15 @@ function postMatchesPoliticsScopeFilter(p, politicsScope) {
   }
 
   if (ps === 'andhra' || ps === 'telangana' || ps === 'north') {
-    return postMatchesRegionalPoliticsScope(p, ps);
+    if (postMatchesRegionalPoliticsScope(p, ps)) return true;
+    if (ps === 'andhra' && AP_ONLY_REGIONAL_RE.test(text) && !TELANGANA_REGIONAL_RE.test(text)) {
+      return true;
+    }
+    if (ps === 'telangana' && TELANGANA_REGIONAL_RE.test(text)) {
+      return true;
+    }
+    if (ps === 'north' && northRegional) return true;
+    return false;
   }
 
   return true;
@@ -251,6 +279,11 @@ function filterPostsForCategory(posts, categorySlug, { politicsScope } = {}) {
     }
 
     if (slug === 'politics' && !postMatchesPoliticsScopeFilter(p, scope)) return false;
+
+    const postLang = String(p?.language || '').toLowerCase();
+    if (slug === 'politics' && (postLang === 'te' || postLang === 'hi')) {
+      if (isPoliticalNoise(p, postLang)) return false;
+    }
 
     if (postSlug === slug) {
       if (isLegacyMiscategorized(p, slug)) return false;

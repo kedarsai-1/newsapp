@@ -10,8 +10,13 @@ class DefaultFirebaseOptions {
   static const String _placeholder = 'REPLACE_ME';
 
   /// True when real Firebase project values are present (not template placeholders).
-  static bool get isConfigured =>
-      android.apiKey != _placeholder && ios.apiKey != _placeholder;
+  static bool get isWebConfigured =>
+      web.apiKey != _placeholder && web.appId != _placeholder;
+
+  static bool get isConfigured {
+    if (kIsWeb) return isWebConfigured;
+    return android.apiKey != _placeholder && ios.apiKey != _placeholder;
+  }
 
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {

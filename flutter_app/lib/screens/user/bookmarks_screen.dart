@@ -99,10 +99,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     final bottomInset = FeedXpressoTheme.feedBottomInset(context);
 
     return Scaffold(
-      backgroundColor: fx.background,
+      backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         color: fx.accent,
-        backgroundColor: fx.background,
+        backgroundColor: fx.sheet,
         edgeOffset: 8,
         onRefresh: _load,
         child: Center(

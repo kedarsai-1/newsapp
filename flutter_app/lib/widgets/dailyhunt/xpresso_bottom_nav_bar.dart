@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../feed/feed_xpresso_theme.dart';
+import '../../constants.dart';
 
-/// Dailyhunt Xpresso bottom bar — matte, compact, top-dash active state.
+/// Premium floating glassmorphic navigation dock — detaches bottom bar
+/// and animates active states inside soft glowing capsules.
 class XpressoBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
@@ -17,53 +19,35 @@ class XpressoBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fx = FeedXpressoTheme.fx(context);
-    final isDark = fx.background.computeLuminance() < 0.2;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: fx.navBackground,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
-            blurRadius: isDark ? 12 : 16,
-            offset: const Offset(0, -4),
-          ),
-          if (!isDark)
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 14), // Floating margins
+        child: GlassCard(
+          radius: 24,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          color: Colors.white.withOpacity(0.05),
+          borderColor: Colors.white.withOpacity(0.12),
+          boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
+              color: Colors.black.withOpacity(0.20),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Divider(
-            height: 1,
-            thickness: 0.5,
-            color: fx.divider,
+          ],
+          child: Row(
+            children: [
+              for (var i = 0; i < destinations.length; i++)
+                Expanded(
+                  child: _XpressoNavItem(
+                    destination: destinations[i],
+                    selected: i == selectedIndex,
+                    onTap: () => onSelected(i),
+                  ),
+                ),
+            ],
           ),
-          SafeArea(
-            top: false,
-            child: SizedBox(
-              height: FeedXpressoTheme.navBarHeight,
-              child: Row(
-                children: [
-                  for (var i = 0; i < destinations.length; i++)
-                    Expanded(
-                      child: _XpressoNavItem(
-                        fx: fx,
-                        destination: destinations[i],
-                        selected: i == selectedIndex,
-                        onTap: () => onSelected(i),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -81,65 +65,74 @@ class XpressoNavDestination {
   });
 }
 
-class _XpressoNavItem extends StatelessWidget {
-  final FeedXpressoPalette fx;
+class _XpressoNavItem extends StatefulWidget {
   final XpressoNavDestination destination;
   final bool selected;
   final VoidCallback onTap;
 
   const _XpressoNavItem({
-    required this.fx,
     required this.destination,
     required this.selected,
     required this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final iconColor =
-        selected ? fx.navActiveIcon : fx.navInactiveIcon;
-    final labelColor =
-        selected ? fx.navActiveLabel : fx.navInactiveLabel;
+  State<_XpressoNavItem> createState() => _XpressoNavItemState();
+}
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
+class _XpressoNavItemState extends State<_XpressoNavItem> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = GlassColors.accentGreen;
+    final activeColorLight = GlassColors.accentGreenLight;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedScale(
+        scale: _pressed ? 0.90 : 1.00,
+        duration: const Duration(milliseconds: 100),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (selected)
-              Container(
-                width: FeedXpressoTheme.navIndicatorWidth,
-                height: FeedXpressoTheme.navIndicatorHeight,
-                margin: const EdgeInsets.only(bottom: 3),
-                decoration: BoxDecoration(
-                  color: fx.navActiveIndicator,
-                  borderRadius: BorderRadius.circular(2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.12),
-                      blurRadius: 4,
-                    ),
-                  ],
+            // Glowing capsule backdrop behind the active tab icon
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: widget.selected
+                    ? activeColor.withOpacity(0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: widget.selected
+                      ? activeColor.withOpacity(0.35)
+                      : Colors.transparent,
+                  width: 0.8,
                 ),
-              )
-            else
-              const SizedBox(height: 5),
-            Icon(
-              selected ? destination.selectedIcon : destination.icon,
-              size: FeedXpressoTheme.navIconSize,
-              color: iconColor,
+              ),
+              child: Icon(
+                widget.selected ? widget.destination.selectedIcon : widget.destination.icon,
+                size: 19,
+                color: widget.selected ? activeColorLight : Colors.white60,
+              ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
-              destination.label,
+              widget.destination.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: FeedXpressoTheme.navLabelSize,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: labelColor,
+                fontSize: 9.5,
+                fontWeight: widget.selected ? FontWeight.w800 : FontWeight.w600,
+                color: widget.selected ? Colors.white : Colors.white38,
                 height: 1,
               ),
             ),

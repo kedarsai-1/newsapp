@@ -13,6 +13,13 @@ class AppGradients {
         stops: const [0.0, 0.5, 1.0],
       );
 
+  // New gradient for glass surfaces
+  static const LinearGradient glassGradient = LinearGradient(
+    colors: [Colors.white12, Colors.white24],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   static LinearGradient accent(AppPalette p) => LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,

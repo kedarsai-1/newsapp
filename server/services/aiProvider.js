@@ -11,11 +11,24 @@ const FEED_LANG_LABELS = {
   te: 'Telugu',
 };
 
-let ollamaQueue = Promise.resolve();
+const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 
-function withOllamaQueue(fn) {
-  const run = ollamaQueue.then(fn, fn);
-  ollamaQueue = run.catch(() => {});
+let ollamaQueues = {
+  en: Promise.resolve(),
+  hi: Promise.resolve(),
+  te: Promise.resolve(),
+};
+
+function ollamaQueueKey(lang) {
+  const l = String(lang || 'en').toLowerCase();
+  if (l === 'hi' || l === 'te') return l;
+  return 'en';
+}
+
+function withOllamaQueue(fn, lang = 'en') {
+  const key = ollamaQueueKey(lang);
+  const run = ollamaQueues[key].then(fn, fn);
+  ollamaQueues[key] = run.catch(() => {});
   return run;
 }
 
@@ -88,11 +101,12 @@ function isAiSummaryEnabled() {
 }
 
 function cleanModelOutput(text) {
-  let t = String(text || '')
-    .replace(/^summary:\s*/i, '')
-    .replace(/^translation:\s*/i, '')
-    .replace(/^["']|["']$/g, '')
-    .trim();
+  let t = decodeHtmlEntities(
+    String(text || '')
+      .replace(/^summary:\s*/i, '')
+      .replace(/^translation:\s*/i, '')
+      .replace(/^["']|["']$/g, ''),
+  );
 
   const metaCut = t.search(/\((?:Note|Translation|Output|The term)/i);
   if (metaCut > 20) t = t.slice(0, metaCut).trim();
@@ -211,7 +225,7 @@ async function ollamaComplete(system, user, lang = 'en') {
 }
 
 async function ollamaCompleteQueued(system, user, lang = 'en') {
-  return withOllamaQueue(() => ollamaComplete(system, user, lang));
+  return withOllamaQueue(() => ollamaComplete(system, user, lang), lang);
 }
 
 function parseHfSummarizationJson(result) {
@@ -396,7 +410,29 @@ async function translateToFeedLanguage(text, targetLang) {
   return raw;
 }
 
-/** Health check for startup logs / ops. */
+async function areTitlesSameStory(titleA, titleB, lang = 'en') {
+  if (!isOllamaProvider() || process.env.OLLAMA_YOUTUBE_DEDUPE === 'false') {
+    return false;
+  }
+  const a = String(titleA || '').trim().slice(0, 220);
+  const b = String(titleB || '').trim().slice(0, 220);
+  if (!a || !b) return false;
+  if (a.toLowerCase() === b.toLowerCase()) return true;
+
+  const system = (
+    'You detect duplicate news videos. Reply with exactly YES if both titles describe '
+    + 'the same news story or event, otherwise NO. One word only.'
+  );
+  const user = `Title A: ${a}\nTitle B: ${b}\nSame story?`;
+
+  try {
+    const out = await withOllamaQueue(() => ollamaChat(system, user, lang), lang);
+    return /^yes\b/i.test(String(out || '').trim());
+  } catch {
+    return false;
+  }
+}
+
 async function pingOllama() {
   if (!isOllamaProvider()) return { ok: false, skipped: true };
   try {
@@ -438,4 +474,5 @@ module.exports = {
   getConfiguredOllamaModels,
   validateLanguageOutput,
   cleanModelOutput,
+  areTitlesSameStory,
 };

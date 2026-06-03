@@ -13,11 +13,14 @@ class FirebaseBootstrap {
     if (_initialized) return true;
     if (!DefaultFirebaseOptions.isConfigured) {
       if (kDebugMode) {
-        debugPrint(
-          '[Firebase] Not configured. Add google-services.json / '
-          'GoogleService-Info.plist and run flutterfire configure. '
-          'See docs/FIREBASE_SETUP.md',
-        );
+        final hint = kIsWeb
+            ? '[Firebase] Web not configured — add a Web app in Firebase Console, '
+                'run flutterfire configure, and add web/firebase-messaging-sw.js. '
+                'Push is skipped on web until then.'
+            : '[Firebase] Not configured. Add google-services.json / '
+                'GoogleService-Info.plist and run flutterfire configure. '
+                'See docs/FIREBASE_SETUP.md';
+        debugPrint(hint);
       }
       return false;
     }

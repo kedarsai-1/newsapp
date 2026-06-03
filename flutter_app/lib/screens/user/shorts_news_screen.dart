@@ -13,7 +13,7 @@ import '../../services/auth_provider.dart';
 import '../../utils/i18n.dart';
 import '../../widgets/shorts/shorts_card_shimmer.dart';
 import '../../widgets/shorts/shorts_feed_theme.dart';
-import '../../widgets/premium_news_ui.dart';
+import '../../widgets/premium_utils.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
 import '../../widgets/shorts/shorts_chrome.dart';

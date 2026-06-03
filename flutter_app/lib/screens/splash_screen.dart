@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants.dart';
-import '../widgets/premium_news_ui.dart';
+import '../widgets/glass_scaffold.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -37,7 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     final p = context.palette;
     final t = Theme.of(context).textTheme;
-    return PremiumScaffold(
+    return GlassScaffold(
       safeArea: true,
       child: Center(
         child: FadeTransition(

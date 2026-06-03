@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'theme/app_palette.dart';
+import 'dart:ui';
 import 'theme/app_gradients.dart';
 
 export 'theme/app_palette.dart';
@@ -12,6 +13,9 @@ export 'theme/app_typography.dart';
 export 'theme/app_gradients.dart';
 export 'theme/app_components.dart';
 export 'design_system/dailyhunt/dailyhunt.dart';
+export 'design_system/glass/glass_background.dart';
+export 'widgets/glass_scaffold.dart';
+export 'widgets/glass_card.dart';
 
 class AppConstants {
   /// Default local API port — macOS Monterey+ reserves 5000 for AirPlay Receiver.
@@ -187,63 +191,9 @@ class GlassColors {
   static const Color info = Color(0xFF38BDF8);
 }
 
-// ─── Gradient Background Widget ───────────────────────────────────────────────
+// Gradient Background Widget is now imported and exported directly from design_system/glass/glass_background.dart.
 
-class GlassBackground extends StatelessWidget {
-  final Widget child;
-  const GlassBackground({super.key, required this.child});
 
-  @override
-  Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    return ColoredBox(
-      color: isLight ? Colors.white : Theme.of(context).scaffoldBackgroundColor,
-      child: child,
-    );
-  }
-}
-
-// _Blob intentionally removed — keep backgrounds clean for production.
-
-// ─── Glass Card ───────────────────────────────────────────────────────────────
-
-class GlassCard extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  final double borderRadius;
-  final Color? borderColor;
-  final Color? backgroundColor;
-  final VoidCallback? onTap;
-
-  const GlassCard({
-    super.key,
-    required this.child,
-    this.padding,
-    this.borderRadius = 16,
-    this.borderColor,
-    this.backgroundColor,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: backgroundColor ?? GlassColors.surfaceWhite,
-          borderRadius: BorderRadius.circular(borderRadius),
-          border: Border.all(
-            color: borderColor ?? GlassColors.borderWhite,
-            width: 0.8,
-          ),
-        ),
-        child: child,
-      ),
-    );
-  }
-}
 
 // ─── Glass Container (simpler, no clip) ──────────────────────────────────────
 

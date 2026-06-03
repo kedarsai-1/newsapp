@@ -42,6 +42,24 @@ class ShortsProvider extends ChangeNotifier {
   bool hasContentFor(String? language) =>
       _posts.isNotEmpty && languageMatches(language);
 
+  /// Client-side guard — political reels live on a separate tab.
+  static bool _isPoliticalShort(NewsPost post) {
+    final cat = post.category?.slug?.toLowerCase() ?? '';
+    if (cat == 'politics' || cat == 'local') return true;
+    final tags = post.tags.map((t) => t.toLowerCase()).toList();
+    if (tags.any((t) => t.contains('politic'))) return true;
+    final scope = post.politicsScope?.toLowerCase() ?? '';
+    if (scope.isNotEmpty && scope != 'all') return true;
+    final title = post.title.toLowerCase();
+    const politicalHints = [
+      'minister', 'election', 'parliament', 'assembly', 'bjp', 'congress',
+      'debate', 'interview', 'press meet', 'rally', 'mla', ' mp ',
+      'మంత్రి', 'ఎన్నిక', 'రాజకీయ', 'పార్టీ', 'ఇంటర్వ్యూ',
+      'मंत्री', 'चुनाव', 'राजनीति', 'संसद', 'इंटरव्यू',
+    ];
+    return politicalHints.any(title.contains);
+  }
+
   /// Load Shorts for [language] when empty or language changed (e.g. feed preference).
   Future<void> ensureForLanguage(String? language, {bool force = false}) async {
     if (_busy) return;
@@ -105,6 +123,7 @@ class ShortsProvider extends ChangeNotifier {
         days: 30,
         sourceTypes: const ['youtube'],
         hasVideo: true,
+        excludePolitics: true,
       );
       if (res['success'] == true && res['posts'] is List) {
         final raw = res['posts'] as List;
@@ -117,6 +136,7 @@ class ShortsProvider extends ChangeNotifier {
             final vid = post.youtube?.videoId ?? '';
             if (vid.isEmpty) continue;
             if (!postMatchesLanguage(post, language)) continue;
+            if (_isPoliticalShort(post)) continue;
             fetched.add(post);
           } catch (_) {
             // Skip malformed API rows.

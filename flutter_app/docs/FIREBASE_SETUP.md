@@ -8,7 +8,7 @@ Dart code initializes Firebase in `lib/services/firebase_bootstrap.dart` and reg
 1. Open [Firebase Console](https://console.firebase.google.com/) and create a project (or reuse an existing one).
 2. Enable **Cloud Messaging** (included by default for mobile apps).
 
-## 2. Register Android and iOS apps
+## 2. Register Android, iOS, and (optional) Web apps
 
 | Platform | Identifier in this repo |
 |----------|-------------------------|
@@ -34,6 +34,8 @@ flutterfire configure
 ```
 
 This updates `lib/firebase_options.dart` and links the platform files above.
+
+**Web (Chrome / PWA):** also register a **Web** app in Firebase Console, then run `flutterfire configure` so `firebase_options.dart` `web` is not `REPLACE_ME`. Copy the same values into `web/firebase-messaging-sw.js` (`appId`, `apiKey`). Without this, push is **skipped on web** (mobile still works).
 
 If you configure manually, replace `REPLACE_ME` values in `lib/firebase_options.dart` with keys from the Firebase Console.
 

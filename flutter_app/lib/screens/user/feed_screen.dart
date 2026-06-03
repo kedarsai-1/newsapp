@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -22,7 +23,7 @@ import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/feed/dailyhunt_feed_article_card.dart';
 import '../../widgets/feed/feed_list_tuning.dart';
 import '../../widgets/dailyhunt/xpresso_side_menu.dart';
-import '../../widgets/premium_news_ui.dart';
+import '../../widgets/premium_utils.dart';
 
 class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
@@ -66,10 +67,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   final Map<String, bool> _likedByPostId = {};
   Timer? _autoRefreshTimer;
   DateTime? _lastFeedRefreshAt;
+  late final PageController _feedPageController;
+  int _activePage = 0;
+  bool _sidebarOpen = false;
 
   @override
   void initState() {
     super.initState();
+    _feedPageController = PageController();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     _restoreLikedCache();
@@ -91,8 +96,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     _autoRefreshTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _feedPageController.dispose();
     super.dispose();
   }
+
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -318,72 +325,354 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     if (scrollToTop) _scrollFeedToTop();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = FeedXpressoTheme.feedBottomInset(context);
+  static (String emoji, List<Color> colors) _categoryStyle(String slug) {
+    switch (slug.toLowerCase()) {
+      case 'politics':
+        return ('🏛️', [const Color(0xFFC084FC), const Color(0xFF8B5CF6)]); // Purple
+      case 'sports':
+        return ('⚽', [const Color(0xFF34D399), const Color(0xFF059669)]); // Green
+      case 'entertainment':
+        return ('🎬', [const Color(0xFFFBBF24), const Color(0xFFD97706)]); // Amber/Yellow
+      case 'technology':
+        return ('💻', [const Color(0xFF38BDF8), const Color(0xFF0284C7)]); // Blue
+      case 'business':
+        return ('📈', [const Color(0xFF2DD4BF), const Color(0xFF0D9488)]); // Teal
+      case 'health':
+        return ('🏥', [const Color(0xFFF87171), const Color(0xFFDC2626)]); // Red
+      case 'education':
+        return ('🎓', [const Color(0xFF818CF8), const Color(0xFF4F46E5)]); // Indigo
+      case 'local':
+        return ('📍', [const Color(0xFFF97316), const Color(0xFFEA580C)]); // Orange
+      default:
+        return ('📰', [Colors.white30, Colors.white10]);
+    }
+  }
 
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _deckSelectorTabs() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withOpacity(0.08), width: 0.8),
+      ),
+      child: Row(
         children: [
-          const RepaintBoundary(child: _DailyhuntFeedAppBar()),
-            RepaintBoundary(
-              child: Selector<NewsProvider, (int, String?)>(
-                selector: (_, news) =>
-                    (_chipIndexForProvider(news), news.categoriesError),
-                builder: (_, data, __) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (data.$2 != null)
-                      _CategoriesLoadBanner(message: data.$2!),
-                    DailyhuntCategoryTabBar(
-                      categories: _kFeedTabLabels,
-                      selectedIndex: data.$1,
-                      dark: FeedXpressoTheme.isDark(context),
-                      onSelected: _selectCategoryChip,
-                    ),
-                  ],
-                ),
+          Expanded(
+            child: _DeckTab(
+              label: 'Curated Feed',
+              selected: _activePage == 0,
+              onTap: () {
+                _feedPageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+              },
+            ),
+          ),
+          Expanded(
+            child: _DeckTab(
+              label: 'Discover Topics',
+              selected: _activePage == 1,
+              onTap: () {
+                _feedPageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _activeCategoryBanner(NewsProvider news) {
+    if (news.selectedCategoryId == null) return const SizedBox.shrink();
+    
+    Category? activeCat;
+    for (final c in news.categories) {
+      if (c.id == news.selectedCategoryId) {
+        activeCat = c;
+        break;
+      }
+    }
+    if (activeCat == null) return const SizedBox.shrink();
+    
+    final style = _categoryStyle(activeCat.slug);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 4, 14, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: style.$2[0].withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: style.$2[0].withOpacity(0.35), width: 0.8),
+      ),
+      child: Row(
+        children: [
+          Text(style.$1, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Filtering by Topic: ${activeCat.name}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: style.$2[0],
               ),
             ),
-            Selector<NewsProvider, _RegionChipBarData>(
-              selector: (_, news) {
-                if (news.shouldShowPoliticalScopeDropdown) {
-                  return _RegionChipBarData(
-                    selectedScope: news.selectedPoliticsScope,
-                    options: news.politicsScopeOptions,
-                    onSelectPolitics: true,
-                  );
-                }
-                if (news.shouldShowLocalScopeDropdown) {
-                  return _RegionChipBarData(
-                    selectedScope: news.selectedLocalScope,
-                    options: news.localScopeOptions,
-                    onSelectPolitics: false,
-                  );
-                }
-                return const _RegionChipBarData.hidden();
-              },
-              builder: (_, data, __) {
-                if (data.hidden) return const SizedBox.shrink();
-                final news = context.read<NewsProvider>();
-                return RepaintBoundary(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FeedScopeChipBar(
-                        selectedScope: data.selectedScope,
-                        options: data.options,
-                        onSelected: data.onSelectPolitics
-                            ? news.selectPoliticsScope
-                            : news.selectLocalScope,
+          ),
+          GestureDetector(
+            onTap: () async {
+              await news.selectCategory(null);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: style.$2[0].withOpacity(0.20),
+              ),
+              child: Icon(Icons.close_rounded, size: 12, color: style.$2[0]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _discoverDeck(NewsProvider news) {
+    if (news.categories.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: GlassColors.accentGreen,
+        ),
+      );
+    }
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 32),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.1,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: news.categories.length,
+      itemBuilder: (context, idx) {
+        final cat = news.categories[idx];
+        final style = _categoryStyle(cat.slug);
+        final isSelected = news.selectedCategoryId == cat.id;
+
+        return GestureDetector(
+          onTap: () {
+            news.selectCategory(cat.id);
+            _feedPageController.animateToPage(
+              0,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutCubic,
+            );
+          },
+          child: GlassCard(
+            radius: 16,
+            padding: const EdgeInsets.all(12),
+            color: isSelected
+                ? style.$2[0].withOpacity(0.18)
+                : Colors.white.withOpacity(0.04),
+            borderColor: isSelected
+                ? style.$2[0].withOpacity(0.50)
+                : Colors.white.withOpacity(0.10),
+            boxShadow: [
+              if (isSelected)
+                BoxShadow(
+                  color: style.$2[0].withOpacity(0.08),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+            ],
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [style.$2[0].withOpacity(0.5), style.$2[1].withOpacity(0.2)],
+                    ),
+                    border: Border.all(color: style.$2[0].withOpacity(0.4), width: 0.8),
+                  ),
+                  child: Text(style.$1, style: const TextStyle(fontSize: 16)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    cat.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected ? style.$2[0] : Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _sidebarCategoryList(NewsProvider news) {
+    return Container(
+      width: 250,
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              'DISCOVER TOPICS',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: Colors.white38,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              itemCount: news.categories.length + 1,
+              itemBuilder: (context, index) {
+                final isTop = index == 0;
+                final cat = isTop ? null : news.categories[index - 1];
+                final String label = isTop ? 'Top News' : cat!.name;
+                final String? id = isTop ? null : cat!.id;
+                final bool isSelected = news.selectedCategoryId == id;
+                final style = _categoryStyle(isTop ? '' : cat!.slug);
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: GestureDetector(
+                    onTap: () {
+                      news.selectCategory(id);
+                      _scrollFeedToTop();
+                      setState(() {
+                        _sidebarOpen = false; // close drawer on mobile
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? style.$2[0].withOpacity(0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? style.$2[0].withOpacity(0.35)
+                              : Colors.transparent,
+                          width: 0.8,
+                        ),
                       ),
-                      if (data.onSelectPolitics) const _PoliticalReelsEntry(),
-                    ],
+                      child: Row(
+                        children: [
+                          Text(style.$1, style: const TextStyle(fontSize: 14)),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: isSelected ? style.$2[0] : Colors.white70,
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            Icon(
+                              Icons.check_circle_outline_rounded,
+                              size: 14,
+                              color: style.$2[0],
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },
             ),
-            Expanded(
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = FeedXpressoTheme.feedBottomInset(context);
+    final news = context.watch<NewsProvider>();
+    final width = MediaQuery.sizeOf(context).width;
+
+    Widget buildCuratedFeedContent() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _activeCategoryBanner(news),
+          Selector<NewsProvider, _RegionChipBarData>(
+            selector: (_, news) {
+              if (news.shouldShowPoliticalScopeDropdown) {
+                return _RegionChipBarData(
+                  selectedScope: news.selectedPoliticsScope,
+                  options: news.politicsScopeOptions,
+                  onSelectPolitics: true,
+                );
+              }
+              if (news.shouldShowLocalScopeDropdown) {
+                return _RegionChipBarData(
+                  selectedScope: news.selectedLocalScope,
+                  options: news.localScopeOptions,
+                  onSelectPolitics: false,
+                );
+              }
+              return const _RegionChipBarData.hidden();
+            },
+            builder: (_, data, __) {
+              if (data.hidden) return const SizedBox.shrink();
+              final news = context.read<NewsProvider>();
+              return RepaintBoundary(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FeedScopeChipBar(
+                      selectedScope: data.selectedScope,
+                      options: data.options,
+                      onSelected: data.onSelectPolitics
+                          ? news.selectPoliticsScope
+                          : news.selectLocalScope,
+                    ),
+                    if (data.onSelectPolitics) const _PoliticalReelsEntry(),
+                  ],
+                ),
+              );
+            },
+          ),
+          Expanded(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 500),
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 20 * (1 - value)),
+                    child: child,
+                  ),
+                );
+              },
               child: Selector<NewsProvider, FeedListSnapshot>(
                 selector: (_, news) => readFeedListSnapshot(news),
                 builder: (context, snap, _) {
@@ -425,8 +714,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                           ? 'No $scopeLabel stories yet'
                           : 'No stories yet',
                       subtitle: news.categories.isEmpty
-                          ? 'Categories did not load — check API at ${AppConstants.apiConnectionHint} and pull to refresh.'
-                          : 'Pull down to refresh, try Top News, or pick another category.',
+                          ? 'Categories did not load — check API and pull to refresh.'
+                          : 'Pull down to refresh or pick another category in Discover Topics.',
                       dark: FeedXpressoTheme.isDark(context),
                       buttonLabel: news.categories.isEmpty ? 'Retry' : null,
                       onButtonTap: news.categories.isEmpty
@@ -455,7 +744,369 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 },
               ),
             ),
+          ),
+        ],
+      );
+    }
+
+    Widget bodyContent;
+    final bool useMobileLayout = width < 800;
+
+    if (news.layoutMode == AppLayoutMode.dualDeck) {
+      bodyContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _deckSelectorTabs(),
+          Expanded(
+            child: PageView(
+              controller: _feedPageController,
+              onPageChanged: (value) {
+                setState(() {
+                  _activePage = value;
+                });
+              },
+              children: [
+                buildCuratedFeedContent(),
+                _discoverDeck(news),
+              ],
+            ),
+          ),
+        ],
+      );
+    } else if (news.layoutMode == AppLayoutMode.carouselWheel) {
+      bodyContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 6),
+          CategoryCarouselWheel(
+            categories: news.categories,
+            selectedCategoryId: news.selectedCategoryId,
+            onSelected: (id) => news.selectCategory(id),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: buildCuratedFeedContent(),
+          ),
+        ],
+      );
+    } else {
+      // Sidebar layout
+      if (!useMobileLayout) {
+        bodyContent = Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _sidebarCategoryList(news),
+            Expanded(
+              child: buildCuratedFeedContent(),
+            ),
           ],
+        );
+      } else {
+        bodyContent = Stack(
+          children: [
+            buildCuratedFeedContent(),
+            if (_sidebarOpen)
+              GestureDetector(
+                onTap: () => setState(() => _sidebarOpen = false),
+                child: Container(
+                  color: Colors.black54,
+                ),
+              ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              left: _sidebarOpen ? 0 : -260,
+              top: 0,
+              bottom: 0,
+              width: 260,
+              child: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.60),
+                      border: Border(
+                        right: BorderSide(
+                          color: Colors.white.withOpacity(0.08),
+                          width: 0.8,
+                        ),
+                      ),
+                    ),
+                    child: SafeArea(
+                      child: _sidebarCategoryList(news),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        RepaintBoundary(
+          child: _DailyhuntFeedAppBar(
+            onMenuPressed: news.layoutMode == AppLayoutMode.sidebarPanel && useMobileLayout
+                ? () => setState(() => _sidebarOpen = !_sidebarOpen)
+                : null,
+          ),
+        ),
+        Expanded(
+          child: bodyContent,
+        ),
+      ],
+    );
+  }
+}
+
+class CategoryCarouselWheel extends StatefulWidget {
+  final List<Category> categories;
+  final String? selectedCategoryId;
+  final ValueChanged<String?> onSelected;
+
+  const CategoryCarouselWheel({
+    super.key,
+    required this.categories,
+    required this.selectedCategoryId,
+    required this.onSelected,
+  });
+
+  @override
+  State<CategoryCarouselWheel> createState() => _CategoryCarouselWheelState();
+}
+
+class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
+  late final PageController _pageController;
+  late List<(String, String?)> _items;
+
+  @override
+  void initState() {
+    super.initState();
+    _buildItems();
+    final initialIdx = _selectedIndex();
+    _pageController = PageController(
+      viewportFraction: 0.38,
+      initialPage: initialIdx,
+    );
+  }
+
+  void _buildItems() {
+    _items = [
+      ('Top News', null),
+      ...widget.categories.map((c) => (c.name, c.id)),
+    ];
+  }
+
+  int _selectedIndex() {
+    final sel = widget.selectedCategoryId;
+    if (sel == null) return 0;
+    for (int i = 0; i < widget.categories.length; i++) {
+      if (widget.categories[i].id == sel) return i + 1;
+    }
+    return 0;
+  }
+
+  @override
+  void didUpdateWidget(covariant CategoryCarouselWheel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.categories != widget.categories) {
+      _buildItems();
+    }
+    final activeIdx = _selectedIndex();
+    if (_pageController.hasClients && _pageController.page?.round() != activeIdx) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pageController.hasClients) {
+          _pageController.animateToPage(
+            activeIdx,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  (String, List<Color>) _categoryStyle(String? name) {
+    if (name == null) return ('📰', [Colors.white30, Colors.white10]);
+    final n = name.toLowerCase();
+    if (n.contains('sport')) return ('⚽', [const Color(0xFF34D399), const Color(0xFF059669)]);
+    if (n.contains('polit')) return ('🏛️', [const Color(0xFFC084FC), const Color(0xFF7C3AED)]);
+    if (n.contains('entert')) return ('🎬', [const Color(0xFFFBBF24), const Color(0xFFD97706)]);
+    if (n.contains('tech')) return ('💻', [const Color(0xFF38BDF8), const Color(0xFF0284C7)]);
+    if (n.contains('busin')) return ('💼', [const Color(0xFFF472B6), const Color(0xFFDB2777)]);
+    if (n.contains('health')) return ('🩺', [const Color(0xFFF87171), const Color(0xFFDC2626)]);
+    if (n.contains('educat')) return ('🎓', [const Color(0xFF818CF8), const Color(0xFF4F46E5)]);
+    if (n.contains('local')) return ('📍', [const Color(0xFFF97316), const Color(0xFFEA580C)]);
+    return ('📰', [Colors.white30, Colors.white10]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 72,
+      child: AnimatedBuilder(
+        animation: _pageController,
+        builder: (context, child) {
+          return PageView.builder(
+            controller: _pageController,
+            onPageChanged: (idx) {
+              if (idx >= 0 && idx < _items.length) {
+                final targetId = _items[idx].$2;
+                if (targetId != widget.selectedCategoryId) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    widget.onSelected(targetId);
+                  });
+                }
+              }
+            },
+            physics: const BouncingScrollPhysics(),
+            itemCount: _items.length,
+            itemBuilder: (context, index) {
+              final item = _items[index];
+              double value = 0.0;
+              if (_pageController.position.haveDimensions) {
+                value = _pageController.page! - index;
+              } else {
+                value = (_pageController.initialPage - index).toDouble();
+              }
+              value = value.clamp(-1.0, 1.0);
+
+              final scale = 1.0 - (value.abs() * 0.16);
+              final opacity = 1.0 - (value.abs() * 0.45);
+              final rotation = value * 0.38;
+
+              final style = _categoryStyle(item.$2 == null ? null : item.$1);
+              final isSelected = index == _selectedIndex();
+
+              return Center(
+                child: Opacity(
+                  opacity: opacity.clamp(0.4, 1.0),
+                  child: Transform(
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.001)
+                      ..scale(scale)
+                      ..rotateY(rotation),
+                    alignment: Alignment.center,
+                    child: GestureDetector(
+                      onTap: () {
+                        _pageController.animateToPage(
+                          index,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOutCubic,
+                        );
+                        widget.onSelected(item.$2);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? style.$2[0].withOpacity(0.20)
+                              : Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? style.$2[0].withOpacity(0.50)
+                                : Colors.white.withOpacity(0.08),
+                            width: isSelected ? 1.5 : 0.8,
+                          ),
+                          boxShadow: [
+                            if (isSelected)
+                              BoxShadow(
+                                color: style.$2[0].withOpacity(0.20),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(style.$1, style: const TextStyle(fontSize: 14)),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                item.$1,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: isSelected ? style.$2[0] : Colors.white70,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DeckTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DeckTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: selected
+              ? LinearGradient(
+                  colors: [
+                    GlassColors.accentGreen.withOpacity(0.35),
+                    GlassColors.accentGreen.withOpacity(0.15),
+                  ],
+                )
+              : null,
+          border: selected
+              ? Border.all(
+                  color: GlassColors.accentGreen.withOpacity(0.40),
+                  width: 0.8,
+                )
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: selected ? Colors.white : Colors.white38,
+            letterSpacing: -0.1,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -503,6 +1154,7 @@ class _CategoriesLoadBanner extends StatelessWidget {
   }
 }
 
+
 class _RegionChipBarData {
   final bool hidden;
   final String selectedScope;
@@ -523,13 +1175,14 @@ class _RegionChipBarData {
 }
 
 class _DailyhuntFeedAppBar extends StatelessWidget {
-  const _DailyhuntFeedAppBar();
+  final VoidCallback? onMenuPressed;
+  const _DailyhuntFeedAppBar({this.onMenuPressed});
 
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: fx.background,
+      color: Colors.transparent,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -542,60 +1195,68 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: 'Menu',
-                      onPressed: () => XpressoSideMenu.open(context),
-                      icon: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: fx.divider.withValues(alpha: 0.8),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: CircleAvatar(
-                          radius: 17,
-                          backgroundColor: fx.iconSurface,
-                          child: Icon(
-                            Icons.person_rounded,
-                            size: 19,
-                            color: fx.iconFg,
-                          ),
-                        ),
-                      ),
+                      tooltip: onMenuPressed != null ? 'Open Categories' : 'Menu',
+                      onPressed: onMenuPressed ?? () => XpressoSideMenu.open(context),
+                      icon: onMenuPressed != null
+                          ? Icon(
+                              Icons.menu_open_rounded,
+                              size: 24,
+                              color: fx.accent,
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: fx.divider.withValues(alpha: 0.8),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 17,
+                                backgroundColor: fx.iconSurface,
+                                child: Icon(
+                                  Icons.person_rounded,
+                                  size: 19,
+                                  color: fx.iconFg,
+                                ),
+                              ),
+                            ),
                     ),
                     Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 30,
-                            height: 30,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  fx.accent.withValues(alpha: 0.35),
-                                  fx.iconSurface,
-                                ],
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    fx.accent.withValues(alpha: 0.35),
+                                    fx.iconSurface,
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: fx.accent.withValues(alpha: 0.45),
+                                  width: 0.5,
+                                ),
                               ),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: fx.accent.withValues(alpha: 0.45),
-                                width: 0.5,
+                              alignment: Alignment.center,
+                              child: Icon(
+                                Icons.article_rounded,
+                                color: fx.accent,
+                                size: 17,
                               ),
                             ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.article_rounded,
-                              color: fx.accent,
-                              size: 17,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
+                            const SizedBox(width: 8),
+                            Text(
                               AppConstants.appName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -604,8 +1265,8 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                                 letterSpacing: -0.5,
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     IconButton(
@@ -630,7 +1291,7 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
               ),
             ),
           ),
-          Divider(height: 1, thickness: 1, color: fx.divider),
+          Divider(height: 1, thickness: 1, color: Colors.white.withOpacity(0.08)),
         ],
       ),
     );

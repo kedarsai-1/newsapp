@@ -3,7 +3,7 @@ import 'package:shimmer/shimmer.dart';
 
 import 'feed/feed_xpresso_theme.dart';
 
-/// Dailyhunt-style feed shimmer — image block, headline lines, meta + action row.
+/// Premium glassmorphic feed shimmer loader — matches GlassSportsArticleCard boundaries.
 class NewsShimmerLoader extends StatelessWidget {
   final int count;
   final bool shrinkWrap;
@@ -22,18 +22,16 @@ class NewsShimmerLoader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fx = FeedXpressoTheme.fx(context);
-    final bg = backgroundColor ?? fx.background;
     return ColoredBox(
-      color: bg,
+      color: backgroundColor ?? Colors.transparent, // Default to transparent so blobs show through
       child: ListView.builder(
         shrinkWrap: shrinkWrap,
         physics: shrinkWrap
             ? const NeverScrollableScrollPhysics()
-            : (physics ?? const ClampingScrollPhysics()),
+            : (physics ?? const BouncingScrollPhysics()),
         padding: padding,
         itemCount: count,
-        itemBuilder: (_, __) => _DailyhuntRowSkeleton(fx: fx),
+        itemBuilder: (_, __) => const _GlassRowSkeleton(),
       ),
     );
   }
@@ -44,15 +42,18 @@ class NewsShimmerLoader extends StatelessWidget {
     required double height,
     double radius = 3,
   }) {
-    final fx = FeedXpressoTheme.fx(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.06);
+    final highlightColor = isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.10);
+
     return Shimmer.fromColors(
-      baseColor: fx.shimmerBase,
-      highlightColor: fx.shimmerHighlight,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: fx.shimmerBase,
+          color: baseColor,
           borderRadius: BorderRadius.circular(radius),
         ),
       ),
@@ -60,64 +61,80 @@ class NewsShimmerLoader extends StatelessWidget {
   }
 }
 
-class _DailyhuntRowSkeleton extends StatelessWidget {
-  final FeedXpressoPalette fx;
-
-  const _DailyhuntRowSkeleton({required this.fx});
+class _GlassRowSkeleton extends StatelessWidget {
+  const _GlassRowSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: fx.shimmerBase,
-      highlightColor: fx.shimmerHighlight,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: FeedXpressoTheme.cardMargin,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05);
+    final highlightColor = isDark ? Colors.white.withOpacity(0.14) : Colors.black.withOpacity(0.09);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+          width: 0.8,
+        ),
+      ),
+      child: Shimmer.fromColors(
+        baseColor: baseColor,
+        highlightColor: highlightColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Thumbnail placeholder
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 1.88,
+                child: Container(
+                  color: baseColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Title placeholder lines
+            Container(height: 12, width: double.infinity, color: baseColor),
+            const SizedBox(height: 7),
+            Container(height: 12, width: double.infinity, color: baseColor),
+            const SizedBox(height: 7),
+            FractionallySizedBox(
+              widthFactor: 0.72,
+              alignment: Alignment.centerLeft,
+              child: Container(height: 12, color: baseColor),
+            ),
+            const SizedBox(height: 14),
+            // Footer placeholder row
+            Row(
               children: [
-                ClipRRect(
-                  borderRadius: FeedXpressoTheme.imageBorderRadius,
-                  child: AspectRatio(
-                    aspectRatio: FeedXpressoTheme.imageAspectRatio,
-                    child: ColoredBox(color: fx.shimmerBase),
-                  ),
+                Container(height: 10, width: 88, color: baseColor),
+                const Spacer(),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                 ),
-                const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
-                Container(height: 12, width: double.infinity, color: fx.shimmerBase),
-                const SizedBox(height: 7),
-                Container(height: 12, width: double.infinity, color: fx.shimmerBase),
-                const SizedBox(height: 7),
-                FractionallySizedBox(
-                  widthFactor: 0.72,
-                  alignment: Alignment.centerLeft,
-                  child: Container(height: 12, color: fx.shimmerBase),
+                const SizedBox(width: 8),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Container(height: 10, width: 88, color: fx.shimmerBase),
-                    const Spacer(),
-                    Container(height: 14, width: 14, color: fx.shimmerBase),
-                    const SizedBox(width: 18),
-                    Container(height: 14, width: 14, color: fx.shimmerBase),
-                    const SizedBox(width: 18),
-                    Container(height: 14, width: 4, color: fx.shimmerBase),
-                  ],
+                const SizedBox(width: 8),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                 ),
               ],
             ),
-          ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            indent: 12,
-            endIndent: 12,
-            color: fx.divider,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

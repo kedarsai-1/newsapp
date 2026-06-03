@@ -57,6 +57,9 @@ temp/
 coverage/
 .nyc_output/
 
+# ── Local refactor backups (do not commit) ────────────────────
+flutter_app/lib_backup_before_refactor/
+
 # ── IDE (local editor state) ──────────────────────────────────
 .idea/
 *.iml

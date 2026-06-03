@@ -109,4 +109,34 @@ class AppUtils {
     final p = name.trim().split(' ');
     return p.length >= 2 ? '${p[0][0]}${p[1][0]}'.toUpperCase() : (name.isNotEmpty ? name[0].toUpperCase() : '?');
   }
+
+  /// Decode common HTML entities from legacy RSS rows (&#039;, &zwnj;, etc.).
+  static String decodeHtmlEntities(String input) {
+    var t = input;
+    if (t.isEmpty) return t;
+
+    t = t
+        .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (m) {
+          final code = int.tryParse(m.group(1)!, radix: 16);
+          return code == null ? m.group(0)! : String.fromCharCode(code);
+        })
+        .replaceAllMapped(RegExp(r'&#(\d+);'), (m) {
+          final code = int.tryParse(m.group(1)!);
+          return code == null ? m.group(0)! : String.fromCharCode(code);
+        })
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&zwnj;', '')
+        .replaceAll('&zwj;', '')
+        .replaceAll('&lsquo;', '\u2018')
+        .replaceAll('&rsquo;', '\u2019')
+        .replaceAll(RegExp(r'caption\s+of\s+image\.?', caseSensitive: false), ' ');
+
+    return t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
 }

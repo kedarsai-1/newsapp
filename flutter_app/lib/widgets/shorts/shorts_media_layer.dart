@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../models/models.dart';
-import '../premium_news_ui.dart';
+import '../premium_utils.dart';
 import 'youtube_shorts_player.dart';
 
 /// Full-bleed media for shorts — YouTube iframe or direct video/image fallback.

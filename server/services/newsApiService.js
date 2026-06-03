@@ -186,25 +186,10 @@ function parseFirstContentImageFromHtml(html, pageUrl) {
  * When NewsAPI does not provide urlToImage, load the article HTML and read og:image.
  * Set NEWSAPI_OG_FALLBACK=false to skip (saves latency on ingest).
  */
+const { getPublisherReferer } = require('../utils/publisherReferer');
+
 function refererForImageFetch(pageUrl) {
-  if (!pageUrl) return null;
-  try {
-    const parsed = new URL(pageUrl.trim());
-    const host = parsed.hostname.toLowerCase();
-    if (host.includes('abplive.com')) return 'https://www.abplive.com/';
-    if (host.includes('amarujala.com')) return 'https://www.amarujala.com/';
-    if (host.includes('bhaskar.com')) return 'https://www.bhaskar.com/';
-    if (host.includes('jagran.com')) return 'https://www.jagran.com/';
-    if (host.includes('prabhatkhabar.com')) return 'https://www.prabhatkhabar.com/';
-    if (host.includes('ndtv.com')) return 'https://www.ndtv.com/';
-    if (host.includes('theprint.in')) return 'https://hindi.theprint.in/';
-    if (host.includes('tv9telugu.com')) return 'https://www.tv9telugu.com/';
-    if (host.includes('ntvtelugu.com')) return 'https://www.ntvtelugu.com/';
-    if (host.includes('bbc.co.uk') || host.includes('bbci.co.uk')) return 'https://www.bbc.com/hindi';
-    return `${parsed.protocol}//${parsed.host}/`;
-  } catch {
-    return null;
-  }
+  return getPublisherReferer(pageUrl);
 }
 
 async function fetchOgImageFallback(pageUrl) {

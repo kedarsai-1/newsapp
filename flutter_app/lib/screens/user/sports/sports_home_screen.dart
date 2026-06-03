@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -9,15 +10,14 @@ import '../../../services/auth_provider.dart';
 import '../../../providers/news_provider.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../services/api_service.dart';
-import '../../../widgets/dailyhunt/xpresso_sliver_app_bar.dart';
-import '../../../widgets/feed/dailyhunt_feed_article_card.dart';
-import '../../../widgets/feed/feed_image_cache.dart';
-import '../../../widgets/feed/feed_list_tuning.dart';
-import '../../../widgets/feed/feed_xpresso_theme.dart';
-import '../../../widgets/premium_news_ui.dart';
+import '../../../constants.dart';
+import '../../../widgets/premium_utils.dart';
 import '../../../widgets/sports/sports_live_card.dart';
+import '../../../widgets/sports/glass_sports_article_card.dart';
+import '../../../widgets/premium_animations.dart';
+import '../../../widgets/feed/feed_xpresso_theme.dart';
 
-/// Cricket / sports hub — live scores + sports feed (language-aware RSS).
+/// Cricket / sports hub — premium glassmorphic live scores + sports feed.
 class SportsHomeScreen extends StatefulWidget {
   const SportsHomeScreen({super.key});
 
@@ -141,28 +141,119 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
       });
     }
 
-    final fx = FeedXpressoTheme.fx(context);
     final bottom = FeedXpressoTheme.feedBottomInset(context);
 
-    return Scaffold(
-      backgroundColor: fx.background,
-      body: RefreshIndicator(
-        color: fx.accent,
+    return GlassScaffold(
+      child: RefreshIndicator(
+        color: GlassColors.accentGreen,
+        backgroundColor: const Color(0xFF0F172A),
         onRefresh: () => context.read<SportsProvider>().refreshAll(),
         child: CustomScrollView(
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(
-            parent: ClampingScrollPhysics(),
+            parent: BouncingScrollPhysics(), // Bouncy overscroll for physical glass feel
           ),
           slivers: [
-            const XpressoSliverAppBar(title: 'Cricket'),
-            SliverToBoxAdapter(child: _LiveSection(onMatchTap: _openMatch)),
+            // Custom premium frosted glass sliver app bar
+            SliverAppBar(
+              pinned: true,
+              toolbarHeight: 52,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 18, color: Colors.white70),
+                onPressed: () => context.pop(),
+              ),
+              title: const Text(
+                'Cricket Arena',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              flexibleSpace: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF070A12).withOpacity(0.40),
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.white.withOpacity(0.08),
+                          width: 0.8,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: AnimatedBuilder(
+                animation: _scrollController,
+                builder: (context, child) {
+                  double offset = 0.0;
+                  if (_scrollController.hasClients) {
+                    offset = _scrollController.offset;
+                  }
+                  final collapseProgress = (offset / 160.0).clamp(0.0, 1.0);
+                  final double heightFactor = 1.0 - collapseProgress;
+                  final double opacity = 1.0 - collapseProgress;
+                  final double translateY = -20.0 * collapseProgress;
+
+                  return ClipRect(
+                    child: Opacity(
+                      opacity: opacity,
+                      child: Align(
+                        heightFactor: heightFactor,
+                        alignment: Alignment.topCenter,
+                        child: Transform.translate(
+                          offset: Offset(0.0, translateY),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                child: _LiveSection(onMatchTap: _openMatch),
+              ),
+            ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 18, 14, 8),
-                child: Text(
-                  'Sports news',
-                  style: fx.screenTitleStyle.copyWith(fontSize: 16),
+                padding: const EdgeInsets.fromLTRB(14, 24, 14, 8),
+                child: Row(
+                  children: [
+                    // Premium neon capsule bullet
+                    Container(
+                      width: 4,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: GlassColors.accentGreen,
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: GlassColors.accentGreen.withOpacity(0.5),
+                            blurRadius: 6,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Sports Feed',
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -187,22 +278,22 @@ class _LiveSection extends StatelessWidget {
 
   const _LiveSection({required this.onMatchTap});
 
-  Widget _sectionHeader(
-    FeedXpressoPalette fx, {
+  Widget _sectionHeader({
     required String title,
     String? badge,
     Color? badgeColor,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
       child: Row(
         children: [
           Text(
             title,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: fx.title,
+            style: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w900,
+              color: Colors.white70,
+              letterSpacing: -0.1,
             ),
           ),
           if (badge != null) ...[
@@ -210,15 +301,19 @@ class _LiveSection extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: (badgeColor ?? fx.accent).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+                color: (badgeColor ?? GlassColors.accentGreen).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: (badgeColor ?? GlassColors.accentGreen).withOpacity(0.30),
+                  width: 0.8,
+                ),
               ),
               child: Text(
                 badge,
                 style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: badgeColor ?? fx.accent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: badgeColor ?? GlassColors.accentGreenLight,
                 ),
               ),
             ),
@@ -239,7 +334,7 @@ class _LiveSection extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: matches.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (_, i) => SportsLiveCard(
           match: matches[i],
           compact: true,
@@ -251,7 +346,6 @@ class _LiveSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fx = FeedXpressoTheme.fx(context);
     return Selector<SportsProvider, (List<SportsMatch>, List<SportsMatch>, List<SportsMatch>, String, String?)>(
       selector: (_, p) => (p.live, p.upcoming, p.ipl, p.iplSectionTitle, p.liveError),
       builder: (context, data, _) {
@@ -261,13 +355,24 @@ class _LiveSection extends StatelessWidget {
         final iplTitle = data.$4;
         final err = data.$5;
         if (live.isEmpty && upcoming.isEmpty && ipl.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: Text(
-              err?.trim().isNotEmpty == true
-                  ? err!
-                  : 'No live or upcoming matches right now. Pull to refresh.',
-              style: TextStyle(color: fx.meta, fontSize: 13, height: 1.35),
+          return StaggeredEntranceAnimation(
+            index: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 20, 14, 0),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withOpacity(0.08), width: 0.8),
+                ),
+                child: Text(
+                  err?.trim().isNotEmpty == true
+                      ? err!
+                      : 'No live matches currently. Pull to refresh.',
+                  style: TextStyle(color: Colors.white.withOpacity(0.50), fontSize: 13, height: 1.35),
+                ),
+              ),
             ),
           );
         }
@@ -275,31 +380,46 @@ class _LiveSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (live.isNotEmpty) ...[
-              _sectionHeader(
-                fx,
-                title: 'Live now',
-                badge: '${live.length} live',
-                badgeColor: const Color(0xFFE53935),
+              StaggeredEntranceAnimation(
+                index: 0,
+                child: _sectionHeader(
+                  title: 'LIVE MATCHES',
+                  badge: '${live.length} LIVE NOW',
+                  badgeColor: Colors.redAccent,
+                ),
               ),
-              _matchRow(live, height: 118),
+              StaggeredEntranceAnimation(
+                index: 1,
+                child: _matchRow(live, height: 124),
+              ),
             ],
             if (upcoming.isNotEmpty) ...[
-              _sectionHeader(
-                fx,
-                title: 'Upcoming',
-                badge: upcoming.length > 1 ? '${upcoming.length} matches' : null,
+              StaggeredEntranceAnimation(
+                index: live.isNotEmpty ? 2 : 0,
+                child: _sectionHeader(
+                  title: 'UPCOMING FIXTURES',
+                  badge: upcoming.length > 1 ? '${upcoming.length} Matches' : null,
+                ),
               ),
-              _matchRow(upcoming, height: 108),
+              StaggeredEntranceAnimation(
+                index: live.isNotEmpty ? 3 : 1,
+                child: _matchRow(upcoming, height: 114),
+              ),
             ],
             if (ipl.isNotEmpty) ...[
-              _sectionHeader(
-                fx,
-                title: iplTitle,
-                badge: ipl.every((m) => m.status == SportsMatchStatus.finished)
-                    ? 'Recent'
-                    : '${ipl.length} matches',
+              StaggeredEntranceAnimation(
+                index: live.isNotEmpty ? 4 : (upcoming.isNotEmpty ? 2 : 0),
+                child: _sectionHeader(
+                  title: iplTitle.toUpperCase(),
+                  badge: ipl.every((m) => m.status == SportsMatchStatus.finished)
+                      ? 'RECENT'
+                      : '${ipl.length} MATCHES',
+                ),
               ),
-              _matchRow(ipl, height: 118),
+              StaggeredEntranceAnimation(
+                index: live.isNotEmpty ? 5 : (upcoming.isNotEmpty ? 3 : 1),
+                child: _matchRow(ipl, height: 124),
+              ),
             ],
           ],
         );
@@ -346,8 +466,13 @@ class _SportsPostsSectionState extends State<_SportsPostsSection> {
         if (loading && posts.isEmpty) {
           return const SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              padding: EdgeInsets.all(40),
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: GlassColors.accentGreen,
+                ),
+              ),
             ),
           );
         }
@@ -358,7 +483,7 @@ class _SportsPostsSectionState extends State<_SportsPostsSection> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 err,
-                style: TextStyle(color: FeedXpressoTheme.fx(context).meta),
+                style: TextStyle(color: Colors.white.withOpacity(0.50)),
               ),
             ),
           );
@@ -372,21 +497,13 @@ class _SportsPostsSectionState extends State<_SportsPostsSection> {
                 'No sports stories for your language yet. Pull to refresh.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: FeedXpressoTheme.fx(context).meta,
+                  color: Colors.white.withOpacity(0.50),
                   fontSize: 13,
                 ),
               ),
             ),
           );
         }
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!context.mounted) return;
-          final controller = PrimaryScrollController.maybeOf(context);
-          if (controller != null && controller.hasClients) {
-            FeedImagePrecache.onScroll(context, posts, controller.position);
-          }
-        });
 
         final itemCount = posts.length + (loadingMore ? 1 : 0);
         return SliverPadding(
@@ -395,18 +512,33 @@ class _SportsPostsSectionState extends State<_SportsPostsSection> {
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 if (index >= posts.length) {
-                  return const FeedListLoadingFooter();
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: GlassColors.accentGreen,
+                        ),
+                      ),
+                    ),
+                  );
                 }
                 final post = posts[index];
-                return DailyhuntFeedArticleCard(
-                  key: ValueKey(post.id),
-                  post: post,
-                  liked: widget.likedByPostId[post.id] ?? false,
-                  saved: widget.bookmarkedByPostId[post.id] ?? false,
-                  onOpen: () => widget.onOpen(post),
-                  onLike: () => widget.onLike(post),
-                  onShare: () => widget.onShare(post),
-                  onBookmark: () => widget.onBookmark(post),
+                return StaggeredEntranceAnimation(
+                  index: index.clamp(0, 7), // Cap staggered delay multiplier for infinite scroll items
+                  child: GlassSportsArticleCard(
+                    key: ValueKey(post.id),
+                    post: post,
+                    liked: widget.likedByPostId[post.id] ?? false,
+                    saved: widget.bookmarkedByPostId[post.id] ?? false,
+                    onOpen: () => widget.onOpen(post),
+                    onLike: () => widget.onLike(post),
+                    onShare: () => widget.onShare(post),
+                    onBookmark: () => widget.onBookmark(post),
+                  ),
                 );
               },
               childCount: itemCount,

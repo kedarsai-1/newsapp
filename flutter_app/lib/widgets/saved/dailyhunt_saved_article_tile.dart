@@ -4,7 +4,7 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../models/models.dart';
 import '../feed/compact_list_row.dart';
 import '../feed/feed_xpresso_theme.dart';
-import '../premium_news_ui.dart';
+import '../premium_utils.dart';
 
 /// Saved article — light compact row (feed uses Xpresso).
 class DailyhuntSavedArticleTile extends StatelessWidget {

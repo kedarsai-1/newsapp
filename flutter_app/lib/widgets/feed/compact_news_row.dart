@@ -3,10 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'feed_xpresso_theme.dart';
+import '../glass_card.dart';
 
 export 'feed_xpresso_theme.dart' show FeedXpressoTheme, kFeedRowExtent;
 
-/// Dailyhunt-style feed row — flat on black, image on top, headline, meta + actions.
+/// Dailyhunt-style feed row — premium glassmorphic floating capsule card.
 class CompactNewsRow extends StatelessWidget {
   final String title;
   final String? summary;
@@ -54,79 +55,76 @@ class CompactNewsRow extends StatelessWidget {
     final actions = footerActions;
     final hasActions = actions != null && actions.isNotEmpty;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: FeedXpressoTheme.cardMargin,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: FeedXpressoTheme.cardBorderRadius,
-              splashColor: fx.accent.withValues(alpha: 0.1),
-              highlightColor: fx.accent.withValues(alpha: 0.05),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: GlassCard(
+          padding: const EdgeInsets.all(12),
+          radius: 14,
+          borderColor: Colors.white.withOpacity(0.12),
+          color: Colors.white.withOpacity(0.04),
+          enableAnimation: true,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (url.isNotEmpty)
+                _HeroImage(
+                  fx: fx,
+                  url: url,
+                  memCacheWidth: memW,
+                  onUnavailable: onImageUnavailable,
+                ),
+              if (url.isNotEmpty)
+                const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
+              Text(
+                title,
+                maxLines: titleMaxLines,
+                overflow: TextOverflow.ellipsis,
+                style: fx.titleStyle,
+              ),
+              if (hasSummary) ...[
+                const SizedBox(height: 5),
+                Text(
+                  summary!.trim(),
+                  maxLines: summaryMaxLines.clamp(1, 2),
+                  overflow: TextOverflow.ellipsis,
+                  style: fx.summaryStyle,
+                ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  if (url.isNotEmpty)
-                    _HeroImage(
+                  Expanded(
+                    child: _MetaRow(
                       fx: fx,
-                      url: url,
-                      memCacheWidth: memW,
-                      onUnavailable: onImageUnavailable,
+                      metaLine: metaLine,
+                      sourceName: sourceName,
+                      timeLabel: timeLabel,
+                      showVerified: showVerified,
                     ),
-                  if (url.isNotEmpty)
-                    const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
-                  Text(
-                    title,
-                    maxLines: titleMaxLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: fx.titleStyle,
                   ),
-                  if (hasSummary) ...[
-                    const SizedBox(height: 5),
-                    Text(
-                      summary!.trim(),
-                      maxLines: summaryMaxLines.clamp(1, 2),
-                      overflow: TextOverflow.ellipsis,
-                      style: fx.summaryStyle,
-                    ),
-                  ],
-                  SizedBox(height: hasSummary ? 10 : 9),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: _MetaRow(
-                          fx: fx,
-                          metaLine: metaLine,
-                          sourceName: sourceName,
-                          timeLabel: timeLabel,
-                          showVerified: showVerified,
-                        ),
-                      ),
-                      if (hasActions)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: actions,
-                        )
-                      else if (trailing != null)
-                        trailing!,
-                    ],
-                  ),
+                  if (hasActions)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actions,
+                    )
+                  else if (trailing != null)
+                    trailing!,
                 ],
               ),
-            ),
+            ],
           ),
         ),
-        if (showDivider)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Divider(height: 1, thickness: 1, color: fx.divider),
-          ),
-      ],
+      ),
     );
   }
 }

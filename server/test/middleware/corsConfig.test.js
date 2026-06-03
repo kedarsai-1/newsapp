@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   parseAllowedOrigins,
   buildCorsOptions,
+  isLocalDevOrigin,
 } = require('../../middleware/corsConfig');
 
 describe('corsConfig', () => {
@@ -11,6 +12,7 @@ describe('corsConfig', () => {
   beforeEach(() => {
     saved.NODE_ENV = process.env.NODE_ENV;
     saved.ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS;
+    saved.CORS_ALLOW_LOCALHOST = process.env.CORS_ALLOW_LOCALHOST;
   });
 
   afterEach(() => {
@@ -18,6 +20,8 @@ describe('corsConfig', () => {
     else process.env.NODE_ENV = saved.NODE_ENV;
     if (saved.ALLOWED_ORIGINS === undefined) delete process.env.ALLOWED_ORIGINS;
     else process.env.ALLOWED_ORIGINS = saved.ALLOWED_ORIGINS;
+    if (saved.CORS_ALLOW_LOCALHOST === undefined) delete process.env.CORS_ALLOW_LOCALHOST;
+    else process.env.CORS_ALLOW_LOCALHOST = saved.CORS_ALLOW_LOCALHOST;
   });
 
   it('parses || and comma separated origins with schemes added', () => {
@@ -41,5 +45,19 @@ describe('corsConfig', () => {
     process.env.NODE_ENV = 'production';
     assert.deepEqual(parseAllowedOrigins(), []);
     assert.equal(buildCorsOptions().origin, false);
+  });
+
+  it('blocks localhost in production unless CORS_ALLOW_LOCALHOST=true', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.CORS_ALLOW_LOCALHOST;
+    assert.equal(isLocalDevOrigin('http://localhost:51712'), false);
+    process.env.CORS_ALLOW_LOCALHOST = 'true';
+    assert.equal(isLocalDevOrigin('http://localhost:51712'), true);
+  });
+
+  it('allows localhost in non-production by default', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.CORS_ALLOW_LOCALHOST;
+    assert.equal(isLocalDevOrigin('http://127.0.0.1:8080'), true);
   });
 });

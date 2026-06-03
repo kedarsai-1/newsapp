@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../glass_card.dart';
 import '../feed/feed_xpresso_theme.dart';
 
-/// Settings block — section label + content + hairline separator.
+/// Settings block — section label + content inside floating glass card panel.
 class DailyhuntSettingsSection extends StatelessWidget {
   final String title;
   final Widget child;
@@ -20,33 +21,33 @@ class DailyhuntSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (showTitle && title.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10, bottom: 6),
-            child: Text(
-              title.toUpperCase(),
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.45,
-                fontSize: 10,
-                color: fx.meta,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (showTitle && title.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              child: Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.45,
+                  fontSize: 10,
+                  color: fx.meta,
+                ),
               ),
             ),
+          GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            radius: 14,
+            borderColor: Colors.white.withOpacity(0.12),
+            color: Colors.white.withOpacity(0.03),
+            child: child,
           ),
-        child,
-        if (showDivider)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Divider(
-              height: 1,
-              thickness: 0.5,
-              color: fx.divider,
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }

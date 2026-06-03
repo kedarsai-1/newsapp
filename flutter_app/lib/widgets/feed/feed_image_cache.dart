@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
 import 'compact_news_row.dart';
-import '../premium_news_ui.dart';
+import '../premium_utils.dart';
 
 /// Throttled precache — runs at most once per scroll index window.
 class FeedImagePrecache {

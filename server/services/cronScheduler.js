@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const { runIngestion } = require('./newsIngestionService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('./politicalVideoIngestionService');
-const { runLanguageIngestion } = require('./languageIngestionService');
+const { runLanguageIngestion, runAllLanguageIngestionParallel } = require('./languageIngestionService');
 const { purgeOldNews } = require('./retentionCleanupService');
 const { emitFeedUpdated } = require('./feedSocket');
 const {
@@ -12,6 +12,7 @@ const {
 const { isRailwayHost } = require('../utils/isRailway');
 const {
   isPerLanguageIngestEnabled,
+  isParallelLanguageIngestEnabled,
   getWorkerLanguages,
   cronForLanguage,
   defaultNewsCronForLanguage,
@@ -93,6 +94,80 @@ async function runScheduledLanguagePipeline(language, triggeredBy) {
   if (!result.success) {
     console.warn(`[ingest:${language}] pipeline issues:`, JSON.stringify(result.stats));
   }
+  return result;
+}
+
+async function runScheduledAllLanguagesParallel(triggeredBy) {
+  const result = await runAllLanguageIngestionParallel({ triggeredBy });
+  if (!result.success) {
+    console.warn('[ingest] parallel pipeline issues:', JSON.stringify(result.byLang));
+  }
+  return result;
+}
+
+function scheduleParallelLanguagePipelines(isRailway, langs) {
+  const cronExpr = process.env.SCRAPER_CRON || '*/5 * * * *';
+  const runOnStart = isRailway
+    ? process.env.SCRAPER_RUN_ON_START === 'true'
+    : process.env.SCRAPER_RUN_ON_START !== 'false';
+
+  cron.schedule(cronExpr, () => {
+    runScheduledAllLanguagesParallel('scheduler:parallel').catch((e) =>
+      console.error('[ingest] parallel scheduler error:', e),
+    );
+  });
+  console.log(
+    `[ingest] parallel pipeline scheduler active cron="${cronExpr}" `
+      + `langs=${langs.join(',')} (en + hi + te run together each tick)`,
+  );
+
+  if (runOnStart) {
+    setTimeout(() => {
+      runScheduledAllLanguagesParallel('startup:parallel').catch((e) =>
+        console.error('[ingest] parallel startup error:', e),
+      );
+    }, 2500);
+    console.log(`[ingest] parallel startup scheduled for: ${langs.join(', ')}`);
+  }
+}
+
+function scheduleStaggeredLanguagePipelines(isRailway, langs) {
+  const runOnStart = isRailway
+    ? process.env.SCRAPER_RUN_ON_START === 'true'
+    : process.env.SCRAPER_RUN_ON_START !== 'false';
+
+  for (const lang of langs) {
+    const cronExpr = cronForLanguage('SCRAPER_CRON', lang, defaultNewsCronForLanguage);
+    cron.schedule(cronExpr, () => {
+      runScheduledLanguagePipeline(lang, `scheduler:${lang}`).catch((e) =>
+        console.error(`[ingest:${lang}] scheduler error:`, e),
+      );
+    });
+    console.log(
+      `[ingest:${lang}] pipeline scheduler active cron="${cronExpr}" `
+        + '(staggered — set INGEST_PARALLEL_LANGUAGES=true for parallel)',
+    );
+  }
+
+  if (runOnStart) {
+    langs.forEach((lang, idx) => {
+      setTimeout(() => {
+        runScheduledLanguagePipeline(lang, `startup:${lang}`).catch((e) =>
+          console.error(`[ingest:${lang}] startup error:`, e),
+        );
+      }, 2500 + idx * 2500);
+    });
+    console.log(`[ingest] staggered startup for: ${langs.join(', ')}`);
+  }
+}
+
+function schedulePerLanguagePipelines(isRailway) {
+  const langs = getWorkerLanguages();
+  if (isParallelLanguageIngestEnabled() && langs.length > 1) {
+    scheduleParallelLanguagePipelines(isRailway, langs);
+    return;
+  }
+  scheduleStaggeredLanguagePipelines(isRailway, langs);
 }
 
 async function runRetention(triggeredBy) {
@@ -116,39 +191,6 @@ async function runRetention(triggeredBy) {
     }
   } catch (e) {
     console.error('[retention] failed:', e);
-  }
-}
-
-function schedulePerLanguagePipelines(isRailway) {
-  const langs = getWorkerLanguages();
-  const runOnStart = isRailway
-    ? process.env.SCRAPER_RUN_ON_START === 'true'
-    : process.env.SCRAPER_RUN_ON_START !== 'false';
-
-  for (const lang of langs) {
-    const cronExpr = cronForLanguage('SCRAPER_CRON', lang, defaultNewsCronForLanguage);
-    cron.schedule(cronExpr, () => {
-      runScheduledLanguagePipeline(lang, `scheduler:${lang}`).catch((e) =>
-        console.error(`[ingest:${lang}] scheduler error:`, e),
-      );
-    });
-    console.log(
-      `[ingest:${lang}] pipeline scheduler active cron="${cronExpr}" `
-        + '(news + youtube shorts + political interviews)',
-    );
-  }
-
-  if (runOnStart) {
-    langs.forEach((lang, idx) => {
-      setTimeout(() => {
-        runScheduledLanguagePipeline(lang, `startup:${lang}`).catch((e) =>
-          console.error(`[ingest:${lang}] startup error:`, e),
-        );
-      }, 2500 + idx * 2500);
-    });
-    console.log(
-      `[ingest] per-language pipelines will run on startup for: ${langs.join(', ')}`,
-    );
   }
 }
 
@@ -251,6 +293,7 @@ function startCronScheduler() {
   if (perLanguage) {
     console.log(
       `[ingest] per-language mode ON — workers: ${getWorkerLanguages().join(', ')} `
+        + `parallel=${isParallelLanguageIngestEnabled() ? 'yes' : 'no (staggered crons)'} `
         + `(set INGEST_WORKER_LANG=en|hi|te for single-language deployment)`,
     );
     if (process.env.SCRAPER_ENABLED !== 'false') {
@@ -297,4 +340,6 @@ module.exports = {
   runScheduledYoutube,
   runScheduledPoliticalVideo,
   runScheduledLanguagePipeline,
+  runScheduledAllLanguagesParallel,
+  runAllLanguageIngestionParallel,
 };

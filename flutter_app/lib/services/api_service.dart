@@ -312,6 +312,7 @@ class ApiService {
     List<String>? sourceTypes,
     bool hasVideo = false,
     bool politicalOnly = false,
+    bool excludePolitics = false,
   }) async {
     final params = {
       'page': page.toString(),
@@ -337,6 +338,7 @@ class ApiService {
             .join(','),
       if (hasVideo) 'hasVideo': 'true',
       if (politicalOnly) 'politicalOnly': 'true',
+      if (excludePolitics) 'excludePolitics': 'true',
     };
     final useClientCache =
         (search == null || search.trim().isEmpty) && page <= 1;

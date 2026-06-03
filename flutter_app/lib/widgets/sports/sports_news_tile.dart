@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/sports_models.dart';
 import '../feed/compact_list_row.dart';
 import '../feed/feed_xpresso_theme.dart';
+import '../premium_animations.dart';
 
 class SportsNewsTile extends StatelessWidget {
   final SportsNewsItem item;
@@ -22,14 +22,17 @@ class SportsNewsTile extends StatelessWidget {
         ? '${item.source} · ${timeago.format(item.time!)}'
         : item.source;
 
-    return CompactListRow(
-      title: item.title,
-      imageUrl: item.thumbnail,
-      metaLine: meta,
-      onTap: onTap,
-      trailing: item.hasVideo
-          ? Icon(Icons.play_circle_outline, color: FeedXpressoTheme.fx(context).meta, size: 20)
-          : null,
+    return PremiumAnimatedWrapper(
+      pressScale: 0.98,
+      child: CompactListRow(
+        title: item.title,
+        imageUrl: item.thumbnail,
+        metaLine: meta,
+        onTap: onTap,
+        trailing: item.hasVideo
+            ? Icon(Icons.play_circle_outline, color: FeedXpressoTheme.fx(context).meta, size: 20)
+            : null,
+      ),
     );
   }
 }

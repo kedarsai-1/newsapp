@@ -312,7 +312,10 @@ GoRouter createAppRouter(BuildContext context) {
 
       // ── End User ──────────────────────────────────────────
       ShellRoute(
-        builder: (context, state, child) => UserShell(child: child),
+        builder: (context, state, child) => UserShell(
+          child: child,
+          location: state.matchedLocation,
+        ),
         routes: [
           GoRoute(
             path: '/feed',
@@ -396,7 +399,10 @@ GoRouter createAppRouter(BuildContext context) {
 
       // ── Reporter ──────────────────────────────────────────
       ShellRoute(
-        builder: (context, state, child) => ReporterShell(child: child),
+        builder: (context, state, child) => ReporterShell(
+          child: child,
+          location: state.matchedLocation,
+        ),
         routes: [
           GoRoute(
             path: '/reporter',
@@ -442,7 +448,10 @@ GoRouter createAppRouter(BuildContext context) {
 
       // ── Admin ─────────────────────────────────────────────
       ShellRoute(
-        builder: (context, state, child) => AdminShell(child: child),
+        builder: (context, state, child) => AdminShell(
+          child: child,
+          location: state.matchedLocation,
+        ),
         routes: [
           GoRoute(
             path: '/admin',
@@ -472,6 +481,7 @@ GoRouter createAppRouter(BuildContext context) {
           ),
         ],
       ),
+
     ],
   );
 }
@@ -521,13 +531,7 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
     });
   }
 
-  @override
-  void reassemble() {
-    // Hot reload: rebuild router so newly added routes (e.g. /settings) apply
-    // without requiring a full restart.
-    super.reassemble();
-    _router = createAppRouter(context);
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -630,7 +634,8 @@ class _HorizontalShellSwipe extends StatelessWidget {
 
 class UserShell extends StatefulWidget {
   final Widget child;
-  const UserShell({super.key, required this.child});
+  final String location;
+  const UserShell({super.key, required this.child, required this.location});
 
   @override
   State<UserShell> createState() => _UserShellState();
@@ -648,88 +653,83 @@ class _UserShellState extends State<UserShell> {
 
   @override
   Widget build(BuildContext context) {
-    final loc = GoRouterState.of(context).matchedLocation;
+    final loc = widget.location;
     int idx = 0;
     if (loc == '/shorts') idx = 1;
-    if (loc == '/categories') idx = 2;
-    if (loc == '/bookmarks') idx = 3;
-    if (loc == '/settings') idx = 4;
+    if (loc == '/bookmarks') idx = 2;
+    if (loc == '/settings') idx = 3;
 
-    return XpressoMenuScope(
-      openMenu: _openMenu,
-      child: Scaffold(
-          key: _scaffoldKey,
-          drawer: const XpressoSideMenu(),
-          drawerEnableOpenDragGesture: true,
-          drawerEdgeDragWidth: 28,
-          backgroundColor: FeedXpressoTheme.fx(context).background,
-          body: _HorizontalShellSwipe(
-            tabRoutes: const [
-              '/feed',
-              '/shorts',
-              '/categories',
-              '/bookmarks',
-              '/settings',
-            ],
-            child: widget.child,
+    return GlassBackground(
+      child: XpressoMenuScope(
+        openMenu: _openMenu,
+        child: Scaffold(
+            key: _scaffoldKey,
+            drawer: const XpressoSideMenu(),
+            drawerEnableOpenDragGesture: true,
+            drawerEdgeDragWidth: 28,
+            backgroundColor: Colors.transparent, // Translucent backing to reveal drifting blobs
+            body: _HorizontalShellSwipe(
+              tabRoutes: const [
+                '/feed',
+                '/shorts',
+                '/bookmarks',
+                '/settings',
+              ],
+              child: widget.child,
+            ),
+            bottomNavigationBar: XpressoBottomNavBar(
+          selectedIndex: idx,
+          onSelected: (i) {
+            switch (i) {
+              case 0:
+                _goIfNeeded(context, loc, '/feed');
+                return;
+              case 1:
+                _goIfNeeded(context, loc, '/shorts');
+                return;
+              case 2:
+                _goIfNeeded(context, loc, '/bookmarks');
+                return;
+              case 3:
+                _goIfNeeded(context, loc, '/settings');
+                return;
+            }
+          },
+          destinations: [
+            XpressoNavDestination(
+              icon: Icons.dynamic_feed_outlined,
+              selectedIcon: Icons.dynamic_feed_rounded,
+              label: I18n.t(context, 'tab_feed'),
+            ),
+            XpressoNavDestination(
+              icon: Icons.view_stream_outlined,
+              selectedIcon: Icons.view_stream_rounded,
+              label: I18n.t(context, 'tab_shorts'),
+            ),
+            XpressoNavDestination(
+              icon: Icons.bookmark_outline,
+              selectedIcon: Icons.bookmark_rounded,
+              label: I18n.t(context, 'tab_saved'),
+            ),
+            XpressoNavDestination(
+              icon: Icons.person_outline,
+              selectedIcon: Icons.person_rounded,
+              label: I18n.t(context, 'tab_settings'),
+            ),
+          ],
+            ),
           ),
-          bottomNavigationBar: XpressoBottomNavBar(
-        selectedIndex: idx,
-        onSelected: (i) {
-          switch (i) {
-            case 0:
-              _goIfNeeded(context, loc, '/feed');
-              return;
-            case 1:
-              _goIfNeeded(context, loc, '/shorts');
-              return;
-            case 2:
-              _goIfNeeded(context, loc, '/categories');
-              return;
-            case 3:
-              _goIfNeeded(context, loc, '/bookmarks');
-              return;
-            case 4:
-              _goIfNeeded(context, loc, '/settings');
-              return;
-          }
-        },
-        destinations: [
-          XpressoNavDestination(
-            icon: Icons.dynamic_feed_outlined,
-            selectedIcon: Icons.dynamic_feed_rounded,
-            label: I18n.t(context, 'tab_feed'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.view_stream_outlined,
-            selectedIcon: Icons.view_stream_rounded,
-            label: I18n.t(context, 'tab_shorts'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.grid_view_outlined,
-            selectedIcon: Icons.grid_view_rounded,
-            label: I18n.t(context, 'feed_categories'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.bookmark_outline,
-            selectedIcon: Icons.bookmark_rounded,
-            label: I18n.t(context, 'tab_saved'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.person_outline,
-            selectedIcon: Icons.person_rounded,
-            label: I18n.t(context, 'tab_settings'),
-          ),
-        ],
-          ),
-        ),
+      ),
     );
   }
+
+
 }
 
 class ReporterShell extends StatelessWidget {
   final Widget child;
-  const ReporterShell({super.key, required this.child});
+  final String location;
+  const ReporterShell({super.key, required this.child, required this.location});
 
   void _goIfNeeded(BuildContext context, String current, String target) {
     if (current == target) return;
@@ -738,7 +738,7 @@ class ReporterShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loc = GoRouterState.of(context).matchedLocation;
+    final loc = location;
     int idx = 0;
     if (loc == '/reporter/posts') {
       idx = 1;
@@ -806,7 +806,8 @@ class ReporterShell extends StatelessWidget {
 
 class AdminShell extends StatelessWidget {
   final Widget child;
-  const AdminShell({super.key, required this.child});
+  final String location;
+  const AdminShell({super.key, required this.child, required this.location});
 
   void _goIfNeeded(BuildContext context, String current, String target) {
     if (current == target) return;
@@ -815,7 +816,7 @@ class AdminShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final loc = GoRouterState.of(context).matchedLocation;
+    final loc = location;
     final p = context.palette;
     int idx = 0;
     if (loc == '/admin/pending') idx = 1;
@@ -912,3 +913,4 @@ class AdminShell extends StatelessWidget {
     );
   }
 }
+

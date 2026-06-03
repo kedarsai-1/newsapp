@@ -21,7 +21,7 @@ class XpressoSliverAppBar extends StatelessWidget {
     return SliverAppBar(
       pinned: true,
       toolbarHeight: toolbarHeight,
-      backgroundColor: fx.background,
+      backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shadowColor: Colors.transparent,
@@ -34,7 +34,7 @@ class XpressoSliverAppBar extends StatelessWidget {
       actions: actions,
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
-        child: Divider(height: 1, thickness: 1, color: fx.divider),
+        child: Divider(height: 1, thickness: 1, color: Colors.white.withOpacity(0.08)),
       ),
     );
   }

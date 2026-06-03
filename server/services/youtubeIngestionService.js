@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { Prisma, prisma } = require('../config/prisma');
-const { canonicalizeUrl, hashUrl, normalizeTitle } = require('../utils/storyDedupe');
+const { canonicalizeUrl, hashUrl, normalizeTitle, titleFingerprint, titlesAreNearDuplicates } = require('../utils/storyDedupe');
+const { areTitlesSameStory } = require('./aiProvider');
 const { createNewsPost } = require('../utils/prismaNewsPost');
 const {
   getYoutubeSearchPlan,
@@ -11,6 +12,7 @@ const {
   filterByLanguages,
 } = require('../config/ingestLanguages');
 const { emitFeedUpdated } = require('./feedSocket');
+const { isPoliticalShortContent } = require('../utils/shortsFeedFilter');
 const {
   isYoutubeQuotaError,
   isYoutubeQuotaBlocked,
@@ -136,6 +138,56 @@ async function isYoutubeDuplicate(videoId, item) {
     const sourceUrlHash = hashUrl(canonical);
     if (await prisma.newsPost.findFirst({ where: { sourceUrlHash }, select: { id: true } })) return true;
   }
+  const lang = String(item?.language || 'en').toLowerCase();
+  const langClause = lang && lang !== 'all' ? { language: lang } : {};
+  const windowStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const fp = titleFingerprint(item?.title);
+  if (fp) {
+    const byFp = await prisma.newsPost.findFirst({
+      where: {
+        titleFingerprint: fp,
+        createdAt: { gte: windowStart },
+        ...langClause,
+      },
+      select: { id: true },
+    });
+    if (byFp) return true;
+  }
+  const titleNorm = normalizeTitle(item?.title);
+  if (titleNorm.length >= 8) {
+    const byTitle = await prisma.newsPost.findFirst({
+      where: {
+        titleNormalized: titleNorm,
+        createdAt: { gte: windowStart },
+        ...langClause,
+      },
+      select: { id: true },
+    });
+    if (byTitle) return true;
+  }
+
+  const isShort = item?.youtube?.isShort === true
+    || (item?.youtube?.durationSeconds != null && item.youtube.durationSeconds <= 60);
+  if (!isShort || process.env.OLLAMA_YOUTUBE_DEDUPE === 'false') return false;
+
+  const maxChecks = Math.min(12, Math.max(3, Number(process.env.OLLAMA_YOUTUBE_DEDUPE_MAX || 8)));
+  const candidates = await prisma.newsPost.findMany({
+    where: {
+      youtubeIsShort: true,
+      createdAt: { gte: windowStart },
+      ...langClause,
+    },
+    select: { title: true },
+    orderBy: { createdAt: 'desc' },
+    take: maxChecks,
+  });
+
+  for (const candidate of candidates) {
+    if (!titlesAreNearDuplicates(item?.title, candidate.title)) continue;
+    // eslint-disable-next-line no-await-in-loop
+    if (await areTitlesSameStory(item?.title, candidate.title, lang)) return true;
+  }
+
   return false;
 }
 
@@ -324,6 +376,18 @@ async function insertNormalizedItem(item, reporter, stats) {
 
   if (await isYoutubeDuplicate(normalized.youtube.videoId, normalized)) {
     stats.youtubeDuplicates += 1;
+    return false;
+  }
+
+  if (
+    normalized.youtube?.isShort
+    && process.env.SHORTS_STRICT_NO_POLITICS !== 'false'
+    && isPoliticalShortContent({
+      ...normalized,
+      categorySlug: normalized.categorySlug,
+    })
+  ) {
+    stats.youtubeSkippedPoliticalShorts = (stats.youtubeSkippedPoliticalShorts || 0) + 1;
     return false;
   }
 
@@ -523,6 +587,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube', languages } = {}) 
       `[youtube] done (${triggeredBy}): langs=${activeLanguages.join(',')} `
         + `fetched=${stats.youtubeFetched} inserted=${stats.youtubeInserted} `
         + `shorts=${stats.youtubeShortsInserted} duplicates=${stats.youtubeDuplicates} `
+        + `politicalSkipped=${stats.youtubeSkippedPoliticalShorts || 0} `
         + `restricted=${stats.youtubeSkippedRestricted} failed=${stats.youtubeFailed}`,
     );
     if (stats.youtubeInserted > 0) {

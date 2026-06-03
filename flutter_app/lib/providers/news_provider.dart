@@ -9,6 +9,12 @@ import '../utils/feed_dedupe.dart';
 import '../utils/feed_language.dart';
 import '../utils/api_memory_cache.dart';
 
+enum AppLayoutMode {
+  dualDeck,
+  carouselWheel,
+  sidebarPanel,
+}
+
 class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
   List<Category> _categories = [];
@@ -28,6 +34,10 @@ class NewsProvider extends ChangeNotifier {
   bool _refreshing = false;
   String? _error;
   String? _categoriesError;
+
+  AppLayoutMode _layoutMode = AppLayoutMode.dualDeck;
+  AppLayoutMode get layoutMode => _layoutMode;
+  static const String _layoutModePrefKey = 'app_layout_mode_v1';
 
   List<NewsPost> get posts => _posts;
   List<NewsPost> get searchResults => _searchResults;
@@ -128,6 +138,14 @@ class NewsProvider extends ChangeNotifier {
     _onboardingUiLanguage = prefs.getString(_onboardingUiLangKey);
     _preferredCity = prefs.getString(_onboardingCityKey);
 
+    final layoutStr = prefs.getString(_layoutModePrefKey);
+    if (layoutStr != null) {
+      _layoutMode = AppLayoutMode.values.firstWhere(
+        (e) => e.name == layoutStr,
+        orElse: () => AppLayoutMode.dualDeck,
+      );
+    }
+
     final done = prefs.getBool(_languageOnboardingKey);
     if (done != null) {
       _languageOnboardingCompleted = done;
@@ -144,6 +162,13 @@ class NewsProvider extends ChangeNotifier {
     // Prime category IDs for Browse / chips before the first full feed refresh.
     loadCategories();
     _wireRealtimeFeedRefresh();
+  }
+
+  Future<void> setLayoutMode(AppLayoutMode mode) async {
+    _layoutMode = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_layoutModePrefKey, mode.name);
+    notifyListeners();
   }
 
   /// Mobile: refresh when server cron inserts stories. Web polls on FeedScreen timer.

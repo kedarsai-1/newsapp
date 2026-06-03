@@ -8,7 +8,10 @@ import '../../constants.dart';
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/premium_news_ui.dart';
+import '../../widgets/glass_scaffold.dart';
+import '../../widgets/glass_card.dart';
+import '../../widgets/premium_utils.dart';
+import '../../widgets/premium_widgets.dart';
 
 class QuickNewsScreen extends StatefulWidget {
   const QuickNewsScreen({super.key});
@@ -49,7 +52,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => FrostedPanel(
+      builder: (_) => GlassCard(
         radius: 26,
         margin: const EdgeInsets.all(10),
         padding: EdgeInsets.fromLTRB(
@@ -98,7 +101,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
     final p = context.palette;
     final posts = provider.posts.take(12).toList();
 
-    return PremiumScaffold(
+    return GlassScaffold(
       safeArea: true,
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
@@ -138,7 +141,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FrostedPanel(
+                  GlassCard(
                     radius: 14,
                     padding:
                         const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -252,7 +255,7 @@ class _QuickHeadlineCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final thumb = premiumImageUrl(post);
-    return FrostedPanel(
+    return GlassCard(
       radius: 24,
       padding: const EdgeInsets.all(16),
       child: InkWell(

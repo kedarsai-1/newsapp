@@ -3,9 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'feed_xpresso_theme.dart';
+import '../glass_card.dart';
 
-/// Compact horizontal row for saved / search on dark surfaces.
-class CompactListRow extends StatelessWidget {
+/// Compact horizontal row for saved / search on dark surfaces — frosted GlassCard.
+class CompactListRow extends StatefulWidget {
   final String title;
   final String? summary;
   final String? imageUrl;
@@ -26,69 +27,84 @@ class CompactListRow extends StatelessWidget {
   static const _thumbSize = 56.0;
 
   @override
+  State<CompactListRow> createState() => _CompactListRowState();
+}
+
+class _CompactListRowState extends State<CompactListRow> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final memW = (_thumbSize * dpr).round().clamp(96, 200);
-    final url = imageUrl?.trim() ?? '';
-    final hasSummary = summary != null && summary!.trim().isNotEmpty;
+    final memW = (CompactListRow._thumbSize * dpr).round().clamp(96, 200);
+    final url = widget.imageUrl?.trim() ?? '';
+    final hasSummary = widget.summary != null && widget.summary!.trim().isNotEmpty;
 
-    return ColoredBox(
-      color: fx.background,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 3),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _Thumb(url: url, memCacheWidth: memW),
-                  const SizedBox(width: 7),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: fx.titleStyle.copyWith(fontSize: 13.5),
-                        ),
-                        if (hasSummary)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 1),
-                            child: Text(
-                              summary!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: fx.summaryStyle,
-                            ),
-                          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.98 : 1.0,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOutCubic,
+          child: GlassCard(
+            padding: const EdgeInsets.all(8),
+            radius: 12,
+            borderColor: Colors.white.withOpacity(0.12),
+            color: Colors.white.withOpacity(0.04),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _Thumb(url: url, memCacheWidth: memW),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: fx.titleStyle.copyWith(fontSize: 13.5),
+                      ),
+                      if (hasSummary)
                         Padding(
-                          padding: EdgeInsets.only(top: hasSummary ? 0 : 2),
+                          padding: const EdgeInsets.only(top: 1),
                           child: Text(
-                            metaLine,
+                            widget.summary!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: fx.metaStyle,
+                            style: fx.summaryStyle,
                           ),
                         ),
-                      ],
-                    ),
+                      Padding(
+                        padding: EdgeInsets.only(top: hasSummary ? 0 : 2),
+                        child: Text(
+                          widget.metaLine,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: fx.metaStyle,
+                        ),
+                      ),
+                    ],
                   ),
-                  if (trailing != null) trailing!,
-                ],
-              ),
+                ),
+                if (widget.trailing != null) widget.trailing!,
+              ],
             ),
-            Divider(
-              height: 1,
-              thickness: 0.5,
-              color: fx.divider,
-            ),
-          ],
+          ),
         ),
       ),
     );

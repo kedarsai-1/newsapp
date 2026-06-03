@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'app_palette.dart';
 import 'app_components.dart';
 import 'app_typography.dart';
@@ -41,6 +42,12 @@ class AppTheme {
       scaffoldBackgroundColor: p.scaffoldBackground,
       extensions: <ThemeExtension<dynamic>>[p],
       textTheme: textTheme,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       colorScheme: isLight
           ? ColorScheme.light(
               primary: p.primary,
@@ -63,13 +70,16 @@ class AppTheme {
               onError: Colors.white,
             ),
       appBarTheme: AppBarTheme(
-        backgroundColor: p.surface,
+        backgroundColor: Colors.transparent,
         foregroundColor: p.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
             color: p.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
         iconTheme: IconThemeData(color: p.textPrimary),
+        systemOverlayStyle: brightness == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: AppButtonStyles.primary(p),

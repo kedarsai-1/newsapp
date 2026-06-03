@@ -120,6 +120,23 @@ function summariesAreNearDuplicates(a, b) {
   return inter / Math.min(A.size, B.size) >= 0.68;
 }
 
+function titleWordSet(title) {
+  const norm = normalizeTitle(title);
+  if (!norm) return new Set();
+  return new Set(norm.split(/\s+/).filter((w) => w.length > 2));
+}
+
+function titlesAreNearDuplicates(a, b) {
+  const A = titleWordSet(a);
+  const B = titleWordSet(b);
+  if (A.size < 4 || B.size < 4) return false;
+  let inter = 0;
+  for (const w of A) {
+    if (B.has(w)) inter += 1;
+  }
+  return inter / Math.min(A.size, B.size) >= 0.72;
+}
+
 module.exports = {
   canonicalizeUrl,
   hashUrl,
@@ -128,4 +145,5 @@ module.exports = {
   normalizeSummary,
   summaryFingerprint,
   summariesAreNearDuplicates,
+  titlesAreNearDuplicates,
 };

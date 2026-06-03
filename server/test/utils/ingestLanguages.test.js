@@ -6,6 +6,8 @@ const {
   lockKeyForLanguages,
   filterByLanguages,
   getIngestBudgetMs,
+  isParallelLanguageIngestEnabled,
+  isPerLanguageIngestEnabled,
 } = require('../../config/ingestLanguages');
 
 describe('ingestLanguages', () => {
@@ -38,5 +40,20 @@ describe('ingestLanguages', () => {
     assert.equal(getIngestBudgetMs('te'), 12345);
     if (prev === undefined) delete process.env.INGEST_MAX_RUNTIME_MS_TE;
     else process.env.INGEST_MAX_RUNTIME_MS_TE = prev;
+  });
+
+  it('isParallelLanguageIngestEnabled defaults on with per-language mode', () => {
+    const prevPer = process.env.INGEST_PER_LANGUAGE;
+    const prevPar = process.env.INGEST_PARALLEL_LANGUAGES;
+    process.env.INGEST_PER_LANGUAGE = 'true';
+    delete process.env.INGEST_PARALLEL_LANGUAGES;
+    assert.equal(isPerLanguageIngestEnabled(), true);
+    assert.equal(isParallelLanguageIngestEnabled(), true);
+    process.env.INGEST_PARALLEL_LANGUAGES = 'false';
+    assert.equal(isParallelLanguageIngestEnabled(), false);
+    if (prevPer === undefined) delete process.env.INGEST_PER_LANGUAGE;
+    else process.env.INGEST_PER_LANGUAGE = prevPer;
+    if (prevPar === undefined) delete process.env.INGEST_PARALLEL_LANGUAGES;
+    else process.env.INGEST_PARALLEL_LANGUAGES = prevPar;
   });
 });

@@ -4,9 +4,9 @@ const {
 } = require('../services/newsIngestionService');
 const { runYoutubeIngestion } = require('../services/youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('../services/politicalVideoIngestionService');
-const { runLanguageIngestion } = require('../services/languageIngestionService');
+const { runLanguageIngestion, runAllLanguageIngestionParallel } = require('../services/languageIngestionService');
 const { purgeOldNews } = require('../services/retentionCleanupService');
-const { normalizeLanguage, INGEST_LANGS } = require('../config/ingestLanguages');
+const { normalizeLanguage, INGEST_LANGS, isPerLanguageIngestEnabled, isParallelLanguageIngestEnabled } = require('../config/ingestLanguages');
 
 function getRequestSecret(req) {
   const auth = req.get('authorization') || '';
@@ -138,17 +138,25 @@ const runPoliticalVideosCron = async (req, res) => {
 const runLanguageIngestionCron = async (req, res) => {
   try {
     const lang = parseLanguageParam(req);
-    if (!lang) {
-      return res.status(400).json({
-        success: false,
-        message: 'Provide lang query/path: en, hi, or te.',
-      });
-    }
     if (process.env.SCRAPER_ENABLED === 'false') {
       return res.json({
         success: true,
         skipped: true,
         message: 'Ingestion disabled by SCRAPER_ENABLED=false.',
+      });
+    }
+
+    if (!lang && isPerLanguageIngestEnabled() && isParallelLanguageIngestEnabled()) {
+      const result = await runAllLanguageIngestionParallel({
+        triggeredBy: 'api-cron:language:parallel',
+      });
+      return sendCronResult(res, result);
+    }
+
+    if (!lang) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide lang query/path: en, hi, or te — or enable INGEST_PER_LANGUAGE + INGEST_PARALLEL_LANGUAGES.',
       });
     }
 
@@ -193,8 +201,8 @@ const getCronStatus = async (req, res) => {
     return res.json({
       success: true,
       ingestion: getIngestionStatus(),
-      perLanguageMode: process.env.INGEST_PER_LANGUAGE === 'true'
-        || Boolean(process.env.INGEST_WORKER_LANG?.trim()),
+      perLanguageMode: isPerLanguageIngestEnabled(),
+      parallelLanguageIngest: isParallelLanguageIngestEnabled(),
       workerLanguage: process.env.INGEST_WORKER_LANG || null,
     });
   } catch (error) {

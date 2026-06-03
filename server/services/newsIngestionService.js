@@ -8,6 +8,8 @@ const {
   summaryFingerprint,
   summariesAreNearDuplicates,
 } = require('../utils/storyDedupe');
+const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
+const { acceptPoliticsRssItem } = require('../utils/politicalStoryFilter');
 const { passesIngestCategoryGate } = require('../utils/categoryRelevance');
 const { createNewsPost } = require('../utils/prismaNewsPost');
 const {
@@ -17,7 +19,7 @@ const {
   isUnusableFeedImageUrl,
 } = require('./newsApiService');
 const { newsApiIngestPlan } = require('../config/newsApiIngestPlan');
-const { cloudinary } = require('../config/cloudinary');
+const { rehostExternalImageToCloudinary } = require('../utils/rehostExternalImage');
 const { getRssFeeds } = require('../config/rssFeeds');
 const {
   resolveIngestLanguages,
@@ -37,6 +39,7 @@ const {
   summarizeForRssIngest,
   translateEnglishToFeedLanguage,
 } = require('./rssService');
+const { isOllamaProvider } = require('./aiProvider');
 const { extractReadableArticle } = require('./articleExtractionService');
 const { classifyArticleConstituency } = require('./constituencyClassifierService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
@@ -167,12 +170,12 @@ const NEWSAPI_MULTI_CATEGORY = process.env.NEWSAPI_MULTI_CATEGORY !== 'false';
 const INGEST_REHOST_IMAGES = process.env.INGEST_REHOST_IMAGES !== 'false';
 
 function stripMarkup(input = '') {
-  return String(input || '')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return decodeHtmlEntities(
+    String(input || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]*>/g, ' '),
+  );
 }
 
 function scriptRatio(text, re) {
@@ -217,84 +220,6 @@ function matchesSportsRssLanguage(rawItem, feedLang, categorySlug) {
   return matchesExpectedFeedLanguage(rawItem, feedLang);
 }
 
-function isTeluguPoliticalStory(postLike) {
-  const text = stripMarkup(
-    `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
-  ).toLowerCase();
-  if (!text) return false;
-
-  // Hard-negative topical filters: reject common non-political story types.
-  const noisePatterns = [
-    /రాశి|జాతకం|హోరోస్కోప్|వాస్తు|పూజ|దేవాలయం|ధ్యానం|ఆధ్యాత్మిక/,
-    /సినిమా|మూవీ|ట్రైలర్|టీజర్|ఓటిటి|బాక్సాఫీస్|హీరో|హీరోయిన్|సెలబ్రిటీ/,
-    /క్రికెట్|ఐపీఎల్|ఐపిఎల్|ఫుట్‌బాల్|కబడ్డీ|టోర్నమెంట్|మ్యాచ్|స్కోర్/,
-    /హెల్త్|ఆరోగ్యం|డైట్|బ్యూటీ|రెసిపీ|లైఫ్‌స్టైల్|టిప్స్/,
-    /జాబ్స్|ఉద్యోగ|ఎడ్యుకేషన్|ఎగ్జామ్|అడ్మిట్\s*కార్డ్|ఫలితాలు/,
-  ];
-  for (const re of noisePatterns) {
-    if (re.test(text)) return false;
-  }
-
-  // Strict political scoring: require at least two independent signals.
-  const partyOrLeader = [
-    /\b(ysrcp|ycp|tdp|bjp|congress|janasena|jsp|b(?:rs|rs)|trs|cpi|cpm|aimim)\b/i,
-    /\b(jagan|ys\s*jagan|chandrababu|lokesh|pawan\s*kalyan|revanth|modi|rahul|kcr|kavitha)\b/i,
-  ];
-  const institutional = [
-    /ఎన్నిక|పోలింగ్|ఓటు|పార్టీ|ప్రభుత్వం|ప్రతిపక్షం|మంత్రి|మంత్రివర్గం|కేబినెట్|ఎమ్మెల్యే|ఎంపీ|ఎమ్మెల్సీ|శాసనసభ|అసెంబ్లీ|లోక్‌సభ|రాజ్యసభ|కూటమి|మానిఫెస్టో|రాజకీయ/,
-    /\b(election|poll|vote|assembly|parliament|cabinet|minister|mla|mp|m[ -]?l[ -]?c|party|alliance|manifesto|politics?)\b/i,
-  ];
-  const apTgContext = [
-    /ఆంధ్రప్రదేశ్|తెలంగాణ|అమరావతి|విజయవాడ|తాడేపల్లి|హైదరాబాద్|సచివాలయం/,
-    /\b(andhra\s*pradesh|telangana|amaravati|hyderabad)\b/i,
-  ];
-
-  let score = 0;
-  if (partyOrLeader.some((re) => re.test(text))) score += 1;
-  if (institutional.some((re) => re.test(text))) score += 1;
-  if (apTgContext.some((re) => re.test(text))) score += 1;
-
-  return score >= 2;
-}
-
-function isHindiPoliticalStory(postLike) {
-  const text = stripMarkup(
-    `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
-  );
-  if (!text) return false;
-
-  const noisePatterns = [
-    /राशिफल|कुंडली|ज्योतिष|वास्तु|धर्म|मंदिर|पूजा/,
-    /फिल्म|मूवी|ट्रेलर|बॉक्स ऑफिस|बॉलीवुड|सेलिब्रिटी|सिनेमा/,
-    /क्रिकेट|आईपीएल|फुटबॉल|मैच|स्कोर|खेल/,
-    /रेसिपी|ब्यूटी|स्किनकेयर|डाइट|हेल्थ टिप्स/,
-    /सोना चोरी|गोल्ड थेफ्ट|आम की कीमत|मैंगो/i,
-  ];
-  for (const re of noisePatterns) {
-    if (re.test(text)) return false;
-  }
-
-  const partyOrLeader = [
-    /\b(bjp|congress|aap|sp\b|bsp|jdu|rjd|tdp|ysrcp)\b/i,
-    /\b(modi|rahul|yogi|kejriwal|akhilesh|nitish|tejashwi|shah|nadda)\b/i,
-    /मोदी|राहुल|योगी|केजरीवाल|शाह|गांधी|भाजपा|कांग्रेस/,
-  ];
-  const institutional = [
-    /\b(election|poll|vote|assembly|parliament|cabinet|minister|mla|mp|party|manifesto|politics?)\b/i,
-    /चुनाव|मंत्री|सरकार|विधानसभा|लोकसभा|राज्यसभा|पार्टी|राजनीति|कैबिनेट/,
-  ];
-  const northContext = [
-    /उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|यू\.पी\./,
-    /\b(uttar pradesh|punjab|haryana|rajasthan|bihar|delhi|lucknow|chandigarh)\b/i,
-  ];
-
-  let score = 0;
-  if (partyOrLeader.some((re) => re.test(text))) score += 1;
-  if (institutional.some((re) => re.test(text))) score += 1;
-  if (northContext.some((re) => re.test(text))) score += 1;
-  return score >= 2;
-}
-
 /** Resolve politicsScope — feed section is a hint; story text wins for regional vs world. */
 function resolvePoliticsScope(item, feed) {
   const feedLang = String(feed.language || '').toLowerCase();
@@ -310,9 +235,11 @@ function resolvePoliticsScope(item, feed) {
 
   if (feedCat === 'politics') {
     if (valid && valid !== 'all') {
+      if (inferred && ['andhra', 'telangana', 'north', 'international'].includes(inferred)) {
+        return inferred;
+      }
       if (valid === 'international' && inferred !== 'international') return inferred;
       if (valid === 'india' && inferred === 'international') return 'international';
-      if (['andhra', 'telangana', 'north'].includes(valid) && inferred !== valid) return inferred;
       return valid;
     }
     return inferred || 'india';
@@ -359,100 +286,6 @@ function inferPoliticsScopeFromStory(postLike, feedScope) {
     return 'india';
   }
   return 'india';
-}
-
-function isCloudinaryUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  return url.includes('res.cloudinary.com/') || url.includes('cloudinary.com/');
-}
-
-function isBlockedFetchHost(hostname) {
-  const host = String(hostname || '').toLowerCase();
-  if (!host || host === 'localhost' || host.endsWith('.local')) return true;
-  if (host === 'metadata.google.internal') return true;
-  return /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
-}
-
-async function rehostExternalImageToCloudinary(imageUrl, { referer } = {}) {
-  if (!INGEST_REHOST_IMAGES) return { ok: false, reason: 'disabled' };
-  if (!imageUrl || typeof imageUrl !== 'string') return { ok: false, reason: 'missing' };
-  if (isCloudinaryUrl(imageUrl)) return { ok: true, url: imageUrl, already: true };
-
-  let parsed;
-  try {
-    parsed = new URL(imageUrl.trim());
-  } catch {
-    return { ok: false, reason: 'invalid_url' };
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol)) return { ok: false, reason: 'scheme' };
-  if (isBlockedFetchHost(parsed.hostname)) return { ok: false, reason: 'blocked_host' };
-
-  const ac = new AbortController();
-  const to = setTimeout(() => ac.abort(), 15000);
-  try {
-    const headers = {
-      'User-Agent':
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    };
-    if (referer && typeof referer === 'string' && referer.trim()) {
-      headers.Referer = referer.trim();
-      headers.Origin = referer.trim();
-    }
-
-    const res = await fetch(parsed.href, {
-      redirect: 'follow',
-      signal: ac.signal,
-      headers,
-    });
-    clearTimeout(to);
-    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
-
-    const ct = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    if (ct && !ct.startsWith('image/')) return { ok: false, reason: `not_image_${ct}` };
-
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length) return { ok: false, reason: 'empty' };
-    if (buf.length > 5 * 1024 * 1024) return { ok: false, reason: 'too_large' };
-
-    const ext =
-      ct === 'image/png' ? 'png'
-      : ct === 'image/webp' ? 'webp'
-      : ct === 'image/gif' ? 'gif'
-      : ct === 'image/avif' ? 'avif'
-      : 'jpg';
-
-    const dataUri = `data:${ct || 'image/jpeg'};base64,${buf.toString('base64')}`;
-    const uploadTimeoutMs = Math.min(
-      120000,
-      Math.max(8000, Number(process.env.CLOUDINARY_UPLOAD_TIMEOUT_MS || 45000)),
-    );
-    const upload = await Promise.race([
-      cloudinary.uploader.upload(dataUri, {
-        folder: 'newsapp/external',
-        resource_type: 'image',
-        overwrite: false,
-        unique_filename: true,
-        format: ext,
-      }),
-      new Promise((_, rej) => {
-        setTimeout(() => rej(new Error('cloudinary_upload_timeout')), uploadTimeoutMs);
-      }),
-    ]);
-    const secure = upload?.secure_url || upload?.url;
-    if (!secure) return { ok: false, reason: 'upload_failed' };
-    return { ok: true, url: secure, publicId: upload.public_id };
-  } catch (e) {
-    clearTimeout(to);
-    const msg =
-      e?.message === 'cloudinary_upload_timeout'
-        ? 'upload_timeout'
-        : e?.name === 'AbortError'
-          ? 'timeout'
-          : 'fetch_failed';
-    return { ok: false, reason: msg };
-  }
 }
 
 async function ensureSystemReporter() {
@@ -565,9 +398,9 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
 }
 
 function summarizeForPost(text) {
-  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  const t = decodeHtmlEntities(String(text || ''));
   if (!t) return null;
-  return t.length > 280 ? `${t.slice(0, 277)}...` : t;
+  return t.length > 280 ? `${t.slice(0, 277).trim()}…` : t;
 }
 
 /** AI/extractive summary for ingest; respects budget and RSS_SKIP_AI_SUMMARY only. */
@@ -790,14 +623,17 @@ async function runIngestion({
                 mediaUrl = await fetchBestImageFallback(item.sourceUrl);
               }
               if (mediaUrl && !isUnusableFeedImageUrl(mediaUrl)) {
-                const reh = await rehostExternalImageToCloudinary(mediaUrl, {
-                  referer: item.sourceUrl || null,
-                });
-                if (reh.ok && reh.url) {
-                  postFields = { ...item, mediaUrl: reh.url };
+                postFields = { ...item, summary: apiSummary, mediaUrl };
+                if (INGEST_REHOST_IMAGES) {
+                  const reh = await rehostExternalImageToCloudinary(mediaUrl, {
+                    referer: item.sourceUrl || null,
+                  });
+                  if (reh.ok && reh.url) {
+                    postFields = { ...postFields, mediaUrl: reh.url };
+                  }
                 }
               } else {
-                postFields = { ...item, mediaUrl: null };
+                postFields = { ...item, summary: apiSummary, mediaUrl: null };
               }
 
               const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
@@ -922,21 +758,13 @@ async function runIngestion({
               stats.languageFiltered += 1;
               continue;
             }
-            // Telugu politics feeds: drop crime/lifestyle/entertainment that section RSS mislabels.
+            // hi/te politics feeds: strict noise filter only (cinema/sports/etc.), keep real politics.
             const feedLang = String(feed.language || '').toLowerCase();
             const feedCat = String(feed.categorySlug || '').toLowerCase();
             if (
-              feedLang === 'te'
+              (feedLang === 'te' || feedLang === 'hi')
               && feedCat === 'politics'
-              && !isTeluguPoliticalStory(item)
-            ) {
-              stats.politicsFiltered += 1;
-              continue;
-            }
-            if (
-              feedLang === 'hi'
-              && feedCat === 'politics'
-              && !isHindiPoliticalStory(item)
+              && !acceptPoliticsRssItem(item, feedLang, { fromPoliticsFeed: true })
             ) {
               stats.politicsFiltered += 1;
               continue;
@@ -951,11 +779,17 @@ async function runIngestion({
             const prep = prepareForSummaryFromIngestItem(item, raw);
             const summaryInput = prep.textForSummary;
             const originalLang = prep.originalLang;
-            const fallbackSummary = summarizeForPost(
+            const decodedBody = decodeHtmlEntities(
               collectPlainTextForSummary(item.body, summarizeInputFromItem(raw), item.title),
-            ) || String(item.summary || '').trim();
-            const budgetTight = budget.limitMs != null && budget.remainingMs() < 45_000;
-            let displayTitle = item.title;
+            );
+            const fallbackSummary = summarizeForPost(decodedBody)
+              || summarizeForPost(decodeHtmlEntities(String(item.summary || '').trim()));
+
+            let summaryPrimary = '';
+            const ollamaSummary = isOllamaProvider();
+            const budgetTight = budget.limitMs != null
+              && budget.remainingMs() < (ollamaSummary ? 90_000 : 45_000);
+            let displayTitle = decodeHtmlEntities(String(item.title || '')).slice(0, 200);
             if (
               ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
               && originalLang === 'eng'
@@ -970,7 +804,6 @@ async function runIngestion({
               } catch { /* keep RSS title */ }
             }
 
-            let summaryPrimary = '';
             if (summaryInput && process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
               try {
                 // eslint-disable-next-line no-await-in-loop
@@ -991,7 +824,10 @@ async function runIngestion({
             let postFields = {
               ...item,
               title: displayTitle,
-              summary: summaryPrimary || fallbackSummary || item.summary,
+              body: decodedBody.slice(0, 10000) || displayTitle,
+              summary: decodeHtmlEntities(summaryPrimary || fallbackSummary || item.summary || '')
+                || fallbackSummary
+                || summarizeForPost(decodedBody),
               originalLanguage: originalLang,
               politicsScope: resolvePoliticsScope(item, feed),
             };
@@ -1119,7 +955,7 @@ async function runIngestion({
               postFields = { ...postFields, mediaUrl: null };
             }
 
-            if (postFields.mediaUrl && INGEST_REHOST_IMAGES && !budgetTight) {
+            if (postFields.mediaUrl && INGEST_REHOST_IMAGES) {
               const reh = await rehostExternalImageToCloudinary(postFields.mediaUrl, {
                 referer: postFields.sourceUrl || feed.url || null,
               });

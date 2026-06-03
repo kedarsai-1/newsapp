@@ -25,6 +25,13 @@ function isPerLanguageIngestEnabled() {
     || Boolean(process.env.INGEST_WORKER_LANG?.trim());
 }
 
+/** Run en/hi/te pipelines concurrently (default on when per-language mode). */
+function isParallelLanguageIngestEnabled() {
+  if (process.env.INGEST_PARALLEL_LANGUAGES === 'false') return false;
+  if (process.env.INGEST_PARALLEL_LANGUAGES === 'true') return true;
+  return isPerLanguageIngestEnabled();
+}
+
 /** Languages this process should ingest (worker lang or all three). */
 function getWorkerLanguages() {
   const worker = normalizeLanguage(process.env.INGEST_WORKER_LANG);
@@ -122,6 +129,7 @@ module.exports = {
   normalizeLanguage,
   normalizeLanguages,
   isPerLanguageIngestEnabled,
+  isParallelLanguageIngestEnabled,
   getWorkerLanguages,
   resolveIngestLanguages,
   lockKeyForLanguages,

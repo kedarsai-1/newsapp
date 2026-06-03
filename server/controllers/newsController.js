@@ -7,6 +7,7 @@ const {
   titleFingerprint,
   summaryFingerprint,
   summariesAreNearDuplicates,
+  titlesAreNearDuplicates,
 } = require('../utils/storyDedupe');
 const { extractReadableArticle } = require('../services/articleExtractionService');
 const { translateTextForFeed } = require('../services/rssService');
@@ -16,38 +17,21 @@ const {
   serializeNewsPost,
   serializeComment,
 } = require('../utils/serializers');
-const { newsPostInclude } = require('../utils/prismaNewsPost');
+const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 const feedResponseCache = require('../utils/feedResponseCache');
+const { getPublisherReferer } = require('../utils/publisherReferer');
+const {
+  getShortsExcludeCategoryIds,
+  prismaShortsExcludePoliticsClause,
+  filterPostsForShortsFeed,
+} = require('../utils/shortsFeedFilter');
 
 function cleanTextForClient(input) {
-  return String(input || '')
-    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/\u00a0/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function titleWordSet(title) {
-  const norm = normalizeTitle(title);
-  if (!norm) return new Set();
-  return new Set(norm.split(/\s+/).filter((w) => w.length > 2));
-}
-
-function titlesAreNearDuplicates(a, b) {
-  const A = titleWordSet(a);
-  const B = titleWordSet(b);
-  if (A.size < 4 || B.size < 4) return false;
-  let inter = 0;
-  for (const w of A) {
-    if (B.has(w)) inter += 1;
-  }
-  const ratio = inter / Math.min(A.size, B.size);
-  return ratio >= 0.72;
+  return decodeHtmlEntities(
+    String(input || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\u00a0/g, ' '),
+  );
 }
 
 /** Remove duplicate headlines/URLs/summaries within a single feed page response. */
@@ -98,6 +82,14 @@ function languageWhere(langParam) {
         { sourceName: containsInsensitive('telugu') },
         { sourceName: containsInsensitive('eenadu') },
         { sourceName: containsInsensitive('sakshi') },
+        { sourceName: containsInsensitive('tv9') },
+        { sourceName: containsInsensitive('ntv') },
+        { sourceName: containsInsensitive('v6') },
+        { sourceName: containsInsensitive('velugu') },
+        { sourceName: containsInsensitive('andhra jyothy') },
+        { sourceName: containsInsensitive('mana telangana') },
+        { sourceName: containsInsensitive('10tv') },
+        { sourceName: containsInsensitive('123telugu') },
       ],
     };
   }
@@ -110,6 +102,12 @@ function languageWhere(langParam) {
         { sourceName: containsInsensitive('amar ujala') },
         { sourceName: containsInsensitive('jagran') },
         { sourceName: containsInsensitive('abp') },
+        { sourceName: containsInsensitive('ndtv khabar') },
+        { sourceName: containsInsensitive('prabhat') },
+        { sourceName: containsInsensitive('bhaskar') },
+        { sourceName: containsInsensitive('the print') },
+        { sourceName: containsInsensitive('bbc hindi') },
+        { sourceName: containsInsensitive('print hindi') },
       ],
     };
   }
@@ -122,7 +120,23 @@ function politicsScopeWhere(scope, langParam) {
   if (!ps || ps === 'all') return null;
 
   if (ps === 'india') {
-    return { OR: [{ politicsScope: { in: ['india', 'all'] } }, { politicsScope: null }] };
+    return {
+      AND: [
+        {
+          OR: [
+            { politicsScope: { in: ['india', 'all'] } },
+            { politicsScope: null },
+          ],
+        },
+        {
+          NOT: {
+            politicsScope: {
+              in: ['andhra', 'telangana', 'north', 'states', 'delhi', 'international'],
+            },
+          },
+        },
+      ],
+    };
   }
   if (ps === 'international') {
     return { politicsScope: 'international' };
@@ -219,6 +233,7 @@ const getFeed = async (req, res) => {
       sourceTypes,
       hasVideo,
       politicalOnly,
+      excludePolitics,
     } = req.query;
 
     const where = { status: 'approved' };
@@ -240,6 +255,18 @@ const getFeed = async (req, res) => {
           { youtubeVideoId: { not: null } },
         ],
       });
+    }
+    const excludePoliticsFeed =
+      String(excludePolitics || '').toLowerCase() === 'true'
+      || (
+        String(hasVideo || '').toLowerCase() === 'true'
+        && String(politicalOnly || '').toLowerCase() !== 'true'
+        && String(sourceTypes || '').toLowerCase() === 'youtube'
+        && !category
+      );
+    if (excludePoliticsFeed) {
+      const excludeCategoryIds = await getShortsExcludeCategoryIds(prisma);
+      andFilters.push(prismaShortsExcludePoliticsClause(excludeCategoryIds));
     }
     if (category) {
       where.categoryId = String(category);
@@ -376,6 +403,9 @@ const getFeed = async (req, res) => {
     ]);
 
     let posts = dedupeFeedPosts(rows.map((p) => serializeNewsPost(p))).map(sanitizeStoryTextFields);
+    if (excludePoliticsFeed) {
+      posts = filterPostsForShortsFeed(posts);
+    }
     if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
       posts = filterPostsForCategory(posts, categorySlugFilter, {
         politicsScope: politicsScopeParam,
@@ -615,28 +645,15 @@ const getProxyImage = async (req, res) => {
     return res.status(403).type('text/plain').send('Forbidden host');
   }
 
-  let referer = `${parsed.protocol}//${parsed.host}/`;
+  let referer = getPublisherReferer(parsed.hostname) || `${parsed.protocol}//${parsed.host}/`;
   if (refererOpt && typeof refererOpt === 'string') {
     try {
       const r = new URL(refererOpt);
-      if (['http:', 'https:'].includes(r.protocol)) referer = r.href;
-    } catch { /* keep default */ }
+      if (['http:', 'https:'].includes(r.protocol)) {
+        referer = getPublisherReferer(r.href) || r.href;
+      }
+    } catch { /* keep CDN host default */ }
   }
-
-  // The Hindu CDN often rejects article URLs as Referer; site root works for thgimgs.com.
-  if (host === 'thgimgs.com' || host.endsWith('.thgimgs.com')) {
-    referer = 'https://www.thehindu.com/';
-  }
-  if (host.includes('abplive.com')) referer = 'https://www.abplive.com/';
-  if (host.includes('amarujala.com')) referer = 'https://www.amarujala.com/';
-  if (host.includes('bhaskar.com')) referer = 'https://www.bhaskar.com/';
-  if (host.includes('jagran.com')) referer = 'https://www.jagran.com/';
-  if (host.includes('prabhatkhabar.com')) referer = 'https://www.prabhatkhabar.com/';
-  if (host.includes('ndtv.com')) referer = 'https://www.ndtv.com/';
-  if (host.includes('theprint.in')) referer = 'https://hindi.theprint.in/';
-  if (host.includes('tv9telugu.com')) referer = 'https://www.tv9telugu.com/';
-  if (host.includes('ntvtelugu.com')) referer = 'https://www.ntvtelugu.com/';
-  if (host.includes('bbc.co.uk') || host.includes('bbci.co.uk')) referer = 'https://www.bbc.com/hindi';
 
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 15000);

@@ -11,52 +11,17 @@ const {
   getIngestionStatus,
 } = require('../services/newsIngestionService');
 const { runYoutubeIngestion } = require('../services/youtubeIngestionService');
+const { runAllLanguageIngestionParallel } = require('../services/languageIngestionService');
+const { isPerLanguageIngestEnabled } = require('../config/ingestLanguages');
 const { fetchBestImageFallback, isUnusableFeedImageUrl } = require('../services/newsApiService');
 const { resolveGoogleNewsPublisherUrl } = require('../services/rssService');
-const { cloudinary } = require('../config/cloudinary');
 
-function isCloudinaryUrl(url) {
-  if (!url || typeof url !== 'string') return false;
-  return url.includes('res.cloudinary.com/') || url.includes('cloudinary.com/');
-}
+const { rehostExternalImageToCloudinary: rehostImage } = require('../utils/rehostExternalImage');
 
 async function rehostExternalImageToCloudinary(imageUrl, { referer } = {}) {
-  if (!imageUrl || typeof imageUrl !== 'string') return null;
-  if (isCloudinaryUrl(imageUrl)) return { url: imageUrl, publicId: null };
-
-  const ac = new AbortController();
-  const to = setTimeout(() => ac.abort(), 15000);
-  try {
-    const res = await fetch(imageUrl, {
-      redirect: 'follow',
-      signal: ac.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        ...(referer ? { Referer: referer, Origin: referer } : {}),
-      },
-    });
-    clearTimeout(to);
-    if (!res.ok) return null;
-    const ct = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-    if (ct && !ct.startsWith('image/')) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length || buf.length > 5 * 1024 * 1024) return null;
-    const dataUri = `data:${ct || 'image/jpeg'};base64,${buf.toString('base64')}`;
-    const up = await cloudinary.uploader.upload(dataUri, {
-      folder: 'newsapp/external',
-      resource_type: 'image',
-      overwrite: false,
-      unique_filename: true,
-    });
-    const url = up?.secure_url || up?.url;
-    if (!url) return null;
-    return { url, publicId: up.public_id };
-  } catch {
-    clearTimeout(to);
-    return null;
-  }
+  const result = await rehostImage(imageUrl, { referer, skipIngestEnvCheck: true });
+  if (!result.ok || !result.url) return null;
+  return { url: result.url, publicId: result.publicId || null };
 }
 
 // GET /api/admin/dashboard — stats overview
@@ -317,6 +282,16 @@ const createCategory = async (req, res) => {
 // POST /api/admin/ingestion/run
 const runIngestionNow = async (req, res) => {
   try {
+    if (isPerLanguageIngestEnabled()) {
+      const result = await runAllLanguageIngestionParallel({
+        triggeredBy: `admin:${req.user._id.toString()}`,
+      });
+      if (!result.success) {
+        return res.status(500).json(result);
+      }
+      return res.json(result);
+    }
+
     const result = await runIngestion({
       triggeredBy: `admin:${req.user._id.toString()}`,
     });

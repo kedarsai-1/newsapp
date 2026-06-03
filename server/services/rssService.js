@@ -1,6 +1,7 @@
 const Parser = require('rss-parser');
 const { franc } = require('franc');
 const aiProvider = require('./aiProvider');
+const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 const {
   summarize: aiSummarize,
   translateToEnglish: aiTranslateToEnglish,
@@ -36,19 +37,6 @@ function stripHtml(input = '') {
     .replace(/\s+/g, ' ')
     .trim(),
   );
-}
-
-function decodeHtmlEntities(input = '') {
-  return String(input || '')
-    .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/\u00a0/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function summarizeLocal(text) {
@@ -101,14 +89,15 @@ function looksMojibake(text) {
 }
 
 function sanitizeForSummarization(text) {
-  return String(text || '')
-    .replace(/â€™/g, "'")
-    .replace(/â€œ|â€\x9D/g, '"')
-    .replace(/â€"/g, '-')
-    .replace(/Ã©/g, 'e')
-    .replace(/\uFFFD/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return decodeHtmlEntities(
+    String(text || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/â€™/g, "'")
+      .replace(/â€œ|â€\x9D/g, '"')
+      .replace(/â€"/g, '-')
+      .replace(/Ã©/g, 'e')
+      .replace(/\uFFFD/g, ' '),
+  );
 }
 
 function detectLanguage(text) {
@@ -380,6 +369,14 @@ function pickImageFromItem(item) {
       mediaThumbnail = mediaThumbnailRaw[0]?.$?.url || mediaThumbnailRaw[0]?.url;
     }
   }
+
+  const mediaGroupRaw = it['media:group'];
+  let mediaGroupUrl = null;
+  if (mediaGroupRaw) {
+    const content = mediaGroupRaw['media:content'] || mediaGroupRaw.content;
+    const first = Array.isArray(content) ? content[0] : content;
+    mediaGroupUrl = first?.$?.url || first?.url || null;
+  }
   
   // Handle itunes:image
   const itunesImg = it.itunes?.image || it['itunes:image']?.href || it['itunes:image']?.url || it['itunes:image']?.$?.href;
@@ -390,8 +387,13 @@ function pickImageFromItem(item) {
     || it.image?.url
     || it.image?.$?.url;
 
-  // Extract from HTML content
-  const html = it['content:encoded'] || it.content || it.summary || '';
+  // Extract from HTML content (description often has the only image on Hindi/English feeds)
+  const html =
+    it['content:encoded']
+    || it.content
+    || it.summary
+    || it.description
+    || '';
   const htmlImg = (() => {
     const s = String(html || '');
     const patterns = [
@@ -407,7 +409,15 @@ function pickImageFromItem(item) {
     return null;
   })();
 
-  const candidates = [enclosure, mediaContent, mediaThumbnail, itunesImg, topImage, htmlImg].filter(Boolean);
+  const candidates = [
+    enclosure,
+    mediaContent,
+    mediaThumbnail,
+    mediaGroupUrl,
+    itunesImg,
+    topImage,
+    htmlImg,
+  ].filter(Boolean);
   for (const c of candidates) {
     const u = normalizeMediaUrl(c);
     if (u && !isUnusableFeedImageUrl(u)) return u;

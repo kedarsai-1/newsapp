@@ -1,7 +1,7 @@
 /**
  * Runs the full language pipeline: RSS/API news → YouTube (shorts) → political (interviews).
  */
-const { normalizeLanguage } = require('../config/ingestLanguages');
+const { normalizeLanguage, INGEST_LANGS } = require('../config/ingestLanguages');
 const { runIngestion } = require('./newsIngestionService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('./politicalVideoIngestionService');
@@ -68,4 +68,50 @@ async function runLanguageIngestion(language, { triggeredBy = 'language-pipeline
   return { success, stats: summary, news, youtube, political };
 }
 
-module.exports = { runLanguageIngestion };
+/**
+ * Run full pipelines for multiple languages at once (separate locks per language).
+ */
+async function runAllLanguageIngestionParallel({
+  languages,
+  triggeredBy = 'language-pipeline-parallel',
+} = {}) {
+  const langs = (languages && languages.length)
+    ? languages.map(normalizeLanguage).filter((l) => INGEST_LANGS.includes(l))
+    : [...INGEST_LANGS];
+
+  if (!langs.length) {
+    return { success: false, error: 'No valid languages (en, hi, te)' };
+  }
+
+  console.log(
+    `[ingest] parallel pipeline start (${triggeredBy}) langs=${langs.join(',')} `
+      + `${new Date().toISOString()}`,
+  );
+
+  const settled = await Promise.allSettled(
+    langs.map((lang) => runLanguageIngestion(lang, { triggeredBy: `${triggeredBy}:${lang}` })),
+  );
+
+  const byLang = {};
+  let success = true;
+  for (let i = 0; i < langs.length; i++) {
+    const lang = langs[i];
+    const outcome = settled[i];
+    if (outcome.status === 'fulfilled') {
+      byLang[lang] = outcome.value;
+      if (!outcome.value?.success && !outcome.value?.skipped) success = false;
+    } else {
+      byLang[lang] = { success: false, error: outcome.reason?.message || String(outcome.reason) };
+      success = false;
+      console.error(`[ingest:${lang}] parallel pipeline error:`, outcome.reason);
+    }
+  }
+
+  console.log(
+    `[ingest] parallel pipeline done (${triggeredBy}) langs=${langs.join(',')} success=${success}`,
+  );
+
+  return { success, languages: langs, triggeredBy, byLang };
+}
+
+module.exports = { runLanguageIngestion, runAllLanguageIngestionParallel };

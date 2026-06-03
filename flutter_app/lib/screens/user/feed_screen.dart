@@ -353,9 +353,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
+        color: GlassColors.surfaceWhite,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: Colors.white.withOpacity(0.08), width: 0.8),
+        border: Border.all(color: GlassColors.borderWhite, width: 0.8),
       ),
       child: Row(
         children: [
@@ -438,7 +438,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   Widget _discoverDeck(NewsProvider news) {
     if (news.categories.isEmpty) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(
           strokeWidth: 2,
           color: GlassColors.accentGreen,
@@ -469,21 +469,25 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             );
           },
           child: GlassCard(
+            enableBlur: false,
             radius: 16,
             padding: const EdgeInsets.all(12),
             color: isSelected
                 ? style.$2[0].withOpacity(0.18)
-                : Colors.white.withOpacity(0.04),
+                : GlassColors.surfaceWhite,
             borderColor: isSelected
                 ? style.$2[0].withOpacity(0.50)
-                : Colors.white.withOpacity(0.10),
+                : GlassColors.borderWhite,
             boxShadow: [
-              if (isSelected)
-                BoxShadow(
-                  color: style.$2[0].withOpacity(0.08),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
+              BoxShadow(
+                color: isSelected
+                    ? style.$2[0].withOpacity(0.12)
+                    : (GlassColors.isLightMode
+                        ? Colors.black.withOpacity(0.04)
+                        : Colors.black.withOpacity(0.12)),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
             ],
             child: Row(
               children: [
@@ -509,7 +513,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: isSelected ? style.$2[0] : Colors.white,
+                      color: isSelected ? style.$2[0] : GlassColors.textPrimary,
                     ),
                   ),
                 ),
@@ -537,7 +541,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
-                color: Colors.white38,
+                color: GlassColors.textTertiary,
                 letterSpacing: 0.6,
               ),
             ),
@@ -588,7 +592,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
-                                color: isSelected ? style.$2[0] : Colors.white70,
+                                color: isSelected ? style.$2[0] : GlassColors.textSecondary,
                               ),
                             ),
                           ),
@@ -621,44 +625,77 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _activeCategoryBanner(news),
-          Selector<NewsProvider, _RegionChipBarData>(
-            selector: (_, news) {
-              if (news.shouldShowPoliticalScopeDropdown) {
-                return _RegionChipBarData(
-                  selectedScope: news.selectedPoliticsScope,
-                  options: news.politicsScopeOptions,
-                  onSelectPolitics: true,
-                );
+          AnimatedBuilder(
+            animation: _scrollController,
+            builder: (context, child) {
+              double offset = 0.0;
+              if (_scrollController.hasClients) {
+                offset = _scrollController.offset;
               }
-              if (news.shouldShowLocalScopeDropdown) {
-                return _RegionChipBarData(
-                  selectedScope: news.selectedLocalScope,
-                  options: news.localScopeOptions,
-                  onSelectPolitics: false,
-                );
-              }
-              return const _RegionChipBarData.hidden();
-            },
-            builder: (_, data, __) {
-              if (data.hidden) return const SizedBox.shrink();
-              final news = context.read<NewsProvider>();
-              return RepaintBoundary(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FeedScopeChipBar(
-                      selectedScope: data.selectedScope,
-                      options: data.options,
-                      onSelected: data.onSelectPolitics
-                          ? news.selectPoliticsScope
-                          : news.selectLocalScope,
+              final collapseProgress = (offset / 100.0).clamp(0.0, 1.0);
+              final double heightFactor = 1.0 - collapseProgress;
+              final double opacity = 1.0 - collapseProgress;
+              final double translateY = -10.0 * collapseProgress;
+
+              return ClipRect(
+                child: Opacity(
+                  opacity: opacity,
+                  child: Align(
+                    heightFactor: heightFactor,
+                    alignment: Alignment.topCenter,
+                    child: Transform.translate(
+                      offset: Offset(0.0, translateY),
+                      child: child,
                     ),
-                    if (data.onSelectPolitics) const _PoliticalReelsEntry(),
-                  ],
+                  ),
                 ),
               );
             },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _activeCategoryBanner(news),
+                Selector<NewsProvider, _RegionChipBarData>(
+                  selector: (_, news) {
+                    if (news.shouldShowPoliticalScopeDropdown) {
+                      return _RegionChipBarData(
+                        selectedScope: news.selectedPoliticsScope,
+                        options: news.politicsScopeOptions,
+                        onSelectPolitics: true,
+                      );
+                    }
+                    if (news.shouldShowLocalScopeDropdown) {
+                      return _RegionChipBarData(
+                        selectedScope: news.selectedLocalScope,
+                        options: news.localScopeOptions,
+                        onSelectPolitics: false,
+                      );
+                    }
+                    return const _RegionChipBarData.hidden();
+                  },
+                  builder: (_, data, __) {
+                    if (data.hidden) return const SizedBox.shrink();
+                    final news = context.read<NewsProvider>();
+                    return RepaintBoundary(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FeedScopeChipBar(
+                            selectedScope: data.selectedScope,
+                            options: data.options,
+                            onSelected: data.onSelectPolitics
+                                ? news.selectPoliticsScope
+                                : news.selectLocalScope,
+                          ),
+                          if (data.onSelectPolitics) const _PoliticalReelsEntry(),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
           Expanded(
             child: TweenAnimationBuilder<double>(
@@ -756,7 +793,34 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       bodyContent = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _deckSelectorTabs(),
+          AnimatedBuilder(
+            animation: _scrollController,
+            builder: (context, child) {
+              double offset = 0.0;
+              if (_scrollController.hasClients) {
+                offset = _scrollController.offset;
+              }
+              final collapseProgress = (offset / 100.0).clamp(0.0, 1.0);
+              final double heightFactor = 1.0 - collapseProgress;
+              final double opacity = 1.0 - collapseProgress;
+              final double translateY = -10.0 * collapseProgress;
+
+              return ClipRect(
+                child: Opacity(
+                  opacity: opacity,
+                  child: Align(
+                    heightFactor: heightFactor,
+                    alignment: Alignment.topCenter,
+                    child: Transform.translate(
+                      offset: Offset(0.0, translateY),
+                      child: child,
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: _deckSelectorTabs(),
+          ),
           Expanded(
             child: PageView(
               controller: _feedPageController,
@@ -777,13 +841,41 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       bodyContent = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 6),
-          CategoryCarouselWheel(
-            categories: news.categories,
-            selectedCategoryId: news.selectedCategoryId,
-            onSelected: (id) => news.selectCategory(id),
+          AnimatedBuilder(
+            animation: _scrollController,
+            builder: (context, child) {
+              double offset = 0.0;
+              if (_scrollController.hasClients) {
+                offset = _scrollController.offset;
+              }
+              final collapseProgress = (offset / 120.0).clamp(0.0, 1.0);
+              final double heightFactor = 1.0 - collapseProgress;
+              final double opacity = 1.0 - collapseProgress;
+              final double translateY = -15.0 * collapseProgress;
+
+              return ClipRect(
+                child: Opacity(
+                  opacity: opacity,
+                  child: Align(
+                    heightFactor: heightFactor,
+                    alignment: Alignment.topCenter,
+                    child: Transform.translate(
+                      offset: Offset(0.0, translateY),
+                      child: child,
+                    ),
+                  ),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: CategoryCarouselWheel(
+                categories: news.categories,
+                selectedCategoryId: news.selectedCategoryId,
+                onSelected: (id) => news.selectCategory(id),
+              ),
+            ),
           ),
-          const SizedBox(height: 6),
           Expanded(
             child: buildCuratedFeedContent(),
           ),
@@ -1010,12 +1102,12 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? style.$2[0].withOpacity(0.20)
-                              : Colors.white.withOpacity(0.04),
+                              : GlassColors.surfaceWhite,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected
                                 ? style.$2[0].withOpacity(0.50)
-                                : Colors.white.withOpacity(0.08),
+                                : GlassColors.borderWhite,
                             width: isSelected ? 1.5 : 0.8,
                           ),
                           boxShadow: [
@@ -1041,7 +1133,7 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
-                                  color: isSelected ? style.$2[0] : Colors.white70,
+                                  color: isSelected ? style.$2[0] : GlassColors.textSecondary,
                                 ),
                               ),
                             ),
@@ -1102,7 +1194,7 @@ class _DeckTab extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w800,
-            color: selected ? Colors.white : Colors.white38,
+            color: selected ? GlassColors.textPrimary : GlassColors.textTertiary,
             letterSpacing: -0.1,
           ),
         ),

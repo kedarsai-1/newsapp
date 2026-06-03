@@ -201,14 +201,14 @@ class FeedXpressoPalette extends ThemeExtension<FeedXpressoPalette> {
     shimmerHighlight: Color(0xFFF8F8F8),
     verifiedBadge: Color(0xFF1A73E8),
     shareAccent: Color(0xFF25D366),
-    accent: Color(0xFF1A1A1A),
+    accent: Color(0xFF0E9F6E),
     sourceLabel: Color(0xFF3A3A3A),
     navBackground: Color(0xFFFFFFFF),
-    navActiveIcon: Color(0xFF1A1A1A),
-    navActiveLabel: Color(0xFF1A1A1A),
+    navActiveIcon: Color(0xFF0E9F6E),
+    navActiveLabel: Color(0xFF0E9F6E),
     navInactiveIcon: Color(0xFFABABAB),
     navInactiveLabel: Color(0xFF9E9E9E),
-    navActiveIndicator: Color(0xFF1A1A1A),
+    navActiveIndicator: Color(0xFF0E9F6E),
     drawerScrim: Color(0x66000000),
   );
 

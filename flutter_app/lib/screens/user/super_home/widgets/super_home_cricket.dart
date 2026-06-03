@@ -137,7 +137,7 @@ class SuperHomeCricketSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SuperHomeSectionHeader(
-          title: 'Live Cricket',
+          title: 'Home of Sports',
           subtitle: 'Live scores, upcoming fixtures and highlights',
           icon: Icons.sports_cricket_rounded,
           accentColor: const Color(0xFF0D7A3E),

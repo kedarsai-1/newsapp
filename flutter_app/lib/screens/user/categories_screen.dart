@@ -170,6 +170,7 @@ class CategoriesScreen extends StatelessWidget {
                   return DailyhuntCategoryCard(
                     title: I18n.t(context, t.i18nKey),
                     icon: t.icon,
+                    slug: t.slug,
                     onTap: () => _openCategory(context, t.slug),
                   );
                 },

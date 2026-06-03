@@ -436,7 +436,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _role == 'reporter'
                   ? '📸  ${I18n.t(context, 'reporter_register_note')}'
                   : '📰  Readers can browse the news feed, like and bookmark stories, and comment.',
-              style: const TextStyle(fontSize: 12, color: GlassColors.accentGreenLight, height: 1.5),
+              style: TextStyle(fontSize: 12, color: GlassColors.accentGreenLight, height: 1.5),
             ),
           ),
 
@@ -521,7 +521,7 @@ class _RequirementsChecklist extends StatelessWidget {
     return GlassContainer(
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Password requirements',
+        Text('Password requirements',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
                 color: GlassColors.textTertiary, letterSpacing: 0.5)),
         const SizedBox(height: 8),
@@ -538,7 +538,7 @@ class _RequirementsChecklist extends StatelessWidget {
                   color: met ? GlassColors.accentGreen.withOpacity(0.2) : GlassColors.surfaceBright,
                   border: Border.all(color: met ? GlassColors.accentGreenBorder : GlassColors.borderWhite, width: 0.8),
                 ),
-                child: met ? const Icon(Icons.check, size: 10, color: GlassColors.accentGreenLight) : null,
+                child: met ? Icon(Icons.check, size: 10, color: GlassColors.accentGreenLight) : null,
               ),
               const SizedBox(width: 8),
               Text(r.$1, style: TextStyle(fontSize: 12,

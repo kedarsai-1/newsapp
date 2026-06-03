@@ -11,6 +11,7 @@ class GlassCard extends StatelessWidget {
   final EdgeInsetsGeometry? margin;
   final Color? borderColor;
   final bool enableAnimation;
+  final bool enableBlur;
 
   const GlassCard({
     Key? key,
@@ -22,31 +23,36 @@ class GlassCard extends StatelessWidget {
     this.boxShadow,
     this.borderColor,
     this.enableAnimation = true,
+    this.enableBlur = true,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surface.withOpacity(0.25);
+    final cardContent = Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: color ?? surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color: borderColor ?? Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: boxShadow,
+      ),
+      child: child,
+    );
+
     final card = Container(
       margin: margin,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            padding: padding,
-            decoration: BoxDecoration(
-              color: color ?? surface,
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(
-                color: borderColor ?? Colors.white.withOpacity(0.2),
-                width: 1,
-              ),
-              boxShadow: boxShadow,
-            ),
-            child: child,
-          ),
-        ),
+        child: enableBlur
+            ? BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: cardContent,
+              )
+            : cardContent,
       ),
     );
     if (!enableAnimation) return card;

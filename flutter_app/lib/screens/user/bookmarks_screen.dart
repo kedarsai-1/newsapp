@@ -10,6 +10,7 @@ import '../../widgets/dailyhunt/xpresso_sliver_app_bar.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/saved/dailyhunt_saved_article_tile.dart';
 import '../../widgets/saved/dailyhunt_saved_list_shimmer.dart';
+import '../../widgets/premium_animations.dart';
 
 /// Saved articles — theme-aware list matching main feed polish.
 class BookmarksScreen extends StatefulWidget {
@@ -203,11 +204,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             final post = _filtered[index];
-                            return DailyhuntSavedArticleTile(
-                              key: ValueKey('saved-${post.id}'),
-                              post: post,
-                              onTap: () => context.push('/article/${post.id}'),
-                              onRemove: () => _remove(post),
+                            return StaggeredEntranceAnimation(
+                              index: index.clamp(0, 6),
+                              child: DailyhuntSavedArticleTile(
+                                key: ValueKey('saved-${post.id}'),
+                                post: post,
+                                onTap: () => context.push('/article/${post.id}'),
+                                onRemove: () => _remove(post),
+                              ),
                             );
                           },
                           childCount: _filtered.length,

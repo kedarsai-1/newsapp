@@ -257,6 +257,7 @@ class _QuickHeadlineCard extends StatelessWidget {
     final thumb = premiumImageUrl(post);
     return GlassCard(
       radius: 24,
+      enableBlur: false,
       padding: const EdgeInsets.all(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),

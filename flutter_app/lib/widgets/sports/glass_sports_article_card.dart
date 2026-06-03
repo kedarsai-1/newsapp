@@ -174,6 +174,7 @@ class _GlassSportsArticleCardState extends State<GlassSportsArticleCard>
             margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: GlassCard(
               enableAnimation: false,
+              enableBlur: false,
               radius: 18,
               padding: EdgeInsets.zero,
               color: Colors.white.withOpacity(0.05),
@@ -205,7 +206,7 @@ class _GlassSportsArticleCardState extends State<GlassSportsArticleCard>
                                 fit: BoxFit.cover,
                                 placeholder: (context, _) => Container(
                                   color: Colors.white12,
-                                  child: const Center(
+                                  child: Center(
                                     child: SizedBox(
                                       width: 24,
                                       height: 24,
@@ -290,7 +291,7 @@ class _GlassSportsArticleCardState extends State<GlassSportsArticleCard>
                                       _sourceName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11.5,
                                         fontWeight: FontWeight.w700,
                                         color: GlassColors.accentGreenLight,
@@ -298,7 +299,7 @@ class _GlassSportsArticleCardState extends State<GlassSportsArticleCard>
                                     ),
                                   ),
                                   const SizedBox(width: 4),
-                                  const Icon(
+                                  Icon(
                                     Icons.verified,
                                     size: 13,
                                     color: GlassColors.accentGreen,

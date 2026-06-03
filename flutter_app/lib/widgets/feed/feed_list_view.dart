@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
+import '../premium_animations.dart';
 import 'dailyhunt_feed_article_card.dart';
 import 'feed_image_cache.dart';
 import 'feed_list_tuning.dart';
@@ -71,15 +72,18 @@ class _FeedListViewState extends State<FeedListView>
               return const FeedListLoadingFooter();
             }
             final post = widget.posts[index];
-            return DailyhuntFeedArticleCard(
-              key: ValueKey(post.id),
-              post: post,
-              liked: widget.likedByPostId[post.id] ?? false,
-              saved: widget.bookmarkedByPostId[post.id] ?? false,
-              onOpen: () => widget.onOpen(post),
-              onLike: () => widget.onLike(post),
-              onShare: () => widget.onShare(post),
-              onBookmark: () => widget.onBookmark(post),
+            return StaggeredEntranceAnimation(
+              index: index.clamp(0, 6),
+              child: DailyhuntFeedArticleCard(
+                key: ValueKey(post.id),
+                post: post,
+                liked: widget.likedByPostId[post.id] ?? false,
+                saved: widget.bookmarkedByPostId[post.id] ?? false,
+                onOpen: () => widget.onOpen(post),
+                onLike: () => widget.onLike(post),
+                onShare: () => widget.onShare(post),
+                onBookmark: () => widget.onBookmark(post),
+              ),
             );
           },
           ),

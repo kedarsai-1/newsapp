@@ -29,9 +29,9 @@ class AppUtils {
   static void showSuccess(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
-        const Icon(Icons.check_circle, color: GlassColors.accentGreenLight, size: 18),
+        Icon(Icons.check_circle, color: GlassColors.accentGreenLight, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(message, style: const TextStyle(color: GlassColors.textPrimary))),
+        Expanded(child: Text(message, style: TextStyle(color: GlassColors.textPrimary))),
       ]),
     ));
   }
@@ -41,14 +41,14 @@ class AppUtils {
       content: Row(children: [
         Icon(Icons.error_outline, color: GlassColors.error, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(message, style: const TextStyle(color: GlassColors.textPrimary))),
+        Expanded(child: Text(message, style: TextStyle(color: GlassColors.textPrimary))),
       ]),
     ));
   }
 
   static void showInfo(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message, style: const TextStyle(color: GlassColors.textPrimary)),
+      content: Text(message, style: TextStyle(color: GlassColors.textPrimary)),
     ));
   }
 
@@ -57,7 +57,7 @@ class AppUtils {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: Text(message, style: const TextStyle(color: GlassColors.textSecondary)),
+        content: Text(message, style: TextStyle(color: GlassColors.textSecondary)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(

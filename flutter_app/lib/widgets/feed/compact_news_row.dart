@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'feed_xpresso_theme.dart';
 import '../glass_card.dart';
+import '../../constants.dart';
 
 export 'feed_xpresso_theme.dart' show FeedXpressoTheme, kFeedRowExtent;
 
@@ -62,13 +63,16 @@ class CompactNewsRow extends StatelessWidget {
         child: GlassCard(
           padding: const EdgeInsets.all(12),
           radius: 14,
-          borderColor: Colors.white.withOpacity(0.12),
-          color: Colors.white.withOpacity(0.04),
+          enableBlur: false,
+          borderColor: GlassColors.borderWhite,
+          color: GlassColors.surfaceWhite,
           enableAnimation: true,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 8,
+              color: GlassColors.isLightMode
+                  ? Colors.black.withOpacity(0.04)
+                  : Colors.black.withOpacity(0.18),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],

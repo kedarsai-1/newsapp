@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'theme/app_palette.dart';
 import 'dart:ui';
 import 'theme/app_gradients.dart';
+import 'providers/theme_provider.dart';
 
 export 'theme/app_palette.dart';
 export 'theme/app_theme.dart';
@@ -143,52 +144,53 @@ class AppConstants {
 // ─── Glass Design System ──────────────────────────────────────────────────────
 
 class GlassColors {
+  static bool get isLightMode => ThemeProvider.isLight;
+
   // Background gradients (aligned with AppPalette editorial dark)
-  static const Color gradientStart = Color(0xFF070A0F);
-  static const Color gradientMid = Color(0xFF0D1522);
-  static const Color gradientEnd = Color(0xFF121528);
+  static Color get gradientStart => isLightMode ? const Color(0xFFF4F7FB) : const Color(0xFF070A0F);
+  static Color get gradientMid => isLightMode ? const Color(0xFFECFDF5) : const Color(0xFF0D1522);
+  static Color get gradientEnd => isLightMode ? const Color(0xFFFFFFFF) : const Color(0xFF121528);
 
   // Blob accent colors
-  static const Color blobGreen = Color(0xFF34D399);
-  static const Color blobPurple = Color(0xFFC084FC);
-  static const Color blobOrange = Color(0xFFF97316);
+  static Color get blobGreen => const Color(0xFF34D399);
+  static Color get blobPurple => const Color(0xFFC084FC);
+  static Color get blobOrange => const Color(0xFFF97316);
 
   // Glass surface tints
-  static const Color surfaceWhite = Color(0x12FFFFFF); // rgba(255,255,255,0.07)
-  static const Color surfaceBright =
-      Color(0x18FFFFFF); // rgba(255,255,255,0.10)
-  static const Color borderWhite = Color(0x21FFFFFF); // rgba(255,255,255,0.13)
-  static const Color borderBright = Color(0x2FFFFFFF); // rgba(255,255,255,0.18)
+  static Color get surfaceWhite => isLightMode ? Colors.white.withOpacity(0.82) : const Color(0x12FFFFFF); // rgba(255,255,255,0.07)
+  static Color get surfaceBright => isLightMode ? Colors.white.withOpacity(0.92) : const Color(0x18FFFFFF); // rgba(255,255,255,0.10)
+  static Color get borderWhite => isLightMode ? Colors.black.withOpacity(0.08) : const Color(0x21FFFFFF); // rgba(255,255,255,0.13)
+  static Color get borderBright => isLightMode ? Colors.black.withOpacity(0.14) : const Color(0x2FFFFFFF); // rgba(255,255,255,0.18)
 
   // Text
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0x99FFFFFF); // 60% white
-  static const Color textTertiary = Color(0x66FFFFFF); // 40% white
-  static const Color textHint = Color(0x40FFFFFF); // 25% white
+  static Color get textPrimary => isLightMode ? const Color(0xFF111111) : const Color(0xFFFFFFFF);
+  static Color get textSecondary => isLightMode ? const Color(0xFF4A4A4A) : const Color(0x99FFFFFF); // 60% white
+  static Color get textTertiary => isLightMode ? const Color(0xFF717171) : const Color(0x66FFFFFF); // 40% white
+  static Color get textHint => isLightMode ? const Color(0xFF9E9E9E) : const Color(0x40FFFFFF); // 25% white
 
   // Accent — mint (primary action)
-  static const Color accentGreen = Color(0xFF34D399);
-  static const Color accentGreenLight = Color(0xFF6EE7B7);
-  static const Color accentGreenSurface = Color(0x1E34D399);
-  static const Color accentGreenBorder = Color(0x4D34D399);
+  static Color get accentGreen => isLightMode ? const Color(0xFF0E9F6E) : const Color(0xFF34D399);
+  static Color get accentGreenLight => isLightMode ? const Color(0xFF10B981) : const Color(0xFF6EE7B7);
+  static Color get accentGreenSurface => isLightMode ? const Color(0x150E9F6E) : const Color(0x1E34D399);
+  static Color get accentGreenBorder => isLightMode ? const Color(0x330E9F6E) : const Color(0x4D34D399);
 
   // Accent — orange (breaking / admin)
-  static const Color accentOrange = Color(0xFFF97316);
-  static const Color accentOrangeLight = Color(0xFFFDBA74);
-  static const Color accentOrangeSurface = Color(0x26F97316);
-  static const Color accentOrangeBorder = Color(0x59F97316);
+  static Color get accentOrange => isLightMode ? const Color(0xFFEA580C) : const Color(0xFFF97316);
+  static Color get accentOrangeLight => isLightMode ? const Color(0xFFF97316) : const Color(0xFFFDBA74);
+  static Color get accentOrangeSurface => isLightMode ? const Color(0x1AEA580C) : const Color(0x26F97316);
+  static Color get accentOrangeBorder => isLightMode ? const Color(0x33EA580C) : const Color(0x59F97316);
 
   // Accent — purple (reporter badge, categories)
-  static const Color accentPurple = Color(0xFFC084FC);
-  static const Color accentPurpleLight = Color(0xFFE9D5FF);
-  static const Color accentPurpleSurface = Color(0x33C084FC);
-  static const Color accentPurpleBorder = Color(0x4DC084FC);
+  static Color get accentPurple => isLightMode ? const Color(0xFF7C3AED) : const Color(0xFFC084FC);
+  static Color get accentPurpleLight => isLightMode ? const Color(0xFFA78BFA) : const Color(0xFFE9D5FF);
+  static Color get accentPurpleSurface => isLightMode ? const Color(0x207C3AED) : const Color(0x33C084FC);
+  static Color get accentPurpleBorder => isLightMode ? const Color(0x3B7C3AED) : const Color(0x4DC084FC);
 
   // Semantic
-  static const Color success = Color(0xFF34D399);
-  static const Color warning = Color(0xFFFBBF24);
-  static const Color error = Color(0xFFF87171);
-  static const Color info = Color(0xFF38BDF8);
+  static Color get success => isLightMode ? const Color(0xFF0E9F6E) : const Color(0xFF34D399);
+  static Color get warning => isLightMode ? const Color(0xFFD97706) : const Color(0xFFFBBF24);
+  static Color get error => isLightMode ? const Color(0xFFDC2626) : const Color(0xFFF87171);
+  static Color get info => isLightMode ? const Color(0xFF0284C7) : const Color(0xFF38BDF8);
 }
 
 // Gradient Background Widget is now imported and exported directly from design_system/glass/glass_background.dart.
@@ -348,16 +350,16 @@ class GlassTextField extends StatelessWidget {
       readOnly: readOnly,
       onChanged: onChanged,
       onFieldSubmitted: onFieldSubmitted,
-      style: const TextStyle(color: GlassColors.textPrimary, fontSize: 14),
+      style: TextStyle(color: GlassColors.textPrimary, fontSize: 14),
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
         labelStyle:
-            const TextStyle(color: GlassColors.textTertiary, fontSize: 13),
-        hintStyle: const TextStyle(color: GlassColors.textHint, fontSize: 13),
+            TextStyle(color: GlassColors.textTertiary, fontSize: 13),
+        hintStyle: TextStyle(color: GlassColors.textHint, fontSize: 13),
         prefixIcon: prefixIcon != null
             ? IconTheme(
-                data: const IconThemeData(
+                data: IconThemeData(
                     color: GlassColors.textTertiary, size: 18),
                 child: prefixIcon!)
             : null,
@@ -367,17 +369,17 @@ class GlassTextField extends StatelessWidget {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide:
-              const BorderSide(color: GlassColors.borderWhite, width: 0.8),
+              BorderSide(color: GlassColors.borderWhite, width: 0.8),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide:
-              const BorderSide(color: GlassColors.borderWhite, width: 0.8),
+              BorderSide(color: GlassColors.borderWhite, width: 0.8),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide:
-              const BorderSide(color: GlassColors.accentGreen, width: 1.5),
+              BorderSide(color: GlassColors.accentGreen, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -390,7 +392,7 @@ class GlassTextField extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         counterStyle:
-            const TextStyle(color: GlassColors.textHint, fontSize: 11),
+            TextStyle(color: GlassColors.textHint, fontSize: 11),
       ),
     );
   }
@@ -590,7 +592,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       automaticallyImplyLeading: showBack,
       leading: showBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              icon: Icon(Icons.arrow_back_ios_new_rounded,
                   size: 18, color: GlassColors.textSecondary),
               onPressed: () => Navigator.of(context).maybePop(),
             )
@@ -638,7 +640,7 @@ class GlassStatCard extends StatelessWidget {
         const SizedBox(height: 2),
         Text(label,
             style:
-                const TextStyle(fontSize: 11, color: GlassColors.textTertiary)),
+                TextStyle(fontSize: 11, color: GlassColors.textTertiary)),
       ]),
     );
   }
@@ -673,18 +675,18 @@ class GlassBreakingBanner extends StatelessWidget {
           Container(
               width: 7,
               height: 7,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                   color: GlassColors.accentOrange, shape: BoxShape.circle)),
           const SizedBox(width: 8),
           Expanded(
               child: Text(text,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: GlassColors.accentOrangeLight),
                   overflow: TextOverflow.ellipsis)),
           if (onTap != null)
-            const Icon(Icons.refresh,
+            Icon(Icons.refresh,
                 size: 14, color: GlassColors.accentOrangeLight),
         ]),
       ),
@@ -736,14 +738,14 @@ class GlassLocationBar extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: loading
-              ? const Text('Capturing GPS location...',
+              ? Text('Capturing GPS location...',
                   style:
                       TextStyle(fontSize: 13, color: GlassColors.textSecondary))
               : hasLocation
                   ? Text('📍 $locationText',
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 13, color: GlassColors.accentGreenLight))
-                  : const Text(
+                  : Text(
                       'Location unavailable — story posted without GPS',
                       style: TextStyle(
                           fontSize: 12, color: GlassColors.accentOrangeLight)),
@@ -751,7 +753,7 @@ class GlassLocationBar extends StatelessWidget {
         if (!loading)
           GestureDetector(
             onTap: onRefresh,
-            child: const Icon(Icons.refresh,
+            child: Icon(Icons.refresh,
                 size: 16, color: GlassColors.textTertiary),
           ),
       ]),

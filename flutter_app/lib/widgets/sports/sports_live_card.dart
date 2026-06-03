@@ -54,6 +54,7 @@ class _SportsLiveCardState extends State<SportsLiveCard> {
           pressScale: 0.97,
           child: GlassCard(
             enableAnimation: false,
+            enableBlur: false,
             radius: 16,
             padding: EdgeInsets.all(pad),
             color: isLive

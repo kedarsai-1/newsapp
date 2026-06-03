@@ -229,7 +229,7 @@ class _ResendOtpButtonState extends State<ResendOtpButton> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
+      return SizedBox(
         height: 20, width: 20,
         child: CircularProgressIndicator(
             strokeWidth: 2, color: GlassColors.accentGreenLight),
@@ -239,12 +239,12 @@ class _ResendOtpButtonState extends State<ResendOtpButton> {
     if (_seconds > 0) {
       return RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: GlassColors.textTertiary),
+          style: TextStyle(fontSize: 13, color: GlassColors.textTertiary),
           children: [
             const TextSpan(text: 'Resend code in '),
             TextSpan(
               text: '$_seconds s',
-              style: const TextStyle(
+              style: TextStyle(
                   color: GlassColors.accentGreenLight, fontWeight: FontWeight.w700),
             ),
           ],
@@ -254,7 +254,7 @@ class _ResendOtpButtonState extends State<ResendOtpButton> {
 
     return GestureDetector(
       onTap: _resend,
-      child: const Text(
+      child: Text(
         'Resend OTP',
         style: TextStyle(
           fontSize: 13,

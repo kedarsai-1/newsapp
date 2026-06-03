@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'feed_xpresso_theme.dart';
 import '../glass_card.dart';
+import '../../constants.dart';
 
 /// Compact horizontal row for saved / search on dark surfaces — frosted GlassCard.
 class CompactListRow extends StatefulWidget {
@@ -55,11 +56,14 @@ class _CompactListRowState extends State<CompactListRow> {
           child: GlassCard(
             padding: const EdgeInsets.all(8),
             radius: 12,
-            borderColor: Colors.white.withOpacity(0.12),
-            color: Colors.white.withOpacity(0.04),
+            enableBlur: false,
+            borderColor: GlassColors.borderWhite,
+            color: GlassColors.surfaceWhite,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.10),
+                color: GlassColors.isLightMode
+                    ? Colors.black.withOpacity(0.04)
+                    : Colors.black.withOpacity(0.10),
                 blurRadius: 6,
                 offset: const Offset(0, 3),
               ),

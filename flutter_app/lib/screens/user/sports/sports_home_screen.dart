@@ -167,7 +167,7 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
                 onPressed: () => context.pop(),
               ),
               title: const Text(
-                'Cricket Arena',
+                'Home of Sports',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
@@ -327,20 +327,10 @@ class _LiveSection extends StatelessWidget {
     List<SportsMatch> matches, {
     required double height,
   }) {
-    return SizedBox(
+    return _MatchCarousel(
+      matches: matches,
       height: height,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: matches.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, i) => SportsLiveCard(
-          match: matches[i],
-          compact: true,
-          onTap: () => onMatchTap(matches[i]),
-        ),
-      ),
+      onMatchTap: onMatchTap,
     );
   }
 
@@ -428,6 +418,61 @@ class _LiveSection extends StatelessWidget {
   }
 }
 
+class _MatchCarousel extends StatefulWidget {
+  final List<SportsMatch> matches;
+  final double height;
+  final void Function(SportsMatch) onMatchTap;
+
+  const _MatchCarousel({
+    required this.matches,
+    required this.height,
+    required this.onMatchTap,
+  });
+
+  @override
+  State<_MatchCarousel> createState() => _MatchCarouselState();
+}
+
+class _MatchCarouselState extends State<_MatchCarousel> {
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.85);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: widget.height,
+      child: PageView.builder(
+        controller: _pageController,
+        physics: const BouncingScrollPhysics(),
+        itemCount: widget.matches.length,
+        itemBuilder: (context, i) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: SportsLiveCard(
+                match: widget.matches[i],
+                compact: true,
+                onTap: () => widget.onMatchTap(widget.matches[i]),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _SportsPostsSection extends StatefulWidget {
   final double bottom;
   final Map<String, bool> likedByPostId;
@@ -464,9 +509,9 @@ class _SportsPostsSectionState extends State<_SportsPostsSection> {
         final err = data.$4;
 
         if (loading && posts.isEmpty) {
-          return const SliverToBoxAdapter(
+          return SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.all(40),
+              padding: const EdgeInsets.all(40),
               child: Center(
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
@@ -512,8 +557,8 @@ class _SportsPostsSectionState extends State<_SportsPostsSection> {
             delegate: SliverChildBuilderDelegate(
               (context, index) {
                 if (index >= posts.length) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Center(
                       child: SizedBox(
                         width: 20,

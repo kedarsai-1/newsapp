@@ -26,11 +26,13 @@ class XpressoBottomNavBar extends StatelessWidget {
         child: GlassCard(
           radius: 24,
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          color: Colors.white.withOpacity(0.05),
-          borderColor: Colors.white.withOpacity(0.12),
+          color: GlassColors.surfaceWhite,
+          borderColor: GlassColors.borderWhite,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.20),
+              color: GlassColors.isLightMode
+                  ? Colors.black.withOpacity(0.06)
+                  : Colors.black.withOpacity(0.20),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -87,6 +89,7 @@ class _XpressoNavItemState extends State<_XpressoNavItem> {
   Widget build(BuildContext context) {
     final activeColor = GlassColors.accentGreen;
     final activeColorLight = GlassColors.accentGreenLight;
+    final isLight = GlassColors.isLightMode;
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
@@ -108,12 +111,12 @@ class _XpressoNavItemState extends State<_XpressoNavItem> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: widget.selected
-                    ? activeColor.withOpacity(0.14)
+                    ? activeColor.withOpacity(isLight ? 0.12 : 0.16)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: widget.selected
-                      ? activeColor.withOpacity(0.35)
+                      ? activeColor.withOpacity(isLight ? 0.28 : 0.40)
                       : Colors.transparent,
                   width: 0.8,
                 ),
@@ -121,7 +124,9 @@ class _XpressoNavItemState extends State<_XpressoNavItem> {
               child: Icon(
                 widget.selected ? widget.destination.selectedIcon : widget.destination.icon,
                 size: 19,
-                color: widget.selected ? activeColorLight : Colors.white60,
+                color: widget.selected
+                    ? (isLight ? activeColor : activeColorLight)
+                    : GlassColors.textSecondary,
               ),
             ),
             const SizedBox(height: 3),
@@ -132,7 +137,7 @@ class _XpressoNavItemState extends State<_XpressoNavItem> {
               style: TextStyle(
                 fontSize: 9.5,
                 fontWeight: widget.selected ? FontWeight.w800 : FontWeight.w600,
-                color: widget.selected ? Colors.white : Colors.white38,
+                color: widget.selected ? GlassColors.textPrimary : GlassColors.textHint,
                 height: 1,
               ),
             ),

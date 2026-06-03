@@ -120,7 +120,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         ),
       ),
       child: _loading && m == null
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: GlassColors.accentGreen,
@@ -402,11 +402,11 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.emoji_events_outlined, size: 14, color: GlassColors.accentGreen),
+                  Icon(Icons.emoji_events_outlined, size: 14, color: GlassColors.accentGreen),
                   const SizedBox(width: 6),
                   Text(
                     'Winner: ${m.matchWinner}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w800,
                       color: GlassColors.accentGreenLight,

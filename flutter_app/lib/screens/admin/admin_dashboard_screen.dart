@@ -25,7 +25,7 @@ class _State extends State<AdminDashboardScreen> {
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         showBack: false,
-        title: const Text('Admin Panel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: GlassColors.textPrimary)),
+        title: Text('Admin Panel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: GlassColors.textPrimary)),
         actions: [GlassBadge(label: 'Admin', accentColor: GlassColors.accentOrange, icon: Icons.admin_panel_settings), const SizedBox(width: 12)],
       ),
       body: p.loading && p.dashboardStats == null
@@ -35,7 +35,7 @@ class _State extends State<AdminDashboardScreen> {
               color: GlassColors.accentGreenLight,
               child: ListView(padding: const EdgeInsets.all(16), children: [
                 if (p.dashboardStats != null) ...[
-                  const Text('Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
+                  Text('Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
                   const SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
@@ -50,7 +50,7 @@ class _State extends State<AdminDashboardScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                const Text('Management', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
+                Text('Management', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
                 const SizedBox(height: 12),
                 _ActionTile(icon: Icons.pending_actions, label: 'Review Pending Posts',
                     badge: p.dashboardStats?['pendingPosts']?.toString(), color: GlassColors.warning, onTap: () => context.go('/admin/pending')),
@@ -60,9 +60,9 @@ class _State extends State<AdminDashboardScreen> {
                 if (p.recentActivity.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Needs Review', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
+                    Text('Needs Review', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
                     TextButton(onPressed: () => context.go('/admin/pending'),
-                        child: const Text('View All', style: TextStyle(color: GlassColors.accentGreenLight))),
+                        child: Text('View All', style: TextStyle(color: GlassColors.accentGreenLight))),
                   ]),
                   ...p.recentActivity.map((post) => _PendingRow(post: post, provider: p)),
                 ],
@@ -89,7 +89,7 @@ class _ActionTile extends StatelessWidget {
         child: Row(children: [
           Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
           const SizedBox(width: 14),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: GlassColors.textPrimary))),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: GlassColors.textPrimary))),
           if (badge != null && badge != '0')
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -117,17 +117,17 @@ class _PendingRow extends StatelessWidget {
       decoration: BoxDecoration(color: GlassColors.surfaceWhite, borderRadius: BorderRadius.circular(14), border: Border.all(color: GlassColors.borderWhite, width: 0.8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          CircleAvatar(radius: 14, backgroundColor: GlassColors.accentPurpleSurface, child: Text(AppUtils.initials(post.reporter?.name ?? '?'), style: const TextStyle(color: GlassColors.accentPurpleLight, fontSize: 10, fontWeight: FontWeight.bold))),
+          CircleAvatar(radius: 14, backgroundColor: GlassColors.accentPurpleSurface, child: Text(AppUtils.initials(post.reporter?.name ?? '?'), style: TextStyle(color: GlassColors.accentPurpleLight, fontSize: 10, fontWeight: FontWeight.bold))),
           const SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(post.reporter?.name ?? 'Reporter', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: GlassColors.textPrimary)),
-            Text(timeago.format(post.createdAt), style: const TextStyle(fontSize: 10, color: GlassColors.textHint)),
+            Text(post.reporter?.name ?? 'Reporter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: GlassColors.textPrimary)),
+            Text(timeago.format(post.createdAt), style: TextStyle(fontSize: 10, color: GlassColors.textHint)),
           ])),
           if (post.category != null)
             GlassBadge(label: post.category!.name, accentColor: GlassColors.accentGreen),
         ]),
         const SizedBox(height: 8),
-        Text(post.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: GlassColors.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
+        Text(post.title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: GlassColors.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: GestureDetector(
@@ -135,7 +135,7 @@ class _PendingRow extends StatelessWidget {
               final ctrl = TextEditingController();
               final reason = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
                 title: const Text('Rejection Reason'),
-                content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Why is this being rejected?'), maxLines: 3, style: const TextStyle(color: GlassColors.textPrimary)),
+                content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Why is this being rejected?'), maxLines: 3, style: TextStyle(color: GlassColors.textPrimary)),
                 actions: [
                   TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
                   ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Reject')),
@@ -149,9 +149,9 @@ class _PendingRow extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(color: GlassColors.accentOrangeSurface, borderRadius: BorderRadius.circular(10), border: Border.all(color: GlassColors.accentOrangeBorder)),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.close, size: 14, color: GlassColors.accentOrangeLight),
-                SizedBox(width: 4),
+                const SizedBox(width: 4),
                 Text('Reject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: GlassColors.accentOrangeLight)),
               ]),
             ),
@@ -169,9 +169,9 @@ class _PendingRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: GlassColors.accentGreenBorder),
               ),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.check, size: 14, color: GlassColors.accentGreenLight),
-                SizedBox(width: 4),
+                const SizedBox(width: 4),
                 Text('Approve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: GlassColors.accentGreenLight)),
               ]),
             ),

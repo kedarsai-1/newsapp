@@ -287,7 +287,8 @@ async function hfFetch(modelPath, inputs, extraBody = {}) {
 }
 
 async function summarizeWithHf(text) {
-  const result = await hfFetch('sshleifer/distilbart-cnn-12-6', text);
+  const input = String(text || '').slice(0, 3000).trim();
+  const result = await hfFetch('sshleifer/distilbart-cnn-12-6', input);
   return parseHfSummarizationJson(result);
 }
 
@@ -517,6 +518,13 @@ async function pingOllama() {
   }
 }
 
+async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
+  if (!isOllamaProvider()) {
+    throw new Error('Ollama provider is not enabled in environment');
+  }
+  return withOllamaQueue(() => ollamaChat(systemPrompt, userPrompt, lang), lang);
+}
+
 module.exports = {
   getAiProvider,
   isOllamaProvider,
@@ -530,4 +538,5 @@ module.exports = {
   validateLanguageOutput,
   cleanModelOutput,
   areTitlesSameStory,
+  chatWithOllama,
 };

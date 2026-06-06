@@ -768,13 +768,18 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 CircleAvatar(
                                     radius: 14,
                                     backgroundColor: p.primary,
-                                    child: Text(post.reporter!.name[0],
+                                    child: Text(
+                                        (post.sourceName?.trim().isNotEmpty == true
+                                            ? post.sourceName!.trim()
+                                            : post.reporter!.name)[0],
                                         style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 12))),
                                 const SizedBox(width: AppSpacing.s8),
                                 Text(
-                                  post.reporter!.name,
+                                  post.sourceName?.trim().isNotEmpty == true
+                                      ? post.sourceName!.trim()
+                                      : post.reporter!.name,
                                   style: context.subtitleText.copyWith(
                                     color: p.textSecondary,
                                     fontWeight: FontWeight.w600,

@@ -133,7 +133,17 @@ function validateLanguageOutput(text, targetLang) {
   if (lang === 'hi' && devanagari / total < 0.35 && latin / total < 0.35) return '';
   if (lang === 'te' && telugu / total < 0.35) return '';
 
-  return t.length > 320 ? `${t.slice(0, 317).trim()}…` : t;
+  if (t.length <= 320) return t;
+  // Truncate at last sentence boundary within 320 chars
+  const slice = t.slice(0, 320);
+  const lastSentEnd = Math.max(
+    slice.lastIndexOf('. '),
+    slice.lastIndexOf('। '),
+    slice.lastIndexOf('? '),
+    slice.lastIndexOf('! '),
+  );
+  if (lastSentEnd > 80) return slice.slice(0, lastSentEnd + 1).trim();
+  return `${slice.slice(0, 317).trim()}…`;
 }
 
 function summarySystemPrompt(targetLang) {
@@ -366,17 +376,27 @@ async function summarize(text, targetLang = 'en') {
     const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
     if (hasHfToken) {
       try {
-        let summaryEn = await summarizeWithHf(input);
-        if (summaryEn) {
-          const prevProvider = process.env.AI_PROVIDER;
-          process.env.AI_PROVIDER = 'huggingface';
-          try {
-            const tr = await translateToFeedLanguage(summaryEn, lang);
-            if (tr?.trim()) return tr.trim();
-          } finally {
-            if (prevProvider !== undefined) process.env.AI_PROVIDER = prevProvider;
-            else delete process.env.AI_PROVIDER;
+        const englishText = await translateToEnglish(input);
+        const latinCount = (englishText.match(/[A-Za-z]/g) || []).length;
+        const isEnglish = englishText && latinCount > (englishText.length * 0.5);
+
+        if (isEnglish && englishText !== input) {
+          let summaryEn = await summarizeWithHf(englishText);
+          if (summaryEn) {
+            const prevProvider = process.env.AI_PROVIDER;
+            process.env.AI_PROVIDER = 'huggingface';
+            try {
+              const tr = await translateToFeedLanguage(summaryEn, lang);
+              if (tr?.trim()) return tr.trim();
+            } finally {
+              if (prevProvider !== undefined) process.env.AI_PROVIDER = prevProvider;
+              else delete process.env.AI_PROVIDER;
+            }
           }
+        } else {
+          console.warn(
+            `[ai] Hugging Face backup skipped for ${lang}: translation to English failed/skipped.`,
+          );
         }
       } catch (hfErr) {
         console.error(`[ai] Hugging Face backup failed: ${hfErr.message}`);

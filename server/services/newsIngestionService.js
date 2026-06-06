@@ -402,7 +402,17 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
 function summarizeForPost(text) {
   const t = decodeHtmlEntities(String(text || ''));
   if (!t) return null;
-  return t.length > 280 ? `${t.slice(0, 277).trim()}…` : t;
+  if (t.length <= 300) return t;
+  // Try to truncate at last sentence boundary within 300 chars
+  const slice = t.slice(0, 300);
+  const lastSentEnd = Math.max(
+    slice.lastIndexOf('. '),
+    slice.lastIndexOf('। '),
+    slice.lastIndexOf('? '),
+    slice.lastIndexOf('! '),
+  );
+  if (lastSentEnd > 80) return slice.slice(0, lastSentEnd + 1).trim();
+  return `${slice.slice(0, 297).trim()}…`;
 }
 
 /** AI/extractive summary for ingest; respects budget and RSS_SKIP_AI_SUMMARY only. */
@@ -975,7 +985,7 @@ async function runIngestion({
               continue;
             }
 
-            const label = `RSS · ${feed.name || 'RSS'}`;
+            const label = feed.name || 'RSS';
             const { apiSourceName, ...postDocFields } = postFields;
             try {
               await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));

@@ -287,7 +287,7 @@ async function hfFetch(modelPath, inputs, extraBody = {}) {
 }
 
 async function summarizeWithHf(text) {
-  const input = String(text || '').slice(0, 3000).trim();
+  const input = String(text || '').slice(0, 2000).trim();
   const result = await hfFetch('sshleifer/distilbart-cnn-12-6', input);
   return parseHfSummarizationJson(result);
 }

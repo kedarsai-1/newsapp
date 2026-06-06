@@ -1,4 +1,5 @@
 const { Prisma, prisma } = require('../config/prisma');
+const { reverseGeocode } = require('../utils/geocode');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const {
   canonicalizeUrl,
@@ -26,6 +27,7 @@ const {
   prismaShortsExcludePoliticsClause,
   filterPostsForShortsFeed,
 } = require('../utils/shortsFeedFilter');
+const { capYoutubeInMixedFeed } = require('../utils/youtubeCap');
 
 function cleanTextForClient(input) {
   return decodeHtmlEntities(
@@ -239,10 +241,24 @@ const extractArticle = async (req, res) => {
 // GET /api/news/feed  — paginated, filterable by category and city
 const getFeed = async (req, res) => {
   try {
-    const cached = feedResponseCache.getCachedFeed(req.query);
+    const cached = await feedResponseCache.getCachedFeed(req.query);
     if (cached) {
       res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
-      return res.json({ ...cached.body, cached: true });
+      let posts = cached.body.posts || [];
+      if (req.user && req.user.id) {
+        const seenRows = await prisma.postSeen.findMany({
+          where: {
+            userId: req.user.id,
+            postId: { in: posts.map((p) => p.id) },
+          },
+          select: { postId: true },
+        });
+        const seenPostIds = new Set(seenRows.map((r) => r.postId));
+        posts = posts.map((p) => ({ ...p, seen: seenPostIds.has(p.id) }));
+      } else {
+        posts = posts.map((p) => ({ ...p, seen: false }));
+      }
+      return res.json({ ...cached.body, posts, cached: true });
     }
 
     const {
@@ -430,6 +446,9 @@ const getFeed = async (req, res) => {
     ]);
 
     let posts = dedupeFeedPosts(rows.map((p) => serializeNewsPost(p))).map(sanitizeStoryTextFields);
+
+    posts = capYoutubeInMixedFeed(posts, sourceTypes);
+
     if (excludePoliticsFeed) {
       posts = filterPostsForShortsFeed(posts);
     }
@@ -447,9 +466,25 @@ const getFeed = async (req, res) => {
       posts,
       cached: false,
     };
-    feedResponseCache.setCachedFeed(req.query, payload);
+    await feedResponseCache.setCachedFeed(req.query, payload);
+
+    let finalPosts = posts;
+    if (req.user && req.user.id) {
+      const seenRows = await prisma.postSeen.findMany({
+        where: {
+          userId: req.user.id,
+          postId: { in: posts.map((p) => p.id) },
+        },
+        select: { postId: true },
+      });
+      const seenPostIds = new Set(seenRows.map((r) => r.postId));
+      finalPosts = posts.map((p) => ({ ...p, seen: seenPostIds.has(p.id) }));
+    } else {
+      finalPosts = posts.map((p) => ({ ...p, seen: false }));
+    }
+
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.feedTtlMs()));
-    res.json(payload);
+    res.json({ ...payload, posts: finalPosts });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -459,14 +494,31 @@ const getFeed = async (req, res) => {
 const getPost = async (req, res) => {
   try {
     const postId = String(req.params.id || '').trim();
-    const cached = feedResponseCache.getCachedPost(postId);
+
+    // Mark as seen on detail fetch if logged in
+    if (req.user && req.user.id) {
+      await prisma.postSeen.upsert({
+        where: { userId_postId: { userId: req.user.id, postId } },
+        update: {},
+        create: { userId: req.user.id, postId },
+      }).catch((e) => {
+        console.error('[news] failed to mark seen on getPost:', e.message);
+      });
+    }
+
+    const cached = await feedResponseCache.getCachedPost(postId);
     if (cached) {
       res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
       prisma.newsPost.update({
         where: { id: postId },
         data: { views: { increment: 1 } },
       }).catch(() => {});
-      return res.json({ ...cached.body, cached: true });
+
+      const postWithSeen = {
+        ...cached.body.post,
+        seen: req.user && req.user.id ? true : false,
+      };
+      return res.json({ ...cached.body, post: postWithSeen, cached: true });
     }
 
     const post = await prisma.newsPost.findFirst({
@@ -487,9 +539,15 @@ const getPost = async (req, res) => {
       post: sanitizeStoryTextFields(serializeNewsPost(post)),
       cached: false,
     };
-    feedResponseCache.setCachedPost(postId, payload);
+    await feedResponseCache.setCachedPost(postId, payload);
+
+    const postWithSeen = {
+      ...payload.post,
+      seen: req.user && req.user.id ? true : false,
+    };
+
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.postTtlMs()));
-    res.json(payload);
+    res.json({ ...payload, post: postWithSeen });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -745,6 +803,191 @@ const getProxyImage = async (req, res) => {
   }
 };
 
+const getReverseGeocode = async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+    if (!lat || !lon) {
+      return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+    }
+    const result = await reverseGeocode(lat, lon);
+    return res.json({ success: true, location: result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getLocalNews = async (req, res) => {
+  try {
+    const {
+      latitude,
+      lat,
+      longitude,
+      lng,
+      radius = 50,
+      city,
+      constituency,
+      state,
+      language,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.max(1, Math.min(50, parseInt(limit, 10) || 20));
+    const skip = (p - 1) * lim;
+
+    const queryLat = parseFloat(latitude || lat);
+    const queryLng = parseFloat(longitude || lng);
+    const queryRadius = parseFloat(radius);
+    const lang = language && language !== 'all' ? String(language).toLowerCase() : null;
+
+    let posts = [];
+    let total = 0;
+
+    if (!isNaN(queryLat) && !isNaN(queryLng)) {
+      // Fetch IDs within the radius limit using Haversine formula with LEAST/GREATEST clamp to avoid acos precision domain errors
+      const rows = await prisma.$queryRaw`
+        SELECT id::text FROM news_posts
+        WHERE status = 'approved'
+          AND location_latitude IS NOT NULL
+          AND location_longitude IS NOT NULL
+          AND (6371 * acos(LEAST(GREATEST(
+            cos(radians(${queryLat})) * cos(radians(location_latitude)) *
+            cos(radians(location_longitude) - radians(${queryLng})) +
+            sin(radians(${queryLat})) * sin(radians(location_latitude))
+          , -1.0), 1.0))) <= ${queryRadius}
+        ORDER BY (6371 * acos(LEAST(GREATEST(
+          cos(radians(${queryLat})) * cos(radians(location_latitude)) *
+          cos(radians(location_longitude) - radians(${queryLng})) +
+          sin(radians(${queryLat})) * sin(radians(location_latitude))
+        , -1.0), 1.0))) ASC
+        LIMIT ${lim} OFFSET ${skip}
+      `;
+
+      const totalRows = await prisma.$queryRaw`
+        SELECT COUNT(*)::int as count FROM news_posts
+        WHERE status = 'approved'
+          AND location_latitude IS NOT NULL
+          AND location_longitude IS NOT NULL
+          AND (6371 * acos(LEAST(GREATEST(
+            cos(radians(${queryLat})) * cos(radians(location_latitude)) *
+            cos(radians(location_longitude) - radians(${queryLng})) +
+            sin(radians(${queryLat})) * sin(radians(location_latitude))
+          , -1.0), 1.0))) <= ${queryRadius}
+      `;
+      total = Number(totalRows[0]?.count || 0);
+
+      const ids = rows.map(r => r.id);
+
+      if (ids.length > 0) {
+        let whereClause = { id: { in: ids } };
+        if (lang) {
+          whereClause.language = lang;
+        }
+        const fetched = await prisma.newsPost.findMany({
+          where: whereClause,
+          include: newsPostInclude,
+        });
+
+        // Retain the sorted order by distance
+        posts = ids
+          .map(id => fetched.find(post => post.id === id))
+          .filter(Boolean);
+      }
+    } else {
+      const andFilters = [{ status: 'approved' }];
+      if (lang) {
+        andFilters.push({ language: lang });
+      }
+
+      const orFilters = [];
+      if (city && String(city).trim()) {
+        orFilters.push({ locationCity: { equals: String(city).trim(), mode: 'insensitive' } });
+      }
+      if (constituency && String(constituency).trim() && String(constituency).toLowerCase() !== 'all') {
+        orFilters.push({ constituency: { equals: String(constituency).trim(), mode: 'insensitive' } });
+      }
+      if (state && String(state).trim()) {
+        orFilters.push({ locationState: { equals: String(state).trim(), mode: 'insensitive' } });
+      }
+
+      if (orFilters.length > 0) {
+        andFilters.push({ OR: orFilters });
+      } else {
+        const localCat = await prisma.category.findFirst({
+          where: { slug: 'local', isActive: true },
+          select: { id: true }
+        });
+        if (localCat) {
+          andFilters.push({ categoryId: localCat.id });
+        }
+      }
+
+      const whereClause = { AND: andFilters };
+      
+      const [fetched, count] = await Promise.all([
+        prisma.newsPost.findMany({
+          where: whereClause,
+          include: newsPostInclude,
+          orderBy: [{ sourcePublishedAt: 'desc' }, { createdAt: 'desc' }],
+          skip,
+          take: lim,
+        }),
+        prisma.newsPost.count({ where: whereClause })
+      ]);
+
+      posts = fetched;
+      total = count;
+    }
+
+    const serialized = posts.map(serializeNewsPost);
+    const pages = Math.ceil(total / lim) || 1;
+
+    return res.json({
+      success: true,
+      posts: serialized,
+      page: p,
+      pages,
+      total,
+    });
+  } catch (e) {
+    console.error('[news] local news failed:', e.message);
+    return res.status(500).json({ success: false, message: 'Could not load local news.' });
+  }
+};
+
+const markPostSeen = async (req, res) => {
+  try {
+    const postId = String(req.params.id || '').trim();
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: 'Authorization required.' });
+    }
+
+    const postExists = await prisma.newsPost.findUnique({ where: { id: postId } });
+    if (!postExists) {
+      return res.status(404).json({ success: false, message: 'Post not found.' });
+    }
+
+    await prisma.postSeen.upsert({
+      where: {
+        userId_postId: {
+          userId: req.user.id,
+          postId: postId,
+        },
+      },
+      update: {},
+      create: {
+        userId: req.user.id,
+        postId: postId,
+      },
+    });
+
+    res.json({ success: true, message: 'Post marked as seen.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 module.exports = {
   getFeed,
   getPost,
@@ -756,4 +999,7 @@ module.exports = {
   getComments,
   addComment,
   translateText,
+  getReverseGeocode,
+  getLocalNews,
+  markPostSeen,
 };

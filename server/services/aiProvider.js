@@ -303,10 +303,8 @@ async function translateEnglishToHindiWithHf(text) {
 }
 
 async function translateEnglishToTeluguWithHf(text) {
-  const input = String(text || '').slice(0, 512);
-  const result = await hfFetch('facebook/nllb-200-distilled-600M', input, {
-    parameters: { src_lang: 'eng_Latn', tgt_lang: 'tel_Telu' },
-  });
+  const input = `>>tel<< ${String(text || '').slice(0, 512)}`;
+  const result = await hfFetch('Helsinki-NLP/opus-mt-en-dra', input);
   return parseHfTranslationJson(result);
 }
 
@@ -319,39 +317,90 @@ async function summarize(text, targetLang = 'en') {
   if (!input) return '';
   const lang = String(targetLang || 'en').toLowerCase();
 
-  if (isOllamaProvider()) {
-    try {
-      const model = ollamaModelForLanguage(lang);
-      const raw = await ollamaCompleteQueued(
-        summarySystemPrompt(lang),
-        summaryUserPrompt(input),
-        lang,
-      );
-      const out = validateLanguageOutput(raw, lang);
-      if (!out) {
-        console.warn(
-          `[ai] Ollama summary rejected (lang=${lang}, model=${model}). `
-            + 'Check script validation or try mashriram/sarvam-1 for te/hi.',
-        );
+  // For English: HF primary, Ollama backup
+  if (lang === 'en') {
+    const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
+    if (hasHfToken) {
+      try {
+        const out = await summarizeWithHf(input);
+        if (out) return out;
+      } catch (hfErr) {
+        console.error(`[ai] English HF summarization failed: ${hfErr.message}`);
       }
-      return out;
-    } catch (e) {
-      throw new Error(`Ollama summarization failed: ${e.message || e}`);
+    }
+    if (isOllamaProvider()) {
+      try {
+        const model = ollamaModelForLanguage('en');
+        const raw = await ollamaCompleteQueued(
+          summarySystemPrompt('en'),
+          summaryUserPrompt(input),
+          'en',
+        );
+        const out = validateLanguageOutput(raw, 'en');
+        if (out) return out;
+      } catch (e) {
+        console.error(`[ai] English Ollama fallback summarization failed: ${e.message}`);
+      }
+    }
+  } else {
+    // For Telugu/Hindi: Ollama primary, HF backup
+    if (isOllamaProvider()) {
+      try {
+        const model = ollamaModelForLanguage(lang);
+        const raw = await ollamaCompleteQueued(
+          summarySystemPrompt(lang),
+          summaryUserPrompt(input),
+          lang,
+        );
+        const out = validateLanguageOutput(raw, lang);
+        if (out) return out;
+        console.warn(
+          `[ai] Ollama summary rejected (lang=${lang}, model=${model}). Trying HF backup...`,
+        );
+      } catch (e) {
+        console.error(`Ollama summarization failed: ${e.message || e}. Trying HF backup...`);
+      }
+    }
+    // Fallback/Backup to Hugging Face
+    const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
+    if (hasHfToken) {
+      try {
+        let summaryEn = await summarizeWithHf(input);
+        if (summaryEn) {
+          const prevProvider = process.env.AI_PROVIDER;
+          process.env.AI_PROVIDER = 'huggingface';
+          try {
+            const tr = await translateToFeedLanguage(summaryEn, lang);
+            if (tr?.trim()) return tr.trim();
+          } finally {
+            if (prevProvider !== undefined) process.env.AI_PROVIDER = prevProvider;
+            else delete process.env.AI_PROVIDER;
+          }
+        }
+      } catch (hfErr) {
+        console.error(`[ai] Hugging Face backup failed: ${hfErr.message}`);
+      }
     }
   }
 
-  let summaryEn = await summarizeWithHf(input);
-  if (!summaryEn) return '';
-  if (lang === 'hi' || lang === 'te') {
-    const tr = await translateToFeedLanguage(summaryEn, lang);
-    if (tr?.trim()) return tr.trim();
-  }
-  return summaryEn;
+  return '';
 }
 
 async function translateToEnglish(text) {
   const raw = String(text || '').trim();
   if (!raw) return '';
+
+  // 1. Try Hugging Face first
+  const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
+  if (hasHfToken) {
+    try {
+      return await translateToEnglishWithHf(raw);
+    } catch (hfErr) {
+      console.error(`[ai] English HF translation failed: ${hfErr.message}`);
+    }
+  }
+
+  // 2. Fallback to Ollama
   if (isOllamaProvider()) {
     try {
       const out = validateLanguageOutput(
@@ -362,22 +411,23 @@ async function translateToEnglish(text) {
         ),
         'en',
       );
-      return out || raw;
-    } catch {
-      return raw;
+      if (out) return out;
+    } catch (e) {
+      console.error(`[ai] Ollama translateToEnglish fallback failed: ${e.message}`);
     }
   }
-  try {
-    return await translateToEnglishWithHf(raw);
-  } catch {
-    return raw;
-  }
+
+  return raw;
 }
 
 async function translateToFeedLanguage(text, targetLang) {
   const raw = String(text || '').trim();
   const target = String(targetLang || '').toLowerCase();
   if (!raw || !['en', 'hi', 'te'].includes(target)) return raw;
+
+  if (target === 'en') {
+    return translateToEnglish(raw);
+  }
 
   if (isOllamaProvider()) {
     try {
@@ -389,24 +439,29 @@ async function translateToFeedLanguage(text, targetLang) {
         ),
         target,
       );
-      return out || raw;
-    } catch {
-      return raw;
+      if (out) return out;
+    } catch (e) {
+      console.error(`[ai] Ollama translation failed for ${target}: ${e.message}`);
     }
   }
 
-  try {
-    if (target === 'hi') {
-      const out = await translateEnglishToHindiWithHf(raw);
-      return out || raw;
+  // Fallback to Hugging Face if HF_TOKEN is configured
+  const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
+  if (hasHfToken) {
+    try {
+      if (target === 'hi') {
+        const out = await translateEnglishToHindiWithHf(raw);
+        if (out) return out;
+      }
+      if (target === 'te') {
+        const out = await translateEnglishToTeluguWithHf(raw);
+        if (out) return out;
+      }
+    } catch (hfErr) {
+      console.error(`[ai] Hugging Face translation fallback failed: ${hfErr.message}`);
     }
-    if (target === 'te') {
-      const out = await translateEnglishToTeluguWithHf(raw);
-      return out || raw;
-    }
-  } catch {
-    return raw;
   }
+
   return raw;
 }
 

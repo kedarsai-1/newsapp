@@ -3,6 +3,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
+const cacheService = require('./utils/cacheService');
 const { prisma } = require('./config/prisma');
 const { setIngestionSocket } = require('./services/feedSocket');
 const { startCronScheduler } = require('./services/cronScheduler');
@@ -201,6 +202,7 @@ async function schedulePostgresConnect() {
   }
 }
 
+cacheService.init();
 schedulePostgresConnect();
 
 module.exports = { app, io };

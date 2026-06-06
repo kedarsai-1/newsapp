@@ -25,7 +25,12 @@ model User {
   comments            Comment[]
   likes               PostLike[]
   bookmarks           UserBookmark[]
+  seenPosts           PostSeen[]
   preferredCategories UserPreferredCategory[]
+  pollVotes           MatchPollVote[]
+  points              Int                     @default(0)
+  predictionStreak    Int                     @default(0) @map("prediction_streak")
+  maxPredictionStreak Int                     @default(0) @map("max_prediction_streak")
 
   @@index([role])
   @@map("users")
@@ -108,6 +113,7 @@ model NewsPost {
   comments                  Comment[]
   likedBy                   PostLike[]
   bookmarkedBy              UserBookmark[]
+  seenBy                    PostSeen[]
   politicalVideo            PoliticalVideo?
 
   @@index([status, createdAt])
@@ -238,6 +244,19 @@ model UserBookmark {
   @@map("user_bookmarks")
 }
 
+model PostSeen {
+  userId    String   @map("user_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([postId])
+  @@index([userId, createdAt])
+  @@map("post_seen")
+}
+
 model UserPreferredCategory {
   userId     String   @map("user_id") @db.Uuid
   categoryId String   @map("category_id") @db.Uuid
@@ -249,3 +268,35 @@ model UserPreferredCategory {
   @@index([categoryId])
   @@map("user_preferred_categories")
 }
+
+model MatchPoll {
+  id           String          @id @default(uuid()) @db.Uuid
+  matchId      String          @unique @map("match_id")
+  optionATitle String          @map("option_a_title")
+  optionBTitle String          @map("option_b_title")
+  votesA       Int             @default(0) @map("votes_a")
+  votesB       Int             @default(0) @map("votes_b")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  isResolved   Boolean         @default(false) @map("is_resolved")
+  winnerOption String?         @map("winner_option")
+  votes        MatchPollVote[]
+
+  @@map("match_polls")
+}
+
+model MatchPollVote {
+  id        String    @id @default(uuid()) @db.Uuid
+  pollId    String    @map("poll_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  option      String    // "A" or "B"
+  isProcessed Boolean   @default(false) @map("is_processed")
+  isCorrect   Boolean?  @map("is_correct")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  poll        MatchPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@map("match_poll_votes")
+}
+

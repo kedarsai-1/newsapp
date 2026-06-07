@@ -1,6 +1,5 @@
 const { prisma } = require('../config/prisma');
 const { reverseGeocode } = require('../utils/geocode');
-const { sendToTopic } = require('../utils/notifications');
 const { cloudinary } = require('../config/cloudinary');
 const { serializeNewsPost } = require('../utils/serializers');
 const {

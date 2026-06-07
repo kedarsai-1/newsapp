@@ -14,7 +14,8 @@ async function emitFeedUpdated(payload) {
   }
   const inserted = payload?.inserted ?? 0;
   if (inserted > 0) {
-    notifyFeedIngestion({ inserted }).catch((err) => {
+    const source = payload?.source || payload?.type || 'news';
+    notifyFeedIngestion({ inserted, source }).catch((err) => {
       console.error('[push] feed ingestion notify failed:', err?.message || err);
     });
   }

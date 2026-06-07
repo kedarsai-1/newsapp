@@ -605,7 +605,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube', languages } = {}) 
         + `restricted=${stats.youtubeSkippedRestricted} failed=${stats.youtubeFailed}`,
     );
     if (stats.youtubeInserted > 0) {
-      emitFeedUpdated({ inserted: stats.youtubeInserted, at: new Date() });
+      emitFeedUpdated({ inserted: stats.youtubeInserted, source: 'youtube', at: new Date() });
     }
     return { success: true, stats };
   } catch (error) {

@@ -66,7 +66,7 @@ async function runScheduledYoutube(triggeredBy, languages) {
       + `restricted=${s.youtubeSkippedRestricted ?? 0}`,
   );
   if ((s.youtubeInserted ?? 0) > 0) {
-    emitFeedUpdated({ inserted: s.youtubeInserted, at: new Date() });
+    emitFeedUpdated({ inserted: s.youtubeInserted, source: 'youtube', at: new Date() });
   }
 }
 

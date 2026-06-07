@@ -3,6 +3,7 @@ const { Prisma, prisma } = require('../config/prisma');
 const { generateToken } = require('../middleware/authMiddleware');
 const { serializeUser } = require('../utils/serializers');
 const { validateRegisterPayload } = require('../utils/authValidation');
+const { validateFcmToken } = require('../utils/fcmValidation');
 
 // POST /api/auth/register
 const register = async (req, res) => {
@@ -83,11 +84,28 @@ const getMe = async (req, res) => {
   res.json({ success: true, user: req.user });
 };
 
-// PUT /api/auth/update-fcm
+// PUT /api/auth/fcm-token
 const updateFcmToken = async (req, res) => {
   try {
-    const { fcmToken } = req.body;
-    await prisma.user.update({ where: { id: req.user._id }, data: { fcmToken } });
+    const validation = validateFcmToken(req.body?.fcmToken);
+    if (!validation.ok) {
+      return res.status(400).json({ success: false, message: validation.message });
+    }
+
+    const userId = req.user._id;
+    const token = validation.value;
+
+    await prisma.$transaction([
+      prisma.user.updateMany({
+        where: { fcmToken: token, id: { not: userId } },
+        data: { fcmToken: null },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { fcmToken: token },
+      }),
+    ]);
+
     res.json({ success: true, message: 'FCM token updated.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

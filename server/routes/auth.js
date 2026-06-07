@@ -3,6 +3,7 @@ const router = express.Router();
 const { register, login, getMe, updateFcmToken, updateProfile } = require('../controllers/authController');
 const { sendOtpHandler, verifyLoginOtp, verifyRegisterOtp } = require('../controllers/otpController');
 const { protect } = require('../middleware/authMiddleware');
+const fcmRateLimit = require('../middleware/fcmRateLimit');
 
 // Traditional auth (kept for backward compatibility)
 router.post('/register', register);
@@ -16,6 +17,6 @@ router.post('/otp/verify-register', verifyRegisterOtp);
 // Protected
 router.get('/me',           protect, getMe);
 router.put('/profile',      protect, updateProfile);
-router.put('/fcm-token',    protect, updateFcmToken);
+router.put('/fcm-token',    protect, fcmRateLimit, updateFcmToken);
 
 module.exports = router;

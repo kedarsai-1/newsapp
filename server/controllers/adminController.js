@@ -5,7 +5,8 @@ const {
   serializeUser,
 } = require('../utils/serializers');
 const { mediaCreate, newsPostInclude } = require('../utils/prismaNewsPost');
-const { sendToDevice, sendToTopic } = require('../utils/notifications');
+const { sendToDevice, notifyPublishedPost } = require('../utils/notifications');
+const { truncatePushText } = require('../utils/pushPolicy');
 const {
   runIngestion,
   getIngestionStatus,
@@ -134,18 +135,13 @@ const approvePost = async (req, res) => {
       await sendToDevice(
         post.reporter.fcmToken,
         'Story Published!',
-        `Your story "${post.title}" is now live.`,
-        { postId: post.id, type: 'approved' }
+        `Your story "${truncatePushText(post.title)}" is now live.`,
+        { postId: post.id, type: 'approved' },
+        { userId: post.reporter.id },
       );
     }
 
-    // Broadcast to category subscribers
-    await sendToTopic(
-      `category_${post.category.slug}`,
-      isBreaking ? '🔴 Breaking News' : post.category.name,
-      post.title,
-      { postId: post.id, type: 'news' }
-    );
+    await notifyPublishedPost(post);
 
     // Emit real-time event via Socket.io
     req.io.to('all').emit('new_post', {
@@ -180,8 +176,9 @@ const rejectPost = async (req, res) => {
       await sendToDevice(
         post.reporter.fcmToken,
         'Story Update',
-        `Your story "${post.title}" needs revision. Reason: ${reason}`,
-        { postId: post.id, type: 'rejected' }
+        `Your story "${truncatePushText(post.title)}" needs revision. Please check the app for details.`,
+        { postId: post.id, type: 'rejected' },
+        { userId: post.reporter.id },
       );
     }
 
@@ -195,11 +192,30 @@ const rejectPost = async (req, res) => {
 const featurePost = async (req, res) => {
   try {
     const { isBreaking, isFeatured } = req.body;
+    const existing = await prisma.newsPost.findUnique({
+      where: { id: req.params.id },
+      select: { isBreaking: true, status: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Post not found.' });
+    }
+
     const post = await prisma.newsPost.update({
       where: { id: req.params.id },
       data: { isBreaking, isFeatured },
       include: newsPostInclude,
     });
+
+    if (
+      post.status === 'approved'
+      && post.isBreaking
+      && !existing.isBreaking
+    ) {
+      notifyPublishedPost(post).catch((err) => {
+        console.error('[push] breaking feature notify failed:', err?.message || err);
+      });
+    }
+
     res.json({ success: true, post: serializeNewsPost(post) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

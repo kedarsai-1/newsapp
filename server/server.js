@@ -9,6 +9,7 @@ const { setIngestionSocket } = require('./services/feedSocket');
 const { startCronScheduler } = require('./services/cronScheduler');
 const { ensureDefaultCategories, ensureDefaultAdmin } = require('./utils/ensureDefaultData');
 const aiProvider = require('./services/aiProvider');
+const { getPushHealth } = require('./utils/notifications');
 const { buildCorsOptions, socketCorsOrigins } = require('./middleware/corsConfig');
 const apiRateLimit = require('./middleware/apiRateLimit');
 
@@ -110,6 +111,7 @@ app.get('/api/health', async (req, res) => {
       status: 'OK',
       postgres: dbReady ? 'connected' : 'disconnected',
       ai,
+      push: getPushHealth(),
       timestamp: new Date(),
     });
   } catch (err) {
@@ -117,6 +119,7 @@ app.get('/api/health', async (req, res) => {
       status: 'OK',
       postgres: dbReady ? 'connected' : 'disconnected',
       ai: { provider: aiProvider.getAiProvider(), ok: false, error: err.message },
+      push: getPushHealth(),
       timestamp: new Date(),
     });
   }

@@ -44,4 +44,23 @@ describe('feedResponseCache', () => {
     assert.equal(a, b);
     assert.match(a, /language=en/);
   });
+
+  it('applyEdgeCacheHeaders uses public cache for anonymous GET', () => {
+    const headers = {};
+    const res = { set(name, value) { headers[name.toLowerCase()] = value; } };
+    feedResponseCache.applyEdgeCacheHeaders(res, { headers: {} }, 45_000);
+    assert.match(headers['cache-control'], /^public,/);
+    assert.equal(headers.vary, 'Authorization, Accept-Encoding');
+    assert.match(headers['cdn-cache-control'], /max-age=/);
+  });
+
+  it('applyEdgeCacheHeaders stays private when Authorization present', () => {
+    const headers = {};
+    const res = { set(name, value) { headers[name.toLowerCase()] = value; } };
+    feedResponseCache.applyEdgeCacheHeaders(res, {
+      headers: { authorization: 'Bearer token' },
+    }, 45_000);
+    assert.match(headers['cache-control'], /^private,/);
+    assert.equal(headers['cdn-cache-control'], undefined);
+  });
 });

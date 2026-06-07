@@ -154,10 +154,37 @@ async function invalidateFeedCaches() {
   await cacheService.del(CATEGORIES_KEY);
 }
 
+function isAuthenticatedRequest(req) {
+  if (req?.user?.id || req?.user?._id) return true;
+  const auth = req?.headers?.authorization;
+  return typeof auth === 'string' && auth.startsWith('Bearer ');
+}
+
+function edgeCacheEnabled() {
+  return process.env.EDGE_CACHE_ENABLED !== 'false';
+}
+
 function cacheControlHeader(ttlMs, { private: isPrivate = true } = {}) {
   const sec = Math.max(1, Math.floor(ttlMs / 1000));
   const scope = isPrivate ? 'private' : 'public';
   return `${scope}, max-age=${sec}, stale-while-revalidate=${Math.min(sec * 2, 120)}`;
+}
+
+/**
+ * Set browser + CDN cache headers for public read APIs.
+ * Anonymous GETs are public-cacheable; authenticated responses stay private.
+ */
+function applyEdgeCacheHeaders(res, req, ttlMs, { forcePrivate = false } = {}) {
+  const isPrivate = forcePrivate || isAuthenticatedRequest(req);
+  const sec = Math.max(1, Math.floor(ttlMs / 1000));
+  res.set('Cache-Control', cacheControlHeader(ttlMs, { private: isPrivate }));
+  res.set('Vary', 'Authorization, Accept-Encoding');
+
+  if (!isPrivate && edgeCacheEnabled()) {
+    const cdnSec = Math.max(1, Number(process.env.CDN_CACHE_TTL_SEC || sec));
+    res.set('CDN-Cache-Control', `max-age=${cdnSec}`);
+    res.set('Surrogate-Control', `max-age=${cdnSec}`);
+  }
 }
 
 module.exports = {
@@ -171,6 +198,9 @@ module.exports = {
   setCachedPost,
   invalidateFeedCaches,
   cacheControlHeader,
+  applyEdgeCacheHeaders,
+  isAuthenticatedRequest,
+  edgeCacheEnabled,
   feedTtlMs,
   categoriesTtlMs,
   postTtlMs,

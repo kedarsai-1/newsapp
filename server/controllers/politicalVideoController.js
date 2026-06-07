@@ -29,7 +29,7 @@ const getPoliticalFeed = async (req, res) => {
   try {
     const cached = await feedResponseCache.getCachedPoliticalFeed(req.query);
     if (cached) {
-      res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
+      feedResponseCache.applyEdgeCacheHeaders(res, req, cached.ttlMs);
       return res.json({ ...cached.body, cached: true });
     }
 
@@ -77,7 +77,7 @@ const getPoliticalFeed = async (req, res) => {
     };
 
     await feedResponseCache.setCachedPoliticalFeed(req.query, payload);
-    res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.politicalFeedTtlMs()));
+    feedResponseCache.applyEdgeCacheHeaders(res, req, feedResponseCache.politicalFeedTtlMs());
     return res.json(payload);
   } catch (e) {
     console.error('[political-videos] feed error:', e.message);

@@ -1,6 +1,11 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { clientIp, _pruneStaleBuckets } = require('../../middleware/apiRateLimit');
+const {
+  clientIp,
+  isReadHeavyRequest,
+  maxForRequest,
+  _pruneStaleBuckets,
+} = require('../../middleware/apiRateLimit');
 
 describe('apiRateLimit', () => {
   it('clientIp uses leftmost X-Forwarded-For address', () => {
@@ -18,6 +23,22 @@ describe('apiRateLimit', () => {
   it('clientIp trims spaces around forwarded IP', () => {
     const req = { headers: { 'x-forwarded-for': '  198.51.100.22 , 10.0.0.1' } };
     assert.equal(clientIp(req), '198.51.100.22');
+  });
+
+  it('treats feed GET as read-heavy', () => {
+    const req = { method: 'GET', path: '/api/news/feed', headers: {} };
+    assert.equal(isReadHeavyRequest(req), true);
+  });
+
+  it('treats auth POST as write bucket', () => {
+    const req = { method: 'POST', path: '/api/auth/login', headers: {} };
+    assert.equal(isReadHeavyRequest(req), false);
+  });
+
+  it('read-heavy limit is higher than write limit', () => {
+    const readReq = { method: 'GET', path: '/api/news/feed', headers: {} };
+    const writeReq = { method: 'POST', path: '/api/auth/login', headers: {} };
+    assert.ok(maxForRequest(readReq) >= maxForRequest(writeReq));
   });
 
   it('_pruneStaleBuckets runs without error', () => {

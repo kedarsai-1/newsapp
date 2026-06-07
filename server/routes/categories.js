@@ -22,9 +22,9 @@ router.get('/by-slug/:slug', async (req, res) => {
 // GET /api/categories — public
 router.get('/', async (req, res) => {
   try {
-    const hit = feedResponseCache.getCachedCategories();
+    const hit = await feedResponseCache.getCachedCategories();
     if (hit?.body) {
-      res.set('Cache-Control', feedResponseCache.cacheControlHeader(hit.ttlMs));
+      feedResponseCache.applyEdgeCacheHeaders(res, req, hit.ttlMs);
       return res.json({ ...hit.body, cached: true });
     }
 
@@ -37,11 +37,8 @@ router.get('/', async (req, res) => {
       categories: categories.map(serializeCategory),
       cached: false,
     };
-    feedResponseCache.setCachedCategories(payload);
-    res.set(
-      'Cache-Control',
-      feedResponseCache.cacheControlHeader(feedResponseCache.categoriesTtlMs()),
-    );
+    await feedResponseCache.setCachedCategories(payload);
+    feedResponseCache.applyEdgeCacheHeaders(res, req, feedResponseCache.categoriesTtlMs());
     res.json(payload);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

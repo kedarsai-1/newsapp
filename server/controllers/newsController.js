@@ -390,7 +390,7 @@ const getFeed = async (req, res) => {
   try {
     const cached = await feedResponseCache.getCachedFeed(req.query);
     if (cached) {
-      res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
+      feedResponseCache.applyEdgeCacheHeaders(res, req, cached.ttlMs);
       let posts = cached.body.posts || [];
       if (req.user && req.user.id) {
         const seenRows = await prisma.postSeen.findMany({
@@ -701,7 +701,7 @@ const getFeed = async (req, res) => {
       finalPosts = posts.map((p) => (p.seen === false ? p : { ...p, seen: false }));
     }
 
-    res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.feedTtlMs()));
+    feedResponseCache.applyEdgeCacheHeaders(res, req, feedResponseCache.feedTtlMs());
     res.json({ ...payload, posts: finalPosts });
   } catch (error) {
     console.error('[news] getFeed error:', error.message);
@@ -730,7 +730,7 @@ const getPost = async (req, res) => {
 
     const cached = await feedResponseCache.getCachedPost(postId);
     if (cached) {
-      res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
+      feedResponseCache.applyEdgeCacheHeaders(res, req, cached.ttlMs);
       prisma.newsPost.update({
         where: { id: postId },
         data: { views: { increment: 1 } },
@@ -768,7 +768,7 @@ const getPost = async (req, res) => {
       seen: req.user && req.user.id ? true : false,
     };
 
-    res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.postTtlMs()));
+    feedResponseCache.applyEdgeCacheHeaders(res, req, feedResponseCache.postTtlMs());
     res.json({ ...payload, post: postWithSeen });
   } catch (error) {
     sendPostRouteError(res, error);

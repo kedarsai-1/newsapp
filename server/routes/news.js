@@ -13,6 +13,7 @@ const {
   translateText,
   getLocalNews,
   markPostSeen,
+  chatWithNews,
 } = require('../controllers/newsController');
 const { optionalProtect } = require('../middleware/authMiddleware');
 
@@ -22,6 +23,7 @@ router.get('/proxy-image', getProxyImage);
 router.get('/extract', extractArticle);
 router.get('/bookmarks', optionalProtect, getBookmarks);
 router.post('/translate', optionalProtect, translateText);
+router.post('/chat', optionalProtect, chatWithNews);
 router.get('/:id', optionalProtect, getPost);
 router.post('/:id/like', optionalProtect, toggleLike);
 router.post('/:id/bookmark', optionalProtect, toggleBookmark);

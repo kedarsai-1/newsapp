@@ -23,7 +23,7 @@ function capYoutubeInMixedFeed(posts, sourceTypes) {
   }
 
   let youtubeCount = 0;
-  const maxYoutube = Number(process.env.MAX_YOUTUBE_IN_MIXED_FEED || 3);
+  const maxYoutube = Number(process.env.MAX_YOUTUBE_IN_MIXED_FEED || 2);
   return posts.filter((post) => {
     if (post.sourceType === 'youtube' || post.youtube) {
       youtubeCount++;

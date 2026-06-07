@@ -117,7 +117,7 @@ async function summarize(text, feedLang = 'en') {
   return aiSummarize(text, feedLang);
 }
 
-function extractiveSummaryNative(text, maxLen = 300) {
+function extractiveSummaryNative(text, maxLen = 500) {
   const t = sanitizeForSummarization(text);
   if (!t) return '';
   if (t.length <= maxLen) return t;
@@ -136,7 +136,7 @@ function extractiveSummaryNative(text, maxLen = 300) {
   return `${cut.trim()}…`;
 }
 
-function clipSummarySchema(s, max = 300) {
+function clipSummarySchema(s, max = 500) {
   const x = String(s || '').replace(/\s+/g, ' ').trim();
   if (x.length <= max) return x;
   return `${x.slice(0, max - 1).trim()}…`;
@@ -279,20 +279,31 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
         summary = '';
       }
     }
-    if (!summary) summary = extractiveSummaryNative(src, 300);
+    // If AI summary is too short, try extractive with more characters
+    if (!summary || String(summary).trim().length < 150) {
+      const extractive = extractiveSummaryNative(src, 500);
+      if (extractive.length > String(summary || '').trim().length) {
+        summary = extractive;
+      }
+    }
   } else if (isIndicAiSummaryEnabled() && (isIndicContent || fl === 'hi' || fl === 'te')) {
     try {
       summary = await summarizeIndicViaEnglish(src, fl);
     } catch {
       summary = '';
     }
-    if (!summary) summary = extractiveSummaryNative(src, 300);
+    if (!summary || String(summary).trim().length < 150) {
+      const extractive = extractiveSummaryNative(src, 500);
+      if (extractive.length > String(summary || '').trim().length) {
+        summary = extractive;
+      }
+    }
   } else {
-    summary = extractiveSummaryNative(src, 300);
+    summary = extractiveSummaryNative(src, 500);
   }
 
   if (!summary) summary = summarizeLocal(src) || '';
-  summary = clipSummarySchema(summary, 300);
+  summary = clipSummarySchema(summary, 500);
 
   if (
     (fl === 'hi' || fl === 'te')
@@ -303,7 +314,7 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
   ) {
     try {
       const tr = await translateEnglishToFeedLanguage(summary, fl);
-      if (tr && tr.trim()) summary = clipSummarySchema(tr, 300);
+      if (tr && tr.trim()) summary = clipSummarySchema(tr, 500);
     } catch { /* keep English */ }
   }
   return summary;
@@ -535,6 +546,21 @@ async function fetchRssItems(feedUrl) {
  * @param {object} item rss-parser item
  * @param {object} feedCfg { name, url, categorySlug, language }
  */
+/**
+ * Extract the clean source provider from a feed name.
+ * e.g. "Times of India - Sports" → "Times of India"
+ *      "NDTV Khabar"            → "NDTV Khabar"
+ */
+function extractSourceProvider(feedName) {
+  const name = String(feedName || '').trim();
+  if (!name) return 'RSS';
+  const sep = name.indexOf(' - ');
+  if (sep > 0) return name.slice(0, sep).trim();
+  const sep2 = name.indexOf(' · ');
+  if (sep2 > 0) return name.slice(0, sep2).trim();
+  return name;
+}
+
 function normalizeRssItem(item, feedCfg, { sourceUrlOverride } = {}) {
   const title = stripHtml(item.title || '').slice(0, 200);
   const link = sourceUrlOverride || item.link || item.guid || null;
@@ -554,7 +580,7 @@ function normalizeRssItem(item, feedCfg, { sourceUrlOverride } = {}) {
     sourceType: 'rss',
     language: (feedCfg.language || 'en').toLowerCase(),
     scrapeConfidence: img ? 0.85 : 0.75,
-    apiSourceName: feedCfg.name || 'RSS',
+    apiSourceName: extractSourceProvider(feedCfg.name),
   };
 }
 

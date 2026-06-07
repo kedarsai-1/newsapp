@@ -349,7 +349,15 @@ function toYoutubePostDoc(item, reporterId, categoryId, sourceName) {
     status: SCRAPER_AUTO_APPROVE ? 'approved' : 'pending',
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
     tags: item.tags || ['youtube'],
-    language: item.language || 'en',
+    language: (() => {
+      let l = item.language || 'en';
+      if (l === 'en') {
+        const titleStr = item.title || '';
+        if (/[\u0900-\u097F]/.test(titleStr)) return 'hi';
+        if (/[\u0C00-\u0C7F]/.test(titleStr)) return 'te';
+      }
+      return l;
+    })(),
     sourceName,
     sourceUrl: y.watchUrl,
     sourceUrlHash: (() => {
@@ -398,7 +406,7 @@ async function insertNormalizedItem(item, reporter, stats) {
   }
 
   const category = await getCategoryBySlug(normalized.categorySlug);
-  const label = `YouTube · ${normalized.youtube.channelTitle}`;
+  const label = normalized.youtube.channelTitle || 'YouTube';
   const doc = toYoutubePostDoc(normalized, reporter.id, category.id, label);
   try {
     await createNewsPost(doc);

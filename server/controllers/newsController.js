@@ -75,7 +75,40 @@ function languageWhere(langParam) {
   if (!langParam) return null;
   const lang = String(langParam).toLowerCase();
   if (lang === 'en') {
-    return { language: 'en' };
+    return {
+      language: 'en',
+      AND: [
+        { NOT: { language: { in: ['hi', 'te'] } } },
+        { NOT: { originalLanguage: { in: ['hin', 'tel', 'hi', 'te'] } } },
+        {
+          NOT: {
+            OR: [
+              { sourceName: containsInsensitive('telugu') },
+              { sourceName: containsInsensitive('eenadu') },
+              { sourceName: containsInsensitive('sakshi') },
+              { sourceName: containsInsensitive('tv9') },
+              { sourceName: containsInsensitive('ntv') },
+              { sourceName: containsInsensitive('v6') },
+              { sourceName: containsInsensitive('velugu') },
+              { sourceName: containsInsensitive('andhra jyothy') },
+              { sourceName: containsInsensitive('mana telangana') },
+              { sourceName: containsInsensitive('10tv') },
+              { sourceName: containsInsensitive('123telugu') },
+              { sourceName: containsInsensitive('hindi') },
+              { sourceName: containsInsensitive('amar ujala') },
+              { sourceName: containsInsensitive('jagran') },
+              { sourceName: containsInsensitive('abp') },
+              { sourceName: containsInsensitive('ndtv khabar') },
+              { sourceName: containsInsensitive('prabhat') },
+              { sourceName: containsInsensitive('bhaskar') },
+              { sourceName: containsInsensitive('the print hindi') },
+              { sourceName: containsInsensitive('bbc hindi') },
+              { sourceName: containsInsensitive('print hindi') },
+            ],
+          },
+        },
+      ],
+    };
   }
   if (lang === 'te') {
     return {
@@ -446,6 +479,18 @@ const getFeed = async (req, res) => {
     ]);
 
     let posts = dedupeFeedPosts(rows.map((p) => serializeNewsPost(p))).map(sanitizeStoryTextFields);
+
+    if (langParam === 'en') {
+      const hasDevanagari = (str) => /[\u0900-\u097F]/.test(str);
+      const hasTelugu = (str) => /[\u0C00-\u0C7F]/.test(str);
+      posts = posts.filter((p) => {
+        const titleStr = p.title || '';
+        if (hasDevanagari(titleStr) || hasTelugu(titleStr)) {
+          return false;
+        }
+        return true;
+      });
+    }
 
     posts = capYoutubeInMixedFeed(posts, sourceTypes);
 
@@ -988,6 +1033,108 @@ const markPostSeen = async (req, res) => {
   }
 };
 
+async function chatWithNews(req, res) {
+  try {
+    const { message, language } = req.body;
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ success: false, message: 'Message is required.' });
+    }
+
+    const query = message.trim();
+    const lang = String(language || 'en').toLowerCase().trim();
+
+    // 1. Fetch recent articles (last 7 days) matching the query keywords
+    const keywords = query
+      .toLowerCase()
+      .replace(/[^\w\s\u0900-\u097F\u0C00-\u0C7F]/g, ' ')
+      .split(/\s+/)
+      .map((k) => k.trim())
+      .filter((k) => k.length > 2);
+
+    let context = '';
+    if (keywords.length > 0) {
+      const matchedPosts = await prisma.newsPost.findMany({
+        where: {
+          status: 'approved',
+          createdAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          },
+          OR: keywords.map((kw) => ({
+            OR: [
+              { title: { contains: kw, mode: 'insensitive' } },
+              { summary: { contains: kw, mode: 'insensitive' } },
+            ],
+          })),
+        },
+        take: 6,
+        orderBy: [
+          { sourcePublishedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        select: {
+          title: true,
+          summary: true,
+          sourcePublishedAt: true,
+          createdAt: true,
+        },
+      });
+
+      if (matchedPosts.length > 0) {
+        context = matchedPosts
+          .map((p, idx) => {
+            const date = p.sourcePublishedAt || p.createdAt;
+            const dateStr = date ? new Date(date).toLocaleDateString() : '';
+            return `[Article ${idx + 1}] Title: ${p.title}\nDate: ${dateStr}\nSummary: ${p.summary || ''}\n`;
+          })
+          .join('\n');
+      }
+    }
+
+    // 2. Select system prompts based on target language
+    let systemPrompt = '';
+    let fallbackText = '';
+    if (lang === 'te') {
+      systemPrompt =
+        'You are "NewsNow Assistant", a friendly AI companion for a premium Indian news app. ' +
+        'Answer the user\'s question about recent news using ONLY the provided news articles context below. ' +
+        'Respond in Telugu only (Telugu script). Be factual, objective, and concise (under 4 sentences). ' +
+        'If the context doesn\'t contain the answer, say "నేను ఆ సమాచారాన్ని కనుగొనలేకపోయాను."';
+      fallbackText = 'నేను ఆ సమాచారాన్ని కనుగొనలేకపోయాను.';
+    } else if (lang === 'hi') {
+      systemPrompt =
+        'You are "NewsNow Assistant", a friendly AI companion for a premium Indian news app. ' +
+        'Answer the user\'s question about recent news using ONLY the provided news articles context below. ' +
+        'Respond in Hindi only (Devanagari script). Be factual, objective, and concise (under 4 sentences). ' +
+        'If the context doesn\'t contain the answer, say "मुझे उस विषय के बारे में कोई हालिया समाचार नहीं मिला।"';
+      fallbackText = 'मुझे उस विषय के बारे में कोई हालिया समाचार नहीं मिला।';
+    } else {
+      systemPrompt =
+        'You are "NewsNow Assistant", a friendly AI companion for a premium Indian news app. ' +
+        'Answer the user\'s question about recent news using ONLY the provided news articles context below. ' +
+        'Respond in English only. Be factual, objective, and concise (under 4 sentences). ' +
+        'If the context doesn\'t contain the answer, say "I couldn\'t find any recent news articles about that topic."';
+      fallbackText = 'I couldn\'t find any recent news articles about that topic.';
+    }
+
+    const userPrompt = `Context:\n${context || 'No recent articles found.'}\n\nUser Question: ${query}\n\nAnswer:`;
+
+    // 3. Call Ollama chat service
+    const { chatWithOllama } = require('../services/aiProvider');
+    const answer = await chatWithOllama(systemPrompt, userPrompt, lang);
+
+    return res.json({
+      success: true,
+      answer: answer || fallbackText,
+    });
+  } catch (error) {
+    console.error('[ai-chat] Error in chatWithNews:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate response. Please try again later.',
+    });
+  }
+}
+
 module.exports = {
   getFeed,
   getPost,
@@ -1002,4 +1149,5 @@ module.exports = {
   getReverseGeocode,
   getLocalNews,
   markPostSeen,
+  chatWithNews,
 };

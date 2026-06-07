@@ -14,21 +14,21 @@ describe('youtubeCap', () => {
     { id: 8, title: 'Video 5', sourceType: 'youtube', youtube: { videoId: 'v5' } },
   ];
 
-  it('caps YouTube posts to 3 in a mixed feed when sourceTypes is a comma-separated list including youtube and others', () => {
+  it('caps YouTube posts to 2 in a mixed feed when sourceTypes is a comma-separated list including youtube and others', () => {
     const result = capYoutubeInMixedFeed(posts, 'api,manual,rss,youtube');
-    // We expect 3 youtube videos (id 2, 4, 6) and all non-youtube articles (id 1, 3, 5).
-    // Total should be 6 posts.
-    assert.equal(result.length, 6);
+    // We expect 2 youtube videos (id 2, 4) and all non-youtube articles (id 1, 3, 5).
+    // Total should be 5 posts.
+    assert.equal(result.length, 5);
     const youtubePosts = result.filter(p => p.sourceType === 'youtube');
-    assert.equal(youtubePosts.length, 3);
-    assert.deepEqual(youtubePosts.map(p => p.id), [2, 4, 6]);
+    assert.equal(youtubePosts.length, 2);
+    assert.deepEqual(youtubePosts.map(p => p.id), [2, 4]);
   });
 
-  it('caps YouTube posts to 3 when sourceTypes is not specified (mixed feed by default)', () => {
+  it('caps YouTube posts to 2 when sourceTypes is not specified (mixed feed by default)', () => {
     const result = capYoutubeInMixedFeed(posts, undefined);
-    assert.equal(result.length, 6);
+    assert.equal(result.length, 5);
     const youtubePosts = result.filter(p => p.sourceType === 'youtube');
-    assert.equal(youtubePosts.length, 3);
+    assert.equal(youtubePosts.length, 2);
   });
 
   it('does NOT cap YouTube posts if sourceTypes is only youtube (dedicated feed)', () => {

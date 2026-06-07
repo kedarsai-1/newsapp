@@ -376,7 +376,15 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     status: SCRAPER_AUTO_APPROVE ? 'approved' : 'pending',
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
     tags: item.tags || [],
-    language: item.language || 'en',
+    language: (() => {
+      let l = item.language || 'en';
+      if (l === 'en') {
+        const titleStr = item.title || '';
+        if (/[\u0900-\u097F]/.test(titleStr)) return 'hi';
+        if (/[\u0C00-\u0C7F]/.test(titleStr)) return 'te';
+      }
+      return l;
+    })(),
     originalLanguage: item.originalLanguage || null,
     sourceName,
     sourceUrl: item.sourceUrl || null,
@@ -648,7 +656,7 @@ async function runIngestion({
                 postFields = { ...item, summary: apiSummary, mediaUrl: null };
               }
 
-              const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
+              const label = item.apiSourceName || providerLabel || 'headlines';
               const { apiSourceName, ...postDocFields } = postFields;
               try {
                 await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
@@ -985,7 +993,7 @@ async function runIngestion({
               continue;
             }
 
-            const label = feed.name || 'RSS';
+            const label = postFields.apiSourceName || feed.name || 'RSS';
             const { apiSourceName, ...postDocFields } = postFields;
             try {
               await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));

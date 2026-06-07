@@ -147,6 +147,51 @@ function serializeNewsPost(post, options = {}) {
   });
 }
 
+/** Compact feed-list payload — omits full body and admin/dedupe metadata. */
+function serializeFeedPost(post, options = {}) {
+  if (!post) return post;
+  const reporter = post.reporter
+    ? stripUndefined({
+      _id: idOf(post.reporter.id),
+      id: idOf(post.reporter.id),
+      name: post.reporter.name,
+      avatar: post.reporter.avatar,
+    })
+    : idOf(post.reporterId);
+
+  return stripUndefined({
+    _id: idOf(post.id),
+    id: idOf(post.id),
+    title: post.title,
+    summary: post.summary,
+    reporter,
+    category: post.category ? serializeCategory(post.category) : idOf(post.categoryId),
+    media: Array.isArray(post.media) ? post.media.map(serializeMedia) : [],
+    location: serializeLocation(post),
+    status: post.status,
+    views: post.views,
+    likes: post.likes,
+    isFeatured: post.isFeatured,
+    isBreaking: post.isBreaking,
+    tags: post.tags || [],
+    language: post.language,
+    originalLanguage: post.originalLanguage,
+    sourceName: post.sourceName,
+    sourceUrl: post.sourceUrl,
+    sourcePublishedAt: post.sourcePublishedAt,
+    sourceType: post.sourceType,
+    youtube: serializeYoutube(post),
+    politicsScope: post.politicsScope,
+    constituency: post.constituency,
+    videoCategory: post.videoCategory,
+    videoClassificationMethod: post.videoClassificationMethod,
+    videoClassificationScore: post.videoClassificationScore,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    seen: options.seen,
+  });
+}
+
 function serializeComment(comment) {
   if (!comment) return comment;
   return stripUndefined({
@@ -168,5 +213,6 @@ module.exports = {
   serializeCategory,
   serializeMedia,
   serializeNewsPost,
+  serializeFeedPost,
   serializeComment,
 };

@@ -9,8 +9,8 @@ module.exports = {
       autorestart: true,
       max_restarts: 15,
       min_uptime: '30s',
-      max_memory_restart: '900M',
-      node_args: '--max-old-space-size=768',
+      max_memory_restart: '1100M',
+      node_args: '--max-old-space-size=896',
       env: {
         NODE_ENV: 'production',
       },

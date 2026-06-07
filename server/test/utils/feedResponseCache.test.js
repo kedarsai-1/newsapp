@@ -37,4 +37,11 @@ describe('feedResponseCache', () => {
     assert.equal(await feedResponseCache.getCachedFeed({ page: '1' }), null);
     assert.equal(await feedResponseCache.getCachedCategories(), null);
   });
+
+  it('ignores noisy query params in cache keys', () => {
+    const a = feedResponseCache.feedCacheKey({ page: '1', language: 'en', breaking: 'false' });
+    const b = feedResponseCache.feedCacheKey({ page: '1', language: 'en', utm_source: 'test' });
+    assert.equal(a, b);
+    assert.match(a, /language=en/);
+  });
 });

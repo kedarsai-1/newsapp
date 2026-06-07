@@ -16,10 +16,11 @@ const { filterPostsForCategory } = require('../utils/categoryRelevance');
 const { POLITICAL_LABELS } = require('../config/politicalVideoConfig');
 const {
   serializeNewsPost,
+  serializeFeedPost,
   serializeComment,
 } = require('../utils/serializers');
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
-const { newsPostInclude } = require('../utils/prismaNewsPost');
+const { newsPostInclude, feedListInclude } = require('../utils/prismaNewsPost');
 const feedResponseCache = require('../utils/feedResponseCache');
 const { getPublisherReferer } = require('../utils/publisherReferer');
 const {
@@ -383,6 +384,8 @@ const extractArticle = async (req, res) => {
 };
 
 // GET /api/news/feed  — paginated, filterable by category and city
+const mapFeedRow = (row) => sanitizeStoryTextFields(serializeFeedPost(row));
+
 const getFeed = async (req, res) => {
   try {
     const cached = await feedResponseCache.getCachedFeed(req.query);
@@ -398,8 +401,8 @@ const getFeed = async (req, res) => {
           select: { postId: true },
         });
         const seenPostIds = new Set(seenRows.map((r) => r.postId));
-        posts = posts.map((p) => ({ ...p, seen: seenPostIds.has(p.id) }));
-      } else {
+        posts = posts.map((p) => (seenPostIds.has(p.id) ? { ...p, seen: true } : { ...p, seen: false }));
+      } else if (posts.some((p) => p.seen !== false)) {
         posts = posts.map((p) => ({ ...p, seen: false }));
       }
       return res.json({ ...cached.body, posts, cached: true });
@@ -641,9 +644,9 @@ const getFeed = async (req, res) => {
         where,
         skip,
         limitNum,
-        include: newsPostInclude,
+        include: feedListInclude,
         orderBy,
-        mapRow: (row) => sanitizeStoryTextFields(serializeNewsPost(row)),
+        mapRow: mapFeedRow,
         applyPostFilters: (rows) => applyPostFilters(dedupeFeedPosts(rows)),
       });
       posts = fetched.posts;
@@ -652,13 +655,13 @@ const getFeed = async (req, res) => {
       const [rows] = await Promise.all([
         prisma.newsPost.findMany({
           where,
-          include: newsPostInclude,
+          include: feedListInclude,
           orderBy,
           skip,
           take: limitNum,
         }),
       ]);
-      posts = dedupeFeedPosts(rows.map(mapRow));
+      posts = applyPostFilters(dedupeFeedPosts(rows.map(mapFeedRow)));
       posts = applyPostFilters(posts);
       const probe = posts.length === limitNum
         ? await prisma.newsPost.findMany({
@@ -695,7 +698,7 @@ const getFeed = async (req, res) => {
       const seenPostIds = new Set(seenRows.map((r) => r.postId));
       finalPosts = posts.map((p) => ({ ...p, seen: seenPostIds.has(p.id) }));
     } else {
-      finalPosts = posts.map((p) => ({ ...p, seen: false }));
+      finalPosts = posts.map((p) => (p.seen === false ? p : { ...p, seen: false }));
     }
 
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.feedTtlMs()));

@@ -1,10 +1,21 @@
 const { createClient } = require('redis');
 
+const MAX_MEMORY_ENTRIES = Math.max(
+  50,
+  Number(process.env.CACHE_MAX_MEMORY_ENTRIES || 200),
+);
+const SWEEP_INTERVAL_MS = Math.max(
+  15_000,
+  Number(process.env.CACHE_SWEEP_MS || 60_000),
+);
+
 class CacheService {
   constructor() {
     this._store = new Map();
     this.redisClient = null;
     this.isRedisConnected = false;
+    this._sweepTimer = setInterval(() => this._sweepMemoryStore(), SWEEP_INTERVAL_MS);
+    if (typeof this._sweepTimer.unref === 'function') this._sweepTimer.unref();
   }
 
   async init() {
@@ -28,6 +39,23 @@ class CacheService {
       console.error('[cache] Redis connection failed. Using in-process memory cache fallback:', err.message);
       this.redisClient = null;
       this.isRedisConnected = false;
+    }
+  }
+
+  _sweepMemoryStore() {
+    const now = Date.now();
+    for (const [key, entry] of this._store) {
+      if (now > entry.expiresAt) this._store.delete(key);
+    }
+    this._enforceMemoryCap();
+  }
+
+  _enforceMemoryCap() {
+    if (this._store.size <= MAX_MEMORY_ENTRIES) return;
+    const entries = [...this._store.entries()].sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+    const removeCount = this._store.size - MAX_MEMORY_ENTRIES;
+    for (let i = 0; i < removeCount; i += 1) {
+      this._store.delete(entries[i][0]);
     }
   }
 
@@ -64,6 +92,7 @@ class CacheService {
       value,
       expiresAt: Date.now() + Math.max(1000, ttlMs),
     });
+    this._enforceMemoryCap();
   }
 
   async del(key) {
@@ -118,6 +147,10 @@ class CacheService {
       }
     }
     this._store.clear();
+  }
+
+  memoryStoreSize() {
+    return this._store.size;
   }
 }
 

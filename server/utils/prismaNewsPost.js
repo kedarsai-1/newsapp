@@ -9,6 +9,13 @@ const newsPostInclude = {
   entities: true,
 };
 
+/** Lighter include for paginated feed lists (no body-heavy relations). */
+const feedListInclude = {
+  category: true,
+  media: { orderBy: { order: 'asc' } },
+  reporter: { select: { id: true, name: true, avatar: true } },
+};
+
 function nullIfBlank(value) {
   if (value == null) return null;
   const s = String(value).trim();
@@ -117,6 +124,7 @@ async function createNewsPost(doc, args = {}) {
 
 module.exports = {
   newsPostInclude,
+  feedListInclude,
   newsPostDataFromDoc,
   mediaCreate,
   entitiesCreate,

@@ -6,6 +6,7 @@ const {
   serializeUser,
   serializeCategory,
   serializeNewsPost,
+  serializeFeedPost,
 } = require('../../utils/serializers');
 
 describe('serializers', () => {
@@ -62,5 +63,27 @@ describe('serializers', () => {
     assert.equal(post.title, 'Headline');
     assert.equal(post.location.city, 'Vijayawada');
     assert.equal(post.location.latitude, 16.5);
+  });
+
+  it('serializeFeedPost omits body and admin metadata', () => {
+    const post = serializeFeedPost({
+      id: 'p1',
+      title: 'Headline',
+      body: 'Long body text',
+      summary: 'Short summary',
+      status: 'approved',
+      reporter: { id: 'u1', name: 'Rep', email: 'hidden@test.com' },
+      approvedBy: { id: 'a1', name: 'Admin' },
+      entities: [{ id: 'e1', text: 'Entity' }],
+      tags: ['news'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    assert.equal(post.summary, 'Short summary');
+    assert.equal(post.body, undefined);
+    assert.equal(post.approvedBy, undefined);
+    assert.equal(post.entities, undefined);
+    assert.equal(post.reporter.name, 'Rep');
+    assert.equal(post.reporter.email, undefined);
   });
 });

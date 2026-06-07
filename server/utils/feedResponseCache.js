@@ -33,12 +33,46 @@ function maxCachedFeedPage() {
   return Math.max(1, Number(process.env.FEED_CACHE_MAX_PAGE || 3));
 }
 
-/** Stable cache key from feed query params. */
+const FEED_CACHE_PARAMS = new Set([
+  'page',
+  'limit',
+  'language',
+  'category',
+  'city',
+  'constituency',
+  'politicsScope',
+  'breaking',
+  'featured',
+  'days',
+  'sourceTypes',
+  'hasVideo',
+  'politicalOnly',
+  'excludePolitics',
+]);
+
+function normalizeFeedCacheValue(key, value) {
+  const str = String(value).trim();
+  if (!str) return null;
+  if (str === 'false' || str === '0') return null;
+  if (key === 'limit') {
+    const n = parseInt(str, 10);
+    return Number.isFinite(n) && n > 0 ? String(Math.min(n, 50)) : '20';
+  }
+  if (key === 'page') {
+    const n = parseInt(str, 10);
+    return Number.isFinite(n) && n > 0 ? String(n) : '1';
+  }
+  return str;
+}
+
+/** Stable cache key from whitelisted feed query params. */
 function feedCacheKey(query = {}) {
   const normalized = {};
   for (const [k, v] of Object.entries(query)) {
-    if (v === undefined || v === null || v === '') continue;
-    normalized[k] = String(v);
+    if (!FEED_CACHE_PARAMS.has(k)) continue;
+    const normalizedValue = normalizeFeedCacheValue(k, v);
+    if (!normalizedValue) continue;
+    normalized[k] = normalizedValue;
   }
   const parts = Object.keys(normalized).sort().map((k) => `${k}=${normalized[k]}`);
   return `${FEED_PREFIX}${parts.join('&')}`;

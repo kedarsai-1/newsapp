@@ -7,8 +7,10 @@ const {
 } = require('./weatherService');
 
 const CONTEXT_DAYS = Math.max(7, Number(process.env.CHAT_CONTEXT_DAYS || 30));
-const MAX_ARTICLES = Math.max(4, Math.min(12, Number(process.env.CHAT_MAX_ARTICLES || 10)));
-const MAX_BODY_CHARS = Math.max(200, Number(process.env.CHAT_ARTICLE_BODY_CHARS || 800));
+const MAX_ARTICLES = Math.max(4, Math.min(12, Number(process.env.CHAT_MAX_ARTICLES || 6)));
+const MAX_BODY_CHARS = Math.max(200, Number(process.env.CHAT_ARTICLE_BODY_CHARS || 400));
+const MAX_SUMMARY_CHARS = Math.max(120, Number(process.env.CHAT_ARTICLE_SUMMARY_CHARS || 320));
+const CHAT_INCLUDE_BODY = process.env.CHAT_INCLUDE_BODY === 'true';
 const MAX_HISTORY_TURNS = Math.max(0, Math.min(6, Number(process.env.CHAT_MAX_HISTORY_TURNS || 4)));
 
 const STOP_WORDS = new Set([
@@ -52,10 +54,18 @@ function sinceDate() {
   return new Date(Date.now() - CONTEXT_DAYS * 24 * 60 * 60 * 1000);
 }
 
-function truncateBody(text) {
+function truncateText(text, maxChars) {
   const raw = String(text || '').replace(/\s+/g, ' ').trim();
-  if (raw.length <= MAX_BODY_CHARS) return raw;
-  return `${raw.slice(0, MAX_BODY_CHARS)}…`;
+  if (raw.length <= maxChars) return raw;
+  return `${raw.slice(0, maxChars)}…`;
+}
+
+function truncateBody(text) {
+  return truncateText(text, MAX_BODY_CHARS);
+}
+
+function truncateSummary(text) {
+  return truncateText(text, MAX_SUMMARY_CHARS);
 }
 
 function formatArticle(post, idx) {
@@ -67,8 +77,8 @@ function formatArticle(post, idx) {
     `Title: ${post.title}`,
     category ? `Category: ${category}` : null,
     dateStr ? `Date: ${dateStr}` : null,
-    post.summary ? `Summary: ${post.summary}` : null,
-    post.body ? `Details: ${truncateBody(post.body)}` : null,
+    post.summary ? `Summary: ${truncateSummary(post.summary)}` : null,
+    post.body && CHAT_INCLUDE_BODY ? `Details: ${truncateBody(post.body)}` : null,
   ].filter(Boolean);
   return lines.join('\n');
 }
@@ -262,6 +272,29 @@ async function buildNewsContext({
   };
 }
 
+function withChatBudget(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function emptyNewsContext() {
+  return {
+    text: '',
+    articles: [],
+    relatedArticles: [],
+    meta: {
+      keywords: [],
+      categorySlug: null,
+      articlePinned: false,
+      trendingFallback: false,
+      articleCount: 0,
+    },
+  };
+}
+
 async function buildWeatherContextOptional({
   query,
   latitude,
@@ -397,17 +430,38 @@ async function runNewsChat(input = {}) {
   const query = String(message || '').trim();
   const lang = String(language || 'en').toLowerCase().trim();
 
-  const weather = await buildWeatherContextOptional({
-    query, latitude, longitude, lat, lng, city, state, country,
-  });
-  const news = await buildNewsContext({
-    query,
-    lang,
-    articleId,
-    category,
-    city,
-    hasLiveWeather: Boolean(weather.meta),
-  });
+  const contextBudgetMs = Math.max(
+    3000,
+    Number(process.env.CHAT_CONTEXT_TIMEOUT_MS || 8000),
+  );
+
+  const [weather, news] = await Promise.all([
+    withChatBudget(
+      buildWeatherContextOptional({
+        query, latitude, longitude, lat, lng, city, state, country,
+      }),
+      contextBudgetMs,
+      'chat_weather',
+    ).catch((err) => {
+      console.warn('[ai-chat] Weather context budget exceeded:', err.message);
+      return { text: '', meta: null };
+    }),
+    withChatBudget(
+      buildNewsContext({
+        query,
+        lang,
+        articleId,
+        category,
+        city,
+        hasLiveWeather: false,
+      }),
+      contextBudgetMs,
+      'chat_news',
+    ).catch((err) => {
+      console.warn('[ai-chat] News context budget exceeded:', err.message);
+      return emptyNewsContext();
+    }),
+  ]);
 
   const contextParts = [];
   if (weather.text) contextParts.push(weather.text);
@@ -426,8 +480,10 @@ async function runNewsChat(input = {}) {
 
   const aiProvider = require('./aiProvider');
   let answer = '';
+  let aiGenerated = false;
   try {
     answer = await aiProvider.chatWithOllama(systemPrompt, userPrompt, lang);
+    aiGenerated = Boolean(answer);
   } catch (err) {
     if (aiProvider.isOllamaAbortError(err)) {
       console.warn('[ai-chat] Ollama chat timed out or aborted; using extractive fallback.');
@@ -443,12 +499,14 @@ async function runNewsChat(input = {}) {
   );
   if (shouldUseExtractive) {
     answer = extractiveFallback(news.articles, lang);
+    aiGenerated = false;
   } else if (!answer) {
     answer = fallbackAnswer(lang);
   }
 
   return {
     answer,
+    aiGenerated,
     relatedArticles: news.relatedArticles,
     weather: weather.meta,
     sourcesUsed: {

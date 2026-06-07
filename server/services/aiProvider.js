@@ -12,6 +12,7 @@ const FEED_LANG_LABELS = {
 };
 
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
+const { chatRequestTimeoutMs } = require('../middleware/requestTimeout');
 
 let ollamaIngestionQueue = Promise.resolve();
 let ollamaChatQueue = Promise.resolve();
@@ -88,9 +89,17 @@ function ollamaTimeoutMs() {
 
 function ollamaChatTimeoutMs() {
   return Math.min(
-    120000,
-    Math.max(10000, Number(process.env.OLLAMA_CHAT_TIMEOUT_MS || 45000)),
+    chatRequestTimeoutMs() - 2000,
+    Math.max(10000, Number(process.env.OLLAMA_CHAT_TIMEOUT_MS || 58000)),
   );
+}
+
+function ollamaChatMaxTokens() {
+  return Math.max(64, Number(process.env.OLLAMA_CHAT_MAX_TOKENS || 120));
+}
+
+function ollamaKeepAlive() {
+  return String(process.env.OLLAMA_KEEP_ALIVE || '15m').trim();
 }
 
 /** True when AI summaries are allowed (Ollama local or HF token). */
@@ -187,9 +196,10 @@ async function ollamaChat(system, user, lang = 'en', timeoutMs = null) {
           { role: 'user', content: user },
         ],
         stream: false,
+        keep_alive: ollamaKeepAlive(),
         options: {
-          temperature: Number(process.env.OLLAMA_TEMPERATURE || 0.1),
-          num_predict: Number(process.env.OLLAMA_MAX_TOKENS || 150),
+          temperature: Number(process.env.OLLAMA_CHAT_TEMPERATURE || process.env.OLLAMA_TEMPERATURE || 0.2),
+          num_predict: ollamaChatMaxTokens(),
           top_p: 0.9,
         },
       }),
@@ -564,6 +574,70 @@ async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
   );
 }
 
+function warmOllamaLanguages() {
+  const raw = process.env.OLLAMA_WARM_LANGS || 'en';
+  return [...new Set(
+    raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  )];
+}
+
+async function warmOllamaChatModels() {
+  if (!isOllamaProvider()) return { ok: false, skipped: true };
+  if (process.env.OLLAMA_WARM_ON_START === 'false') return { ok: false, skipped: true };
+
+  const warmTimeoutMs = Math.min(
+    45000,
+    Math.max(5000, Number(process.env.OLLAMA_WARM_TIMEOUT_MS || 25000)),
+  );
+  const langs = warmOllamaLanguages();
+  const seenModels = new Set();
+  const results = {};
+
+  for (const lang of langs) {
+    const model = ollamaModelForLanguage(lang);
+    if (seenModels.has(model)) continue;
+    seenModels.add(model);
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await withOllamaChatQueue(() => ollamaChat(
+        'Reply with exactly: OK',
+        'warmup',
+        lang,
+        warmTimeoutMs,
+      ));
+      results[model] = 'ok';
+    } catch (err) {
+      results[model] = err?.message || String(err);
+      console.warn(`[ai] Ollama warm failed (${model}):`, results[model]);
+    }
+  }
+
+  const ok = Object.values(results).length > 0
+    && Object.values(results).every((v) => v === 'ok');
+  if (ok) {
+    console.log(`[ai] Ollama chat warmed: ${Object.keys(results).join(', ')}`);
+  }
+  return { ok, results };
+}
+
+let warmIntervalTimer = null;
+
+function scheduleOllamaWarmInterval() {
+  if (!isOllamaProvider()) return;
+  if (process.env.OLLAMA_WARM_INTERVAL_MS === '0') return;
+  const intervalMs = Math.max(
+    300_000,
+    Number(process.env.OLLAMA_WARM_INTERVAL_MS || 900_000),
+  );
+  if (warmIntervalTimer) clearInterval(warmIntervalTimer);
+  warmIntervalTimer = setInterval(() => {
+    warmOllamaChatModels().catch((err) => {
+      console.warn('[ai] Ollama periodic warm failed:', err?.message || err);
+    });
+  }, intervalMs);
+  if (typeof warmIntervalTimer.unref === 'function') warmIntervalTimer.unref();
+}
+
 module.exports = {
   getAiProvider,
   isOllamaProvider,
@@ -578,7 +652,10 @@ module.exports = {
   cleanModelOutput,
   areTitlesSameStory,
   chatWithOllama,
+  warmOllamaChatModels,
+  scheduleOllamaWarmInterval,
   ollamaChatTimeoutMs,
+  ollamaChatMaxTokens,
   ollamaSummaryTimeoutMs,
   isOllamaAbortError,
   withOllamaChatQueue,

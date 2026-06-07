@@ -1300,12 +1300,19 @@ async function chatWithNews(req, res) {
     return res.json({
       success: true,
       answer: result.answer,
+      aiGenerated: result.aiGenerated,
       relatedArticles: result.relatedArticles,
       weather: result.weather,
       sourcesUsed: result.sourcesUsed,
     });
   } catch (error) {
     console.error('[ai-chat] Error in chatWithNews:', error.message);
+    if (error.message?.includes('_timeout')) {
+      return res.status(504).json({
+        success: false,
+        message: 'AI chat timed out. Please try a shorter question.',
+      });
+    }
     return res.status(500).json({
       success: false,
       message: 'Failed to generate response. Please try again later.',

@@ -135,8 +135,8 @@ async function fuzzChat() {
       Array(50).fill({ role: 'user', content: 'spam '.repeat(20) }),
     ]),
   };
-  const r = await request('POST', '/api/news/chat', { body, timeout: 25000 });
-  record('chat', r, [200, 400, 503, 500]);
+  const r = await request('POST', '/api/news/chat', { body, timeout: 65000 });
+  record('chat', r, [200, 400, 503, 500, 504]);
 }
 
 async function fuzzOther() {

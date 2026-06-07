@@ -25,7 +25,7 @@ function requestTimeout(ms) {
 function chatRequestTimeoutMs() {
   return Math.min(
     120000,
-    Math.max(15000, Number(process.env.CHAT_REQUEST_TIMEOUT_MS || 65000)),
+    Math.max(15000, Number(process.env.CHAT_REQUEST_TIMEOUT_MS || 60000)),
   );
 }
 

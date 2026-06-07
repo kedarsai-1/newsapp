@@ -80,21 +80,24 @@ describe('aiProvider', () => {
     }
   });
 
-  it('ollamaChatTimeoutMs defaults below ingestion timeout', () => {
+  it('ollamaChatTimeoutMs stays below chat request timeout', () => {
     const {
       ollamaChatTimeoutMs,
       isOllamaAbortError,
     } = require('../../services/aiProvider');
+    const { chatRequestTimeoutMs } = require('../../middleware/requestTimeout');
     const savedChat = process.env.OLLAMA_CHAT_TIMEOUT_MS;
-    const savedIngest = process.env.OLLAMA_TIMEOUT_MS;
+    const savedReq = process.env.CHAT_REQUEST_TIMEOUT_MS;
     delete process.env.OLLAMA_CHAT_TIMEOUT_MS;
-    process.env.OLLAMA_TIMEOUT_MS = '180000';
-    assert.ok(ollamaChatTimeoutMs() < 180000);
+    delete process.env.CHAT_REQUEST_TIMEOUT_MS;
+    assert.equal(chatRequestTimeoutMs(), 60000);
+    assert.equal(ollamaChatTimeoutMs(), 58000);
+    assert.ok(ollamaChatTimeoutMs() < chatRequestTimeoutMs());
     assert.equal(isOllamaAbortError({ name: 'AbortError' }), true);
     assert.equal(isOllamaAbortError(new Error('fetch aborted')), true);
     if (savedChat === undefined) delete process.env.OLLAMA_CHAT_TIMEOUT_MS;
     else process.env.OLLAMA_CHAT_TIMEOUT_MS = savedChat;
-    if (savedIngest === undefined) delete process.env.OLLAMA_TIMEOUT_MS;
-    else process.env.OLLAMA_TIMEOUT_MS = savedIngest;
+    if (savedReq === undefined) delete process.env.CHAT_REQUEST_TIMEOUT_MS;
+    else process.env.CHAT_REQUEST_TIMEOUT_MS = savedReq;
   });
 });

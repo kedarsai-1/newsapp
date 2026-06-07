@@ -193,6 +193,10 @@ async function runBackgroundJobs() {
       const hi = byLang.hi ?? 'unknown';
       const te = byLang.te ?? 'unknown';
       console.log(`[ai] Ollama ready en=${en} hi=${hi} te=${te}`);
+      aiProvider.warmOllamaChatModels().catch((err) => {
+        console.warn('[ai] Ollama warm on startup failed:', err?.message || err);
+      });
+      aiProvider.scheduleOllamaWarmInterval();
     } else {
       const missing = (ollama.missing || []).join(', ');
       console.warn(

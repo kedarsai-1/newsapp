@@ -17,6 +17,14 @@ function feedTtlMs() {
   return Math.max(5000, Number(process.env.FEED_CACHE_TTL_MS || 45_000));
 }
 
+function feedTtlForQuery(query = {}) {
+  const lang = String(query.language || '').toLowerCase();
+  if (lang === 'hi' || lang === 'te') {
+    return Math.max(5000, Number(process.env.FEED_INDIC_CACHE_TTL_MS || 90_000));
+  }
+  return feedTtlMs();
+}
+
 function categoriesTtlMs() {
   return Math.max(60_000, Number(process.env.CATEGORIES_CACHE_TTL_MS || 300_000));
 }
@@ -95,7 +103,7 @@ async function getCachedFeed(query) {
 
 async function setCachedFeed(query, body) {
   if (!shouldCacheFeedQuery(query)) return;
-  const ttlMs = feedTtlMs();
+  const ttlMs = feedTtlForQuery(query);
   await cacheService.set(feedCacheKey(query), { body, ttlMs }, ttlMs);
 }
 
@@ -202,6 +210,7 @@ module.exports = {
   isAuthenticatedRequest,
   edgeCacheEnabled,
   feedTtlMs,
+  feedTtlForQuery,
   categoriesTtlMs,
   postTtlMs,
   politicalFeedTtlMs,

@@ -43,6 +43,24 @@ describe('feedPagination', () => {
       categorySlugFilter: null,
       sourceTypes: 'api',
     }), false);
+    assert.equal(needsPostFetchLoop({
+      langParam: 'hi',
+      excludePoliticsFeed: false,
+      categorySlugFilter: null,
+      sourceTypes: '',
+    }), false);
+    assert.equal(needsPostFetchLoop({
+      langParam: 'te',
+      excludePoliticsFeed: false,
+      categorySlugFilter: null,
+      sourceTypes: '',
+    }), false);
+    assert.equal(needsPostFetchLoop({
+      langParam: null,
+      excludePoliticsFeed: false,
+      categorySlugFilter: null,
+      sourceTypes: '',
+    }), true);
   });
 });
 

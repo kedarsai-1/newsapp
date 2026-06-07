@@ -33,8 +33,12 @@ function needsPostFetchLoop({
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  const isMixedFeed = !list.length
-    || (list.includes('youtube') && list.length > 1);
+  if (!list.length) {
+    // hi/te use indexed SQL language filters — skip expensive scan loop for YouTube cap alone.
+    if (langParam === 'hi' || langParam === 'te') return false;
+    return true;
+  }
+  const isMixedFeed = list.includes('youtube') && list.length > 1;
   return isMixedFeed;
 }
 

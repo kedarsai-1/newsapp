@@ -199,16 +199,6 @@ function languageWhere(langParam) {
       OR: [
         { language: 'hi' },
         { originalLanguage: 'hin' },
-        { sourceName: containsInsensitive('hindi') },
-        { sourceName: containsInsensitive('amar ujala') },
-        { sourceName: containsInsensitive('jagran') },
-        { sourceName: containsInsensitive('abp') },
-        { sourceName: containsInsensitive('ndtv khabar') },
-        { sourceName: containsInsensitive('prabhat') },
-        { sourceName: containsInsensitive('bhaskar') },
-        { sourceName: containsInsensitive('the print hindi') },
-        { sourceName: containsInsensitive('bbc hindi') },
-        { sourceName: containsInsensitive('print hindi') },
       ],
     };
   }
@@ -701,7 +691,7 @@ const getFeed = async (req, res) => {
       finalPosts = posts.map((p) => (p.seen === false ? p : { ...p, seen: false }));
     }
 
-    feedResponseCache.applyEdgeCacheHeaders(res, req, feedResponseCache.feedTtlMs());
+    feedResponseCache.applyEdgeCacheHeaders(res, req, feedResponseCache.feedTtlForQuery(req.query));
     res.json({ ...payload, posts: finalPosts });
   } catch (error) {
     console.error('[news] getFeed error:', error.message);

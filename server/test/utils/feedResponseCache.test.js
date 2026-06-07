@@ -63,4 +63,13 @@ describe('feedResponseCache', () => {
     assert.match(headers['cache-control'], /^private,/);
     assert.equal(headers['cdn-cache-control'], undefined);
   });
+
+  it('feedTtlForQuery uses longer TTL for indic languages', () => {
+    const prev = process.env.FEED_INDIC_CACHE_TTL_MS;
+    process.env.FEED_INDIC_CACHE_TTL_MS = '120000';
+    assert.equal(feedResponseCache.feedTtlForQuery({ language: 'hi' }), 120_000);
+    assert.equal(feedResponseCache.feedTtlForQuery({ language: 'en' }), feedResponseCache.feedTtlMs());
+    if (prev === undefined) delete process.env.FEED_INDIC_CACHE_TTL_MS;
+    else process.env.FEED_INDIC_CACHE_TTL_MS = prev;
+  });
 });

@@ -6,6 +6,7 @@ const cacheService = require('./cacheService');
 
 const FEED_PREFIX = 'feed:';
 const POST_PREFIX = 'post:';
+const POLITICAL_FEED_PREFIX = 'political-feed:';
 const CATEGORIES_KEY = 'categories:active';
 
 function feedCacheEnabled() {
@@ -22,6 +23,10 @@ function categoriesTtlMs() {
 
 function postTtlMs() {
   return Math.max(10_000, Number(process.env.POST_CACHE_TTL_MS || 120_000));
+}
+
+function politicalFeedTtlMs() {
+  return Math.max(5000, Number(process.env.POLITICAL_FEED_CACHE_TTL_MS || 45_000));
 }
 
 function maxCachedFeedPage() {
@@ -79,9 +84,39 @@ async function setCachedPost(id, body) {
   await cacheService.set(`${POST_PREFIX}${id}`, { body, ttlMs }, ttlMs);
 }
 
+function politicalFeedCacheKey(query = {}) {
+  const normalized = {};
+  for (const [k, v] of Object.entries(query)) {
+    if (v === undefined || v === null || v === '') continue;
+    normalized[k] = String(v);
+  }
+  const parts = Object.keys(normalized).sort().map((k) => `${k}=${normalized[k]}`);
+  return `${POLITICAL_FEED_PREFIX}${parts.join('&')}`;
+}
+
+function shouldCachePoliticalFeedQuery(query = {}) {
+  if (process.env.POLITICAL_FEED_CACHE_ENABLED === 'false') return false;
+  const page = parseInt(query.page, 10) || 1;
+  return page <= maxCachedFeedPage();
+}
+
+async function getCachedPoliticalFeed(query) {
+  if (!shouldCachePoliticalFeedQuery(query)) return null;
+  const entry = await cacheService.get(politicalFeedCacheKey(query));
+  if (!entry?.body) return null;
+  return entry;
+}
+
+async function setCachedPoliticalFeed(query, body) {
+  if (!shouldCachePoliticalFeedQuery(query)) return;
+  const ttlMs = politicalFeedTtlMs();
+  await cacheService.set(politicalFeedCacheKey(query), { body, ttlMs }, ttlMs);
+}
+
 async function invalidateFeedCaches() {
   await cacheService.deleteByPrefix(FEED_PREFIX);
   await cacheService.deleteByPrefix(POST_PREFIX);
+  await cacheService.deleteByPrefix(POLITICAL_FEED_PREFIX);
   await cacheService.del(CATEGORIES_KEY);
 }
 
@@ -105,4 +140,7 @@ module.exports = {
   feedTtlMs,
   categoriesTtlMs,
   postTtlMs,
+  politicalFeedTtlMs,
+  getCachedPoliticalFeed,
+  setCachedPoliticalFeed,
 };

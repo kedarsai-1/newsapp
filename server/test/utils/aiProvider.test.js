@@ -79,4 +79,22 @@ describe('aiProvider', () => {
       else process.env[k] = saved[k];
     }
   });
+
+  it('ollamaChatTimeoutMs defaults below ingestion timeout', () => {
+    const {
+      ollamaChatTimeoutMs,
+      isOllamaAbortError,
+    } = require('../../services/aiProvider');
+    const savedChat = process.env.OLLAMA_CHAT_TIMEOUT_MS;
+    const savedIngest = process.env.OLLAMA_TIMEOUT_MS;
+    delete process.env.OLLAMA_CHAT_TIMEOUT_MS;
+    process.env.OLLAMA_TIMEOUT_MS = '180000';
+    assert.ok(ollamaChatTimeoutMs() < 180000);
+    assert.equal(isOllamaAbortError({ name: 'AbortError' }), true);
+    assert.equal(isOllamaAbortError(new Error('fetch aborted')), true);
+    if (savedChat === undefined) delete process.env.OLLAMA_CHAT_TIMEOUT_MS;
+    else process.env.OLLAMA_CHAT_TIMEOUT_MS = savedChat;
+    if (savedIngest === undefined) delete process.env.OLLAMA_TIMEOUT_MS;
+    else process.env.OLLAMA_TIMEOUT_MS = savedIngest;
+  });
 });

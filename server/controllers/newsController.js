@@ -28,6 +28,21 @@ const {
   filterPostsForShortsFeed,
 } = require('../utils/shortsFeedFilter');
 const { capYoutubeInMixedFeed } = require('../utils/youtubeCap');
+const {
+  parseFeedPagination,
+  buildFeedPaginationResponse,
+  needsPostFetchLoop,
+  fetchFeedPagePosts,
+} = require('../utils/feedPagination');
+
+const VALID_FEED_LANGUAGES = new Set(['en', 'hi', 'te']);
+const VALID_POLITICS_SCOPES = new Set([
+  'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi', 'all',
+]);
+const MAX_SEARCH_LENGTH = 200;
+const MAX_COMMENT_LENGTH = 2000;
+const MAX_TRANSLATE_TEXT_LENGTH = 5000;
+const MAX_CHAT_MESSAGE_LENGTH = 2000;
 
 function cleanTextForClient(input) {
   return decodeHtmlEntities(
@@ -67,8 +82,57 @@ function dedupeFeedPosts(rows) {
   return out;
 }
 
+function sanitizeSearchInput(value) {
+  return String(value || '').replace(/\0/g, '').trim();
+}
+
 function containsInsensitive(value) {
-  return { contains: String(value), mode: 'insensitive' };
+  return { contains: sanitizeSearchInput(value), mode: 'insensitive' };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value) {
+  return UUID_RE.test(String(value || '').trim());
+}
+
+function respondInvalidPostId(res) {
+  return res.status(400).json({ success: false, message: 'Invalid post id' });
+}
+
+function sendPostRouteError(res, error) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2023') {
+    return respondInvalidPostId(res);
+  }
+  return res.status(500).json({ success: false, message: error.message });
+}
+
+async function resolveCategoryFilter(categoryParam) {
+  const raw = String(categoryParam || '').trim();
+  if (!raw) return null;
+
+  if (isValidUuid(raw)) {
+    const catDoc = await prisma.category.findUnique({
+      where: { id: raw },
+      select: { id: true, slug: true },
+    });
+    if (!catDoc) return { error: 'Invalid category.' };
+    return {
+      categoryId: catDoc.id,
+      categorySlugFilter: catDoc.slug ? String(catDoc.slug).toLowerCase() : null,
+    };
+  }
+
+  const slug = raw.toLowerCase();
+  const catDoc = await prisma.category.findFirst({
+    where: { slug, isActive: true },
+    select: { id: true, slug: true },
+  });
+  if (!catDoc) return { error: 'Invalid category.' };
+  return {
+    categoryId: catDoc.id,
+    categorySlugFilter: String(catDoc.slug).toLowerCase(),
+  };
 }
 
 function languageWhere(langParam) {
@@ -147,7 +211,54 @@ function languageWhere(langParam) {
       ],
     };
   }
-  return { language: lang };
+  return null;
+}
+
+function politicsScopeAllowedForLanguage(scope, langParam) {
+  const ps = String(scope || '').toLowerCase().trim();
+  if (!ps || ps === 'all') return true;
+  if (!langParam) return true;
+  const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
+  const hiScopes = new Set(['india', 'international', 'north', 'states', 'delhi']);
+  const enHiScopes = new Set(['india', 'international']);
+  if (langParam === 'te') return teScopes.has(ps);
+  if (langParam === 'hi') return hiScopes.has(ps);
+  if (langParam === 'en') return enHiScopes.has(ps);
+  return true;
+}
+
+function applyEnglishScriptFilter(posts) {
+  const hasDevanagari = (str) => /[\u0900-\u097F]/.test(str);
+  const hasTelugu = (str) => /[\u0C00-\u0C7F]/.test(str);
+  return posts.filter((p) => {
+    const titleStr = p.title || '';
+    return !hasDevanagari(titleStr) && !hasTelugu(titleStr);
+  });
+}
+
+function buildFeedPostProcessor({
+  langParam,
+  sourceTypes,
+  excludePoliticsFeed,
+  categorySlugFilter,
+  politicsScopeParam,
+}) {
+  return (posts) => {
+    let out = posts;
+    if (langParam === 'en') {
+      out = applyEnglishScriptFilter(out);
+    }
+    out = capYoutubeInMixedFeed(out, sourceTypes);
+    if (excludePoliticsFeed) {
+      out = filterPostsForShortsFeed(out);
+    }
+    if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
+      out = filterPostsForCategory(out, categorySlugFilter, {
+        politicsScope: politicsScopeParam,
+      });
+    }
+    return out;
+  };
 }
 
 function politicsScopeWhere(scope, langParam) {
@@ -343,18 +454,32 @@ const getFeed = async (req, res) => {
     if (excludePoliticsFeed) {
       const excludeCategoryIds = await getShortsExcludeCategoryIds(prisma);
       andFilters.push(prismaShortsExcludePoliticsClause(excludeCategoryIds));
-      where.youtubeIsShort = true;
+      andFilters.push({
+        OR: [
+          { youtubeIsShort: true },
+          {
+            AND: [
+              { youtubeVideoId: { not: null } },
+              { youtubeIsShort: { not: false } },
+            ],
+          },
+        ],
+      });
     }
     if (category) {
-      where.categoryId = String(category);
-      if (String(category).length >= 20) {
-        politicsCategoryId = String(category);
-        const catDoc = await prisma.category.findUnique({ where: { id: String(category) }, select: { slug: true } });
-        categorySlugFilter = catDoc?.slug ? String(catDoc.slug).toLowerCase() : null;
-        if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
-          const localCat = await prisma.category.findFirst({ where: { slug: 'local', isActive: true }, select: { id: true } });
-          if (localCat?.id) localCategoryId = localCat.id;
-        }
+      const resolved = await resolveCategoryFilter(category);
+      if (resolved?.error) {
+        return res.status(400).json({ success: false, message: resolved.error });
+      }
+      where.categoryId = resolved.categoryId;
+      categorySlugFilter = resolved.categorySlugFilter;
+      politicsCategoryId = resolved.categoryId;
+      if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
+        const localCat = await prisma.category.findFirst({
+          where: { slug: 'local', isActive: true },
+          select: { id: true },
+        });
+        if (localCat?.id) localCategoryId = localCat.id;
       }
     }
     if (city) where.locationCity = containsInsensitive(city);
@@ -366,7 +491,40 @@ const getFeed = async (req, res) => {
         ? String(language).toLowerCase()
         : null;
 
+    if (langParam && !VALID_FEED_LANGUAGES.has(langParam)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid language. Use en, hi, te, or all.',
+      });
+    }
+
+    if (search && String(search).length > MAX_SEARCH_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Search query too long (max ${MAX_SEARCH_LENGTH} characters).`,
+      });
+    }
+
     const politicsScopeParam = String(politicsScope || '').toLowerCase().trim();
+    if (politicsScopeParam && politicsScopeParam !== 'all' && !VALID_POLITICS_SCOPES.has(politicsScopeParam)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid politicsScope.',
+      });
+    }
+    if (
+      politicsScopeParam
+      && politicsScopeParam !== 'all'
+      && langParam
+      && !politicsScopeAllowedForLanguage(politicsScopeParam, langParam)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `politicsScope "${politicsScopeParam}" is not available for language "${langParam}".`,
+      });
+    }
+
+    const { pageNum, limitNum, skip } = parseFeedPagination(page, limit);
 
     if (breaking === 'true') where.isBreaking = true;
     if (featured === 'true') where.isFeatured = true;
@@ -406,15 +564,8 @@ const getFeed = async (req, res) => {
     if (languageClause) filterAnd.push(languageClause);
     const ps = politicsScopeParam;
     const regionalPolitics = ps === 'andhra' || ps === 'telangana' || ps === 'north';
-    if (ps && ps !== 'all' && ['andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(ps)) {
-      const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
-      const hiScopes = new Set(['india', 'international', 'north', 'states', 'delhi']);
-      const enHiScopes = new Set(['india', 'international']);
-      const scopeOk = !langParam
-        || (langParam === 'te' && teScopes.has(ps))
-        || (langParam === 'hi' && hiScopes.has(ps))
-        || (langParam === 'en' && enHiScopes.has(ps))
-        || (langParam !== 'te' && langParam !== 'en' && langParam !== 'hi');
+    if (ps && ps !== 'all' && VALID_POLITICS_SCOPES.has(ps) && ps !== 'all') {
+      const scopeOk = politicsScopeAllowedForLanguage(ps, langParam);
       if (scopeOk) {
         const scopeClause = politicsScopeWhere(ps, langParam);
         if (
@@ -462,53 +613,71 @@ const getFeed = async (req, res) => {
       ];
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const lim = parseInt(limit);
-    const [total, rows] = await Promise.all([
-      prisma.newsPost.count({ where }),
-      prisma.newsPost.findMany({
+    const orderBy = [
+      { sourcePublishedAt: 'desc' },
+      { scrapedAt: 'desc' },
+      { createdAt: 'desc' },
+    ];
+    const applyPostFilters = buildFeedPostProcessor({
+      langParam,
+      sourceTypes,
+      excludePoliticsFeed,
+      categorySlugFilter,
+      politicsScopeParam,
+    });
+
+    let posts;
+    let hasMore;
+    const useFetchLoop = needsPostFetchLoop({
+      langParam,
+      excludePoliticsFeed,
+      categorySlugFilter,
+      sourceTypes,
+    });
+
+    if (useFetchLoop) {
+      const fetched = await fetchFeedPagePosts({
+        prisma,
         where,
-        include: newsPostInclude,
-        orderBy: [
-          { sourcePublishedAt: 'desc' },
-          { scrapedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
         skip,
-        take: lim,
-      }),
-    ]);
-
-    let posts = dedupeFeedPosts(rows.map((p) => serializeNewsPost(p))).map(sanitizeStoryTextFields);
-
-    if (langParam === 'en') {
-      const hasDevanagari = (str) => /[\u0900-\u097F]/.test(str);
-      const hasTelugu = (str) => /[\u0C00-\u0C7F]/.test(str);
-      posts = posts.filter((p) => {
-        const titleStr = p.title || '';
-        if (hasDevanagari(titleStr) || hasTelugu(titleStr)) {
-          return false;
-        }
-        return true;
+        limitNum,
+        include: newsPostInclude,
+        orderBy,
+        mapRow: (row) => sanitizeStoryTextFields(serializeNewsPost(row)),
+        applyPostFilters: (rows) => applyPostFilters(dedupeFeedPosts(rows)),
       });
+      posts = fetched.posts;
+      hasMore = fetched.hasMore;
+    } else {
+      const [rows] = await Promise.all([
+        prisma.newsPost.findMany({
+          where,
+          include: newsPostInclude,
+          orderBy,
+          skip,
+          take: limitNum,
+        }),
+      ]);
+      posts = dedupeFeedPosts(rows.map(mapRow));
+      posts = applyPostFilters(posts);
+      const probe = posts.length === limitNum
+        ? await prisma.newsPost.findMany({
+          where,
+          skip: skip + limitNum,
+          take: 1,
+          select: { id: true },
+        })
+        : [];
+      hasMore = posts.length === limitNum && probe.length > 0;
     }
 
-    posts = capYoutubeInMixedFeed(posts, sourceTypes);
-
-    if (excludePoliticsFeed) {
-      posts = filterPostsForShortsFeed(posts);
-    }
-    if (categorySlugFilter === 'politics' || categorySlugFilter === 'local') {
-      posts = filterPostsForCategory(posts, categorySlugFilter, {
-        politicsScope: politicsScopeParam,
-      });
-    }
-
+    const pagination = buildFeedPaginationResponse(pageNum, limitNum, posts.length, hasMore);
     const payload = {
       success: true,
-      total,
-      page: parseInt(page),
-      pages: Math.ceil(total / parseInt(limit)),
+      total: pagination.total,
+      page: pagination.page,
+      pages: pagination.pages,
+      hasMore: pagination.hasMore,
       posts,
       cached: false,
     };
@@ -532,7 +701,8 @@ const getFeed = async (req, res) => {
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.feedTtlMs()));
     res.json({ ...payload, posts: finalPosts });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error('[news] getFeed error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to load news feed.' });
   }
 };
 
@@ -540,6 +710,9 @@ const getFeed = async (req, res) => {
 const getPost = async (req, res) => {
   try {
     const postId = String(req.params.id || '').trim();
+    if (!isValidUuid(postId)) {
+      return respondInvalidPostId(res);
+    }
 
     // Mark as seen on detail fetch if logged in
     if (req.user && req.user.id) {
@@ -595,7 +768,7 @@ const getPost = async (req, res) => {
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.postTtlMs()));
     res.json({ ...payload, post: postWithSeen });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    sendPostRouteError(res, error);
   }
 };
 
@@ -605,7 +778,11 @@ const toggleLike = async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Login required to like posts.' });
     }
-    const post = await prisma.newsPost.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    const postId = String(req.params.id || '').trim();
+    if (!isValidUuid(postId)) {
+      return respondInvalidPostId(res);
+    }
+    const post = await prisma.newsPost.findUnique({ where: { id: postId }, select: { id: true } });
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
 
     const userId = req.user._id;
@@ -641,7 +818,10 @@ const toggleBookmark = async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Login required to bookmark posts.' });
     }
-    const postId = req.params.id;
+    const postId = String(req.params.id || '').trim();
+    if (!isValidUuid(postId)) {
+      return respondInvalidPostId(res);
+    }
     const post = await prisma.newsPost.findUnique({ where: { id: postId }, select: { id: true } });
     if (!post) return res.status(404).json({ success: false, message: 'Post not found.' });
     const key = { userId_postId: { userId: req.user._id, postId } };
@@ -683,8 +863,12 @@ const getBookmarks = async (req, res) => {
 // GET /api/news/:id/comments
 const getComments = async (req, res) => {
   try {
+    const postId = String(req.params.id || '').trim();
+    if (!isValidUuid(postId)) {
+      return respondInvalidPostId(res);
+    }
     const comments = await prisma.comment.findMany({
-      where: { postId: req.params.id, isDeleted: false },
+      where: { postId, isDeleted: false },
       include: { user: true },
       orderBy: { createdAt: 'desc' },
       take: 50,
@@ -701,14 +885,28 @@ const addComment = async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Login required to comment.' });
     }
+    const postId = String(req.params.id || '').trim();
+    if (!isValidUuid(postId)) {
+      return respondInvalidPostId(res);
+    }
     const { text } = req.body;
     if (!text) return res.status(400).json({ success: false, message: 'Comment text required.' });
+    const commentText = String(text).trim();
+    if (!commentText) {
+      return res.status(400).json({ success: false, message: 'Comment text required.' });
+    }
+    if (commentText.length > MAX_COMMENT_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Comment too long (max ${MAX_COMMENT_LENGTH} characters).`,
+      });
+    }
 
     const comment = await prisma.comment.create({
       data: {
-        postId: req.params.id,
+        postId,
         userId: req.user._id,
-        text,
+        text: commentText,
       },
       include: { user: true },
     });
@@ -728,6 +926,12 @@ const translateText = async (req, res) => {
 
     if (!input) {
       return res.status(400).json({ success: false, message: 'text is required.' });
+    }
+    if (input.length > MAX_TRANSLATE_TEXT_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `text too long (max ${MAX_TRANSLATE_TEXT_LENGTH} characters).`,
+      });
     }
     if (!['en', 'hi', 'te'].includes(target)) {
       return res.status(400).json({
@@ -1005,6 +1209,9 @@ const getLocalNews = async (req, res) => {
 const markPostSeen = async (req, res) => {
   try {
     const postId = String(req.params.id || '').trim();
+    if (!isValidUuid(postId)) {
+      return respondInvalidPostId(res);
+    }
     if (!req.user || !req.user.id) {
       return res.status(401).json({ success: false, message: 'Authorization required.' });
     }
@@ -1036,96 +1243,73 @@ const markPostSeen = async (req, res) => {
 
 async function chatWithNews(req, res) {
   try {
-    const { message, language } = req.body;
+    const {
+      message,
+      language,
+      latitude,
+      longitude,
+      lat,
+      lng,
+      city,
+      state,
+      country,
+      articleId,
+      category,
+      history,
+    } = req.body;
+
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Message is required.' });
     }
-
-    const query = message.trim();
-    const lang = String(language || 'en').toLowerCase().trim();
-
-    // 1. Fetch recent articles (last 7 days) matching the query keywords
-    const keywords = query
-      .toLowerCase()
-      .replace(/[^\w\s\u0900-\u097F\u0C00-\u0C7F]/g, ' ')
-      .split(/\s+/)
-      .map((k) => k.trim())
-      .filter((k) => k.length > 2);
-
-    let context = '';
-    if (keywords.length > 0) {
-      const matchedPosts = await prisma.newsPost.findMany({
-        where: {
-          status: 'approved',
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-          OR: keywords.map((kw) => ({
-            OR: [
-              { title: { contains: kw, mode: 'insensitive' } },
-              { summary: { contains: kw, mode: 'insensitive' } },
-            ],
-          })),
-        },
-        take: 6,
-        orderBy: [
-          { sourcePublishedAt: 'desc' },
-          { createdAt: 'desc' },
-        ],
-        select: {
-          title: true,
-          summary: true,
-          sourcePublishedAt: true,
-          createdAt: true,
-        },
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length > MAX_CHAT_MESSAGE_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: `Message too long (max ${MAX_CHAT_MESSAGE_LENGTH} characters).`,
       });
-
-      if (matchedPosts.length > 0) {
-        context = matchedPosts
-          .map((p, idx) => {
-            const date = p.sourcePublishedAt || p.createdAt;
-            const dateStr = date ? new Date(date).toLocaleDateString() : '';
-            return `[Article ${idx + 1}] Title: ${p.title}\nDate: ${dateStr}\nSummary: ${p.summary || ''}\n`;
-          })
-          .join('\n');
-      }
+    }
+    if (articleId && !isValidUuid(String(articleId))) {
+      return res.status(400).json({ success: false, message: 'Invalid articleId.' });
     }
 
-    // 2. Select system prompts based on target language
-    let systemPrompt = '';
-    let fallbackText = '';
-    if (lang === 'te') {
-      systemPrompt =
-        'You are "NewsNow Assistant", a friendly AI companion for a premium Indian news app. ' +
-        'Answer the user\'s question about recent news using ONLY the provided news articles context below. ' +
-        'Respond in Telugu only (Telugu script). Be factual, objective, and concise (under 4 sentences). ' +
-        'If the context doesn\'t contain the answer, say "నేను ఆ సమాచారాన్ని కనుగొనలేకపోయాను."';
-      fallbackText = 'నేను ఆ సమాచారాన్ని కనుగొనలేకపోయాను.';
-    } else if (lang === 'hi') {
-      systemPrompt =
-        'You are "NewsNow Assistant", a friendly AI companion for a premium Indian news app. ' +
-        'Answer the user\'s question about recent news using ONLY the provided news articles context below. ' +
-        'Respond in Hindi only (Devanagari script). Be factual, objective, and concise (under 4 sentences). ' +
-        'If the context doesn\'t contain the answer, say "मुझे उस विषय के बारे में कोई हालिया समाचार नहीं मिला।"';
-      fallbackText = 'मुझे उस विषय के बारे में कोई हालिया समाचार नहीं मिला।';
-    } else {
-      systemPrompt =
-        'You are "NewsNow Assistant", a friendly AI companion for a premium Indian news app. ' +
-        'Answer the user\'s question about recent news using ONLY the provided news articles context below. ' +
-        'Respond in English only. Be factual, objective, and concise (under 4 sentences). ' +
-        'If the context doesn\'t contain the answer, say "I couldn\'t find any recent news articles about that topic."';
-      fallbackText = 'I couldn\'t find any recent news articles about that topic.';
+    const aiProvider = require('../services/aiProvider');
+    if (!aiProvider.isOllamaProvider()) {
+      return res.status(503).json({
+        success: false,
+        message: 'AI chat requires Ollama. Set AI_PROVIDER=ollama on the server.',
+      });
+    }
+    const ollamaStatus = await aiProvider.pingOllama();
+    if (!ollamaStatus.ok) {
+      return res.status(503).json({
+        success: false,
+        message: 'Ollama is not ready. Pull the configured models and try again.',
+        ai: ollamaStatus,
+      });
     }
 
-    const userPrompt = `Context:\n${context || 'No recent articles found.'}\n\nUser Question: ${query}\n\nAnswer:`;
-
-    // 3. Call Ollama chat service
-    const { chatWithOllama } = require('../services/aiProvider');
-    const answer = await chatWithOllama(systemPrompt, userPrompt, lang);
+    const { runNewsChat } = require('../services/newsChatService');
+    const result = await runNewsChat({
+      message: trimmedMessage,
+      language,
+      latitude,
+      longitude,
+      lat,
+      lng,
+      city,
+      state,
+      country,
+      articleId,
+      category,
+      history,
+    });
 
     return res.json({
       success: true,
-      answer: answer || fallbackText,
+      answer: result.answer,
+      relatedArticles: result.relatedArticles,
+      weather: result.weather,
+      sourcesUsed: result.sourcesUsed,
     });
   } catch (error) {
     console.error('[ai-chat] Error in chatWithNews:', error.message);
@@ -1151,4 +1335,9 @@ module.exports = {
   getLocalNews,
   markPostSeen,
   chatWithNews,
+  isValidUuid,
+  resolveCategoryFilter,
+  VALID_FEED_LANGUAGES,
+  politicsScopeAllowedForLanguage,
+  buildFeedPostProcessor,
 };

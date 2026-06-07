@@ -60,4 +60,23 @@ describe('corsConfig', () => {
     delete process.env.CORS_ALLOW_LOCALHOST;
     assert.equal(isLocalDevOrigin('http://127.0.0.1:8080'), true);
   });
+
+  it('rejects blocked origins without throwing (callback null, false)', () => {
+    process.env.ALLOWED_ORIGINS = 'https://app.example.com';
+    process.env.NODE_ENV = 'production';
+    const { origin } = buildCorsOptions();
+    assert.equal(typeof origin, 'function');
+
+    return new Promise((resolve, reject) => {
+      origin('https://evil.example.com', (err, allowed) => {
+        try {
+          assert.equal(err, null);
+          assert.equal(allowed, false);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+  });
 });

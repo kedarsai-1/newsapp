@@ -13,11 +13,18 @@ const FEED_LANG_LABELS = {
 
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 
-let ollamaQueue = Promise.resolve();
+let ollamaIngestionQueue = Promise.resolve();
+let ollamaChatQueue = Promise.resolve();
 
-function withOllamaQueue(fn) {
-  const run = ollamaQueue.then(fn, fn);
-  ollamaQueue = run.catch(() => {});
+function withOllamaIngestionQueue(fn) {
+  const run = ollamaIngestionQueue.then(fn, fn);
+  ollamaIngestionQueue = run.catch(() => {});
+  return run;
+}
+
+function withOllamaChatQueue(fn) {
+  const run = ollamaChatQueue.then(fn, fn);
+  ollamaChatQueue = run.catch(() => {});
   return run;
 }
 
@@ -76,6 +83,13 @@ function ollamaTimeoutMs() {
   return Math.min(
     600000,
     Math.max(10000, Number(process.env.OLLAMA_TIMEOUT_MS || 180000)),
+  );
+}
+
+function ollamaChatTimeoutMs() {
+  return Math.min(
+    120000,
+    Math.max(10000, Number(process.env.OLLAMA_CHAT_TIMEOUT_MS || 45000)),
   );
 }
 
@@ -157,11 +171,11 @@ function translationUserPrompt(text) {
   return String(text || '').trim().slice(0, 1200);
 }
 
-async function ollamaChat(system, user, lang = 'en') {
+async function ollamaChat(system, user, lang = 'en', timeoutMs = null) {
   const url = `${ollamaBaseUrl()}/api/chat`;
   const model = ollamaModelForLanguage(lang);
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), ollamaTimeoutMs());
+  const timer = setTimeout(() => ac.abort(), timeoutMs ?? ollamaTimeoutMs());
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -192,14 +206,21 @@ async function ollamaChat(system, user, lang = 'en') {
   }
 }
 
-async function ollamaComplete(system, user, lang = 'en') {
+function ollamaSummaryTimeoutMs() {
+  return Math.min(
+    180_000,
+    Math.max(30_000, Number(process.env.OLLAMA_SUMMARY_TIMEOUT_MS || 90_000)),
+  );
+}
+
+async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
   const model = ollamaModelForLanguage(lang);
   if (useOllamaChatApi()) {
-    return ollamaChat(system, user, lang);
+    return ollamaChat(system, user, lang, timeoutMs ?? ollamaTimeoutMs());
   }
   const url = `${ollamaBaseUrl()}/api/generate`;
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), ollamaTimeoutMs());
+  const timer = setTimeout(() => ac.abort(), timeoutMs ?? ollamaTimeoutMs());
   try {
     const response = await fetch(url, {
       method: 'POST',
@@ -223,8 +244,8 @@ async function ollamaComplete(system, user, lang = 'en') {
   }
 }
 
-async function ollamaCompleteQueued(system, user, lang = 'en') {
-  return withOllamaQueue(() => ollamaComplete(system, user, lang));
+async function ollamaCompleteQueued(system, user, lang = 'en', timeoutMs = null) {
+  return withOllamaIngestionQueue(() => ollamaComplete(system, user, lang, timeoutMs));
 }
 
 function parseHfSummarizationJson(result) {
@@ -326,6 +347,7 @@ async function summarize(text, targetLang = 'en') {
           summarySystemPrompt('en'),
           summaryUserPrompt(input),
           'en',
+          ollamaSummaryTimeoutMs(),
         );
         const out = validateLanguageOutput(raw, 'en');
         if (out) return out;
@@ -351,6 +373,7 @@ async function summarize(text, targetLang = 'en') {
           summarySystemPrompt(lang),
           summaryUserPrompt(input),
           lang,
+          ollamaSummaryTimeoutMs(),
         );
         const out = validateLanguageOutput(raw, lang);
         if (out) return out;
@@ -491,7 +514,7 @@ async function areTitlesSameStory(titleA, titleB, lang = 'en') {
   const user = `Title A: ${a}\nTitle B: ${b}\nSame story?`;
 
   try {
-    const out = await withOllamaQueue(() => ollamaChat(system, user, lang));
+    const out = await withOllamaIngestionQueue(() => ollamaChat(system, user, lang));
     return /^yes\b/i.test(String(out || '').trim());
   } catch {
     return false;
@@ -527,11 +550,18 @@ async function pingOllama() {
   }
 }
 
+function isOllamaAbortError(err) {
+  const msg = String(err?.message || err || '');
+  return err?.name === 'AbortError' || /aborted|timeout|timed out/i.test(msg);
+}
+
 async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
   if (!isOllamaProvider()) {
     throw new Error('Ollama provider is not enabled in environment');
   }
-  return withOllamaQueue(() => ollamaChat(systemPrompt, userPrompt, lang));
+  return withOllamaChatQueue(() =>
+    ollamaChat(systemPrompt, userPrompt, lang, ollamaChatTimeoutMs()),
+  );
 }
 
 module.exports = {
@@ -548,4 +578,9 @@ module.exports = {
   cleanModelOutput,
   areTitlesSameStory,
   chatWithOllama,
+  ollamaChatTimeoutMs,
+  ollamaSummaryTimeoutMs,
+  isOllamaAbortError,
+  withOllamaChatQueue,
+  withOllamaIngestionQueue,
 };

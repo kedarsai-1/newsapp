@@ -508,4 +508,6 @@ module.exports = {
   buildDomainImageFallbackCandidates,
   looksLikeDecorativeImage,
   isUnusableFeedImageUrl,
+  parseOgImageFromHtml,
+  parseFirstContentImageFromHtml,
 };

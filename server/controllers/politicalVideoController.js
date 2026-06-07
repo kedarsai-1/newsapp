@@ -3,33 +3,36 @@ const { POLITICAL_LABELS } = require('../config/politicalVideoConfig');
 const { runPoliticalVideoIngestion } = require('../services/politicalVideoIngestionService');
 const { serializeNewsPost } = require('../utils/serializers');
 const { newsPostInclude } = require('../utils/prismaNewsPost');
+const feedResponseCache = require('../utils/feedResponseCache');
+const {
+  parseFeedPagination,
+  buildFeedPaginationResponse,
+} = require('../utils/feedPagination');
 
-function toClientRow(post) {
-  const o = post.toObject ? post.toObject() : post;
-  const thumb =
-    o.media?.[0]?.thumbnail
-    || o.media?.[0]?.url
-    || (o.youtube?.videoId ? `https://i.ytimg.com/vi/${o.youtube.videoId}/hqdefault.jpg` : null);
+/** Vertical political reels — YouTube embeds up to ~60s. */
+function politicalReelsWhere(extra = {}) {
   return {
-    id: String(o._id),
-    title: o.title,
-    thumbnail: thumb,
-    videoId: o.youtube?.videoId || null,
-    category: o.videoCategory || null,
-    language: o.language || 'en',
-    channelName: o.youtube?.channelTitle || o.sourceName || 'YouTube',
-    publishedAt: o.sourcePublishedAt || o.createdAt,
-    embedUrl: o.youtube?.embedUrl || null,
-    watchUrl: o.youtube?.watchUrl || o.sourceUrl || null,
-    classificationMethod: o.videoClassificationMethod || null,
-    classificationScore: o.videoClassificationScore ?? null,
-    post: o,
+    status: 'approved',
+    sourceType: 'youtube',
+    youtubeVideoId: { not: null },
+    videoCategory: { in: POLITICAL_LABELS },
+    OR: [
+      { youtubeIsShort: true },
+      { youtubeDurationSeconds: { lte: 60 } },
+    ],
+    ...extra,
   };
 }
 
 /** GET /api/political-videos/feed — vertical political reels (YouTube embed only). */
 const getPoliticalFeed = async (req, res) => {
   try {
+    const cached = await feedResponseCache.getCachedPoliticalFeed(req.query);
+    if (cached) {
+      res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
+      return res.json({ ...cached.body, cached: true });
+    }
+
     const {
       page = 1,
       limit = 20,
@@ -37,12 +40,7 @@ const getPoliticalFeed = async (req, res) => {
       category,
     } = req.query;
 
-    const where = {
-      status: 'approved',
-      sourceType: 'youtube',
-      youtubeVideoId: { not: null },
-      videoCategory: { in: POLITICAL_LABELS },
-    };
+    const where = politicalReelsWhere();
 
     if (language && String(language).toLowerCase() !== 'all') {
       where.language = String(language).toLowerCase();
@@ -51,8 +49,7 @@ const getPoliticalFeed = async (req, res) => {
       where.videoCategory = String(category).toLowerCase();
     }
 
-    const lim = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (Math.max(1, parseInt(page, 10) || 1) - 1) * lim;
+    const { pageNum, limitNum, skip } = parseFeedPagination(page, limit);
 
     const [rows, total] = await Promise.all([
       prisma.newsPost.findMany({
@@ -60,24 +57,31 @@ const getPoliticalFeed = async (req, res) => {
         include: newsPostInclude,
         orderBy: [{ sourcePublishedAt: 'desc' }, { createdAt: 'desc' }],
         skip,
-        take: lim,
+        take: limitNum,
       }),
       prisma.newsPost.count({ where }),
     ]);
 
     const posts = rows.map(serializeNewsPost);
-    const videos = posts.map(toClientRow);
+    const hasMore = skip + posts.length < total;
+    const pagination = buildFeedPaginationResponse(pageNum, limitNum, posts.length, hasMore);
 
-    return res.json({
+    const payload = {
       success: true,
-      videos,
       posts,
-      page: parseInt(page, 10) || 1,
-      pages: Math.ceil(total / lim) || 1,
+      page: pagination.page,
+      pages: pagination.pages,
       total,
-    });
+      hasMore: pagination.hasMore,
+      cached: false,
+    };
+
+    await feedResponseCache.setCachedPoliticalFeed(req.query, payload);
+    res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.politicalFeedTtlMs()));
+    return res.json(payload);
   } catch (e) {
-    return res.status(500).json({ success: false, message: e.message });
+    console.error('[political-videos] feed error:', e.message);
+    return res.status(500).json({ success: false, message: 'Failed to load political videos.' });
   }
 };
 
@@ -96,4 +100,5 @@ const triggerIngest = async (req, res) => {
 module.exports = {
   getPoliticalFeed,
   triggerIngest,
+  politicalReelsWhere,
 };

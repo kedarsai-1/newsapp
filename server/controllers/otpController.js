@@ -38,31 +38,32 @@ const sendOtpHandler = async (req, res) => {
       return res.status(400).json({ success: false, message: 'target must be a valid email or phone number.' });
     }
 
-    // For login: target must exist in the database
+    const genericLoginMessage =
+      'If an account exists for this target, an OTP has been sent.';
+
+    // For login: never reveal whether the account exists (anti-enumeration).
     if (purpose === 'login') {
       const query = channel === 'email'
         ? { email: target.trim().toLowerCase() }
         : { phone: target.trim() };
 
       const user = await prisma.user.findFirst({ where: query });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: channel === 'email'
-            ? 'No account found with this email.'
-            : 'No account found with this phone number.',
-        });
+      const canSendOtp = Boolean(
+        user && user.isActive && user.role !== 'admin',
+      );
+
+      if (canSendOtp) {
+        await sendOtp(target.trim(), channel, purpose);
       }
-      if (!user.isActive) {
-        return res.status(403).json({ success: false, message: 'Account is suspended.' });
-      }
-      // Admins must use password login — OTP not allowed
-      if (user.role === 'admin') {
-        return res.status(403).json({
-          success: false,
-          message: 'Admin accounts must use password login.',
-        });
-      }
+
+      return res.json({
+        success: true,
+        message: genericLoginMessage,
+        channel,
+        maskedTarget: channel === 'email'
+          ? target.replace(/^(.{2})(.*)(@.*)$/, (_, a, b, c) => a + '*'.repeat(Math.max(1, b.length)) + c)
+          : target.replace(/(\d{2})\d+(\d{3})/, (_, a, b) => a + '****' + b),
+      });
     }
 
     // For register: target must NOT already exist
@@ -88,7 +89,6 @@ const sendOtpHandler = async (req, res) => {
       success: true,
       message: `OTP sent to ${channel === 'email' ? 'your email' : 'your phone'}.`,
       channel,
-      // Mask the target for the response
       maskedTarget: channel === 'email'
         ? target.replace(/^(.{2})(.*)(@.*)$/, (_, a, b, c) => a + '*'.repeat(Math.max(1, b.length)) + c)
         : target.replace(/(\d{2})\d+(\d{3})/, (_, a, b) => a + '****' + b),

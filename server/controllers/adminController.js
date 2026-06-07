@@ -15,6 +15,9 @@ const { runAllLanguageIngestionParallel } = require('../services/languageIngesti
 const { isPerLanguageIngestEnabled } = require('../config/ingestLanguages');
 const { fetchBestImageFallback, isUnusableFeedImageUrl } = require('../services/newsApiService');
 const { resolveGoogleNewsPublisherUrl } = require('../services/rssService');
+const feedResponseCache = require('../utils/feedResponseCache');
+const { validateCategoryInput } = require('../utils/categoryValidation');
+const { runPoliticalVideoIngestion } = require('../services/politicalVideoIngestionService');
 
 const { rehostExternalImageToCloudinary: rehostImage } = require('../utils/rehostExternalImage');
 
@@ -263,19 +266,106 @@ const toggleUserActive = async (req, res) => {
 // POST /api/admin/categories
 const createCategory = async (req, res) => {
   try {
-    const { name, slug, icon, color, order } = req.body;
+    const validated = validateCategoryInput(req.body || {});
+    if (validated.error) {
+      return res.status(400).json({ success: false, message: validated.error });
+    }
+    const { name, slug } = validated.data;
+    const { icon, color, order } = req.body || {};
     const category = await prisma.category.create({
       data: {
         name,
-        slug: String(slug || '').toLowerCase(),
+        slug,
         icon,
         color,
-        order,
+        order: Number.isFinite(Number(order)) ? Number(order) : undefined,
       },
     });
+    await feedResponseCache.invalidateFeedCaches();
     res.status(201).json({ success: true, category: serializeCategory(category) });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ success: false, message: 'Category slug already exists.' });
+    }
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// PUT /api/admin/categories/:id
+const updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Category not found.' });
+    }
+
+    const data = {};
+    if (req.body?.name != null) {
+      const name = String(req.body.name).trim();
+      if (!name) return res.status(400).json({ success: false, message: 'Category name cannot be empty.' });
+      data.name = name;
+    }
+    if (req.body?.slug != null) {
+      const slug = String(req.body.slug).trim().toLowerCase();
+      const validated = validateCategoryInput({ name: data.name || existing.name, slug });
+      if (validated.error) {
+        return res.status(400).json({ success: false, message: validated.error });
+      }
+      data.slug = validated.data.slug;
+    }
+    if (req.body?.icon != null) data.icon = req.body.icon;
+    if (req.body?.color != null) data.color = req.body.color;
+    if (req.body?.order != null && Number.isFinite(Number(req.body.order))) {
+      data.order = Number(req.body.order);
+    }
+    if (req.body?.isActive != null) data.isActive = Boolean(req.body.isActive);
+
+    const category = await prisma.category.update({ where: { id }, data });
+    await feedResponseCache.invalidateFeedCaches();
+    res.json({ success: true, category: serializeCategory(category) });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ success: false, message: 'Category slug already exists.' });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// PUT /api/admin/categories/:id/toggle-active
+const toggleCategoryActive = async (req, res) => {
+  try {
+    const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Category not found.' });
+    }
+    const category = await prisma.category.update({
+      where: { id: req.params.id },
+      data: { isActive: !existing.isActive },
+    });
+    await feedResponseCache.invalidateFeedCaches();
+    res.json({
+      success: true,
+      message: `Category ${category.isActive ? 'activated' : 'deactivated'}.`,
+      category: serializeCategory(category),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// POST /api/admin/political-videos/ingest
+const runPoliticalVideoIngestionNow = async (req, res) => {
+  try {
+    const result = await runPoliticalVideoIngestion({
+      triggeredBy: `admin:${req.user._id.toString()}`,
+    });
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -432,8 +522,11 @@ module.exports = {
   updateUserRole,
   toggleUserActive,
   createCategory,
+  updateCategory,
+  toggleCategoryActive,
   runIngestionNow,
   runYoutubeIngestionNow,
+  runPoliticalVideoIngestionNow,
   getIngestionRunStatus,
   backfillThumbnails,
 };

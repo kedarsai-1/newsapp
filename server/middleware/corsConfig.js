@@ -72,7 +72,7 @@ function buildCorsOptions() {
       if (!origin) return callback(null, true);
       if (allowSet.has(origin)) return callback(null, true);
       if (isLocalDevOrigin(origin)) return callback(null, true);
-      return callback(new Error(`CORS blocked: ${origin}`));
+      return callback(null, false);
     },
   };
 }
@@ -87,7 +87,7 @@ function socketCorsOrigins() {
     if (!origin) return callback(null, true);
     if (allowSet.has(origin)) return callback(null, true);
     if (isLocalDevOrigin(origin)) return callback(null, true);
-    return callback(new Error(`CORS blocked: ${origin}`));
+    return callback(null, false);
   };
 }
 

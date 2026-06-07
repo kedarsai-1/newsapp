@@ -11,8 +11,11 @@ const {
   updateUserRole,
   toggleUserActive,
   createCategory,
+  updateCategory,
+  toggleCategoryActive,
   runIngestionNow,
   runYoutubeIngestionNow,
+  runPoliticalVideoIngestionNow,
   getIngestionRunStatus,
   backfillThumbnails,
 } = require('../controllers/adminController');
@@ -37,10 +40,13 @@ router.put('/users/:id/toggle-active', toggleUserActive);
 
 // Category management
 router.post('/categories', createCategory);
+router.put('/categories/:id', updateCategory);
+router.put('/categories/:id/toggle-active', toggleCategoryActive);
 
 // News ingestion
 router.post('/ingestion/run', runIngestionNow);
 router.post('/youtube/ingest', runYoutubeIngestionNow);
+router.post('/political-videos/ingest', runPoliticalVideoIngestionNow);
 router.get('/ingestion/status', getIngestionRunStatus);
 
 // Media maintenance

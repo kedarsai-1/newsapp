@@ -7,7 +7,7 @@ const cacheService = require('./utils/cacheService');
 const { prisma } = require('./config/prisma');
 const { setIngestionSocket } = require('./services/feedSocket');
 const { startCronScheduler } = require('./services/cronScheduler');
-const { ensureDefaultCategories } = require('./utils/ensureDefaultData');
+const { ensureDefaultCategories, ensureDefaultAdmin } = require('./utils/ensureDefaultData');
 const aiProvider = require('./services/aiProvider');
 const { buildCorsOptions, socketCorsOrigins } = require('./middleware/corsConfig');
 const apiRateLimit = require('./middleware/apiRateLimit');
@@ -19,6 +19,7 @@ const adminRoutes = require('./routes/admin');
 const categoryRoutes = require('./routes/categories');
 const sportsRoutes = require('./routes/sports');
 const politicalVideoRoutes = require('./routes/politicalVideos');
+const weatherRoutes = require('./routes/weather');
 const cronRoutes = require('./routes/cron');
 
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/sports', sportsRoutes);
 app.use('/api/political-videos', politicalVideoRoutes);
+app.use('/api/weather', weatherRoutes);
 app.use('/api/cron', cronRoutes);
 
 let dbReady = false;
@@ -85,6 +87,7 @@ async function buildAiHealthPayload(forceRefresh = false) {
   const byLang = ping.modelsByLang || {};
   const payload = {
     provider: 'ollama',
+    summariesEnabled: aiProvider.isAiSummaryEnabled(),
     ok: ping.ok === true,
     modelsByLang: {
       en: byLang.en ?? 'unknown',
@@ -129,10 +132,21 @@ app.get('/api/ready', (req, res) => {
 
 // Global error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({
+  if (res.headersSent) return next(err);
+
+  const { Prisma } = require('@prisma/client');
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2023') {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid post id',
+    });
+  }
+
+  const status = err.status || 500;
+  console.error(err.stack || err.message || err);
+  res.status(status).json({
     success: false,
-    message: err.message || 'Internal Server Error'
+    message: status >= 500 ? 'Internal Server Error' : (err.message || 'Internal Server Error'),
   });
 });
 
@@ -167,6 +181,7 @@ async function runBackgroundJobs() {
 
   console.log('PostgreSQL connected');
   await ensureDefaultCategories();
+  await ensureDefaultAdmin();
   if (aiProvider.isOllamaProvider()) {
     const ollama = await aiProvider.pingOllama();
     if (ollama.ok) {

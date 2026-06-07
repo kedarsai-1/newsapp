@@ -486,6 +486,17 @@ async function runIngestion({
     };
   }
 
+  // Prevent concurrent execution of multiple language pipelines to protect single-core CPU
+  const anyRunning = [...ingestStateByLock.entries()].find(([k, v]) => v.isRunning && k !== lockKey);
+  if (anyRunning) {
+    return {
+      success: false,
+      skipped: true,
+      message: `Ingestion skipped: another pipeline (${anyRunning[0]}) is currently running.`,
+      state: lockState,
+    };
+  }
+
   lockState.isRunning = true;
   lockState.lastRunAt = new Date();
   lockState.lastError = null;
@@ -725,6 +736,12 @@ async function runIngestion({
       let feedIdx = 0;
       for (const feed of feeds) {
         feedIdx += 1;
+        if (budget.limitMs != null && budget.remainingMs() < 40000) {
+          console.warn(
+            `[ingest] Time budget running low (${Math.round(budget.remainingMs() / 1000)}s remaining) at feed ${feedIdx}/${feeds.length} (${feed.name || 'feed'}). Gracefully ending RSS ingestion loop.`,
+          );
+          break;
+        }
         budget.throwIfExpired(`rss:feed-start:${feedIdx}/${feeds.length}`);
         if (!feed?.url) continue;
         let category;
@@ -747,6 +764,12 @@ async function runIngestion({
 
           for (let ri = 0; ri < slice.length; ri++) {
             if (insertedThisFeed >= targetInsertsPerFeed) break;
+            if (budget.limitMs != null && budget.remainingMs() < 15000) {
+              console.warn(
+                `[ingest] Time budget running low inside feed items loop (${Math.round(budget.remainingMs() / 1000)}s remaining). Gracefully breaking items loop.`,
+              );
+              break;
+            }
             if (ri % 10 === 0) {
               budget.throwIfExpired(`rss:${feedIdx}/${feeds.length}:${feed.name || 'feed'}`);
             }

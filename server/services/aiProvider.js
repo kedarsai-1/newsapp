@@ -13,22 +13,11 @@ const FEED_LANG_LABELS = {
 
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 
-let ollamaQueues = {
-  en: Promise.resolve(),
-  hi: Promise.resolve(),
-  te: Promise.resolve(),
-};
+let ollamaQueue = Promise.resolve();
 
-function ollamaQueueKey(lang) {
-  const l = String(lang || 'en').toLowerCase();
-  if (l === 'hi' || l === 'te') return l;
-  return 'en';
-}
-
-function withOllamaQueue(fn, lang = 'en') {
-  const key = ollamaQueueKey(lang);
-  const run = ollamaQueues[key].then(fn, fn);
-  ollamaQueues[key] = run.catch(() => {});
+function withOllamaQueue(fn) {
+  const run = ollamaQueue.then(fn, fn);
+  ollamaQueue = run.catch(() => {});
   return run;
 }
 
@@ -85,8 +74,8 @@ function useOllamaChatApi() {
 
 function ollamaTimeoutMs() {
   return Math.min(
-    180000,
-    Math.max(10000, Number(process.env.OLLAMA_TIMEOUT_MS || 90000)),
+    600000,
+    Math.max(10000, Number(process.env.OLLAMA_TIMEOUT_MS || 180000)),
   );
 }
 
@@ -235,7 +224,7 @@ async function ollamaComplete(system, user, lang = 'en') {
 }
 
 async function ollamaCompleteQueued(system, user, lang = 'en') {
-  return withOllamaQueue(() => ollamaComplete(system, user, lang), lang);
+  return withOllamaQueue(() => ollamaComplete(system, user, lang));
 }
 
 function parseHfSummarizationJson(result) {
@@ -328,17 +317,8 @@ async function summarize(text, targetLang = 'en') {
   if (!input) return '';
   const lang = String(targetLang || 'en').toLowerCase();
 
-  // For English: HF primary, Ollama backup
+  // For English: Ollama primary (if enabled), HF backup
   if (lang === 'en') {
-    const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
-    if (hasHfToken) {
-      try {
-        const out = await summarizeWithHf(input);
-        if (out) return out;
-      } catch (hfErr) {
-        console.error(`[ai] English HF summarization failed: ${hfErr.message}`);
-      }
-    }
     if (isOllamaProvider()) {
       try {
         const model = ollamaModelForLanguage('en');
@@ -350,7 +330,16 @@ async function summarize(text, targetLang = 'en') {
         const out = validateLanguageOutput(raw, 'en');
         if (out) return out;
       } catch (e) {
-        console.error(`[ai] English Ollama fallback summarization failed: ${e.message}`);
+        console.error(`[ai] English Ollama summarization failed: ${e.message}`);
+      }
+    }
+    const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
+    if (hasHfToken) {
+      try {
+        const out = await summarizeWithHf(input);
+        if (out) return out;
+      } catch (hfErr) {
+        console.error(`[ai] English HF fallback summarization failed: ${hfErr.message}`);
       }
     }
   } else {
@@ -411,17 +400,7 @@ async function translateToEnglish(text) {
   const raw = String(text || '').trim();
   if (!raw) return '';
 
-  // 1. Try Hugging Face first
-  const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
-  if (hasHfToken) {
-    try {
-      return await translateToEnglishWithHf(raw);
-    } catch (hfErr) {
-      console.error(`[ai] English HF translation failed: ${hfErr.message}`);
-    }
-  }
-
-  // 2. Fallback to Ollama
+  // 1. Try Ollama first if it is the selected provider
   if (isOllamaProvider()) {
     try {
       const out = validateLanguageOutput(
@@ -434,7 +413,17 @@ async function translateToEnglish(text) {
       );
       if (out) return out;
     } catch (e) {
-      console.error(`[ai] Ollama translateToEnglish fallback failed: ${e.message}`);
+      console.error(`[ai] Ollama translateToEnglish failed: ${e.message}`);
+    }
+  }
+
+  // 2. Fallback to Hugging Face
+  const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
+  if (hasHfToken) {
+    try {
+      return await translateToEnglishWithHf(raw);
+    } catch (hfErr) {
+      console.error(`[ai] English HF translation fallback failed: ${hfErr.message}`);
     }
   }
 
@@ -502,7 +491,7 @@ async function areTitlesSameStory(titleA, titleB, lang = 'en') {
   const user = `Title A: ${a}\nTitle B: ${b}\nSame story?`;
 
   try {
-    const out = await withOllamaQueue(() => ollamaChat(system, user, lang), lang);
+    const out = await withOllamaQueue(() => ollamaChat(system, user, lang));
     return /^yes\b/i.test(String(out || '').trim());
   } catch {
     return false;
@@ -542,7 +531,7 @@ async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
   if (!isOllamaProvider()) {
     throw new Error('Ollama provider is not enabled in environment');
   }
-  return withOllamaQueue(() => ollamaChat(systemPrompt, userPrompt, lang), lang);
+  return withOllamaQueue(() => ollamaChat(systemPrompt, userPrompt, lang));
 }
 
 module.exports = {

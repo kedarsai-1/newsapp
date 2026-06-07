@@ -384,19 +384,20 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron', lang
     }
 
     const embeddable = await filterEmbeddableVideos(toEmbedCheck);
-    const embeddableIds = new Set(embeddable.map((v) => v.videoId));
+    const embeddableMap = new Map(embeddable.map((v) => [v.videoId, v]));
 
     const toSave = [
-      ...keywordAccepted.filter((x) => embeddableIds.has(x.video.videoId)),
-      ...mlAccepted.filter((x) => embeddableIds.has(x.video.videoId)),
+      ...keywordAccepted.filter((x) => embeddableMap.has(x.video.videoId)),
+      ...mlAccepted.filter((x) => embeddableMap.has(x.video.videoId)),
     ];
 
     for (const row of toSave) {
       try {
+        const enrichedVideo = embeddableMap.get(row.video.videoId);
         // eslint-disable-next-line no-await-in-loop
-        await savePoliticalVideo(row.video, row.classification);
+        await savePoliticalVideo(enrichedVideo, row.classification);
         stats.saved += 1;
-        if (row.video.isShort) stats.shortsSaved += 1;
+        if (enrichedVideo.isShort) stats.shortsSaved += 1;
         if (isInterviewCategory(row.classification.category)) {
           stats.interviewsSaved += 1;
         }

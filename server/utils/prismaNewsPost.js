@@ -67,7 +67,7 @@ function newsPostDataFromDoc(doc) {
   const data = {
     title: String(doc.title || '').slice(0, 200),
     body: doc.body || doc.title || '',
-    summary: doc.summary ?? null,
+    summary: doc.summary ? String(doc.summary).slice(0, 300) : null,
     reporterId: idOf(doc.reporter ?? doc.reporterId),
     categoryId: idOf(doc.category ?? doc.categoryId),
     status: doc.status || 'pending',
@@ -80,7 +80,7 @@ function newsPostDataFromDoc(doc) {
     isBreaking: Boolean(doc.isBreaking),
     tags: Array.isArray(doc.tags) ? doc.tags.map((t) => String(t).toLowerCase()) : [],
     language: String(doc.language || 'en').toLowerCase(),
-    originalLanguage: doc.originalLanguage ?? null,
+    originalLanguage: doc.originalLanguage ? String(doc.originalLanguage).slice(0, 12) : null,
     sourceName: doc.sourceName ?? null,
     sourceUrl: nullIfBlank(doc.sourceUrl),
     sourceUrlHash: nullIfBlank(doc.sourceUrlHash),

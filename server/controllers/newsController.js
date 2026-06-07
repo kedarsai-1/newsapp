@@ -343,6 +343,7 @@ const getFeed = async (req, res) => {
     if (excludePoliticsFeed) {
       const excludeCategoryIds = await getShortsExcludeCategoryIds(prisma);
       andFilters.push(prismaShortsExcludePoliticsClause(excludeCategoryIds));
+      where.youtubeIsShort = true;
     }
     if (category) {
       where.categoryId = String(category);

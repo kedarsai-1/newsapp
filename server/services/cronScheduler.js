@@ -150,14 +150,17 @@ function scheduleStaggeredLanguagePipelines(isRailway, langs) {
   }
 
   if (runOnStart) {
-    langs.forEach((lang, idx) => {
-      setTimeout(() => {
-        runScheduledLanguagePipeline(lang, `startup:${lang}`).catch((e) =>
-          console.error(`[ingest:${lang}] startup error:`, e),
-        );
-      }, 2500 + idx * 2500);
-    });
-    console.log(`[ingest] staggered startup for: ${langs.join(', ')}`);
+    setTimeout(async () => {
+      console.log(`[ingest] starting startup pipelines sequentially for: ${langs.join(', ')}`);
+      for (const lang of langs) {
+        try {
+          await runScheduledLanguagePipeline(lang, `startup:${lang}`);
+        } catch (e) {
+          console.error(`[ingest:${lang}] startup error:`, e);
+        }
+      }
+    }, 2500);
+    console.log(`[ingest] sequential startup scheduled for: ${langs.join(', ')}`);
   }
 }
 

@@ -22,6 +22,9 @@ const politicalVideoRoutes = require('./routes/politicalVideos');
 const cronRoutes = require('./routes/cron');
 
 const app = express();
+if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+}
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -141,9 +144,10 @@ io.on('connection', (socket) => {
 });
 
 const port = Number(process.env.PORT) || 5000;
+const host = process.env.HOST?.trim() || '0.0.0.0';
 
-server.listen(port, () => {
-  console.log(`Server listening on port ${port} (PostgreSQL connecting in background)`);
+server.listen(port, host, () => {
+  console.log(`Server listening on ${host}:${port} (PostgreSQL connecting in background)`);
 });
 
 process.on('SIGTERM', () => {

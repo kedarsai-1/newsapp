@@ -17,23 +17,38 @@ const POLITICAL_KEYWORDS = {
     'minister', 'chief minister', 'cm ', 'mla', 'mp ', 'election', 'parliament',
     'assembly', 'debate', 'interview', 'press meet', 'press conference',
     'bjp', 'congress', 'speech', 'rally', 'cabinet', 'opposition', 'polling',
+    'governor', 'president', 'prime minister', 'modi', 'amit shah', 'rahul',
+    'ycp', 'tdp', 'trs', 'brs', 'ysrcp', 'party',
   ],
   te: [
     'మంత్రి', 'సీఎం', 'ఎమ్మెల్యే', 'ఎంపీ', 'ఎన్నికలు', 'సభ', 'ఇంటర్వ్యూ',
     'ప్రసంగం', 'పార్లమెంట్', 'అసెంబ్లీ', 'బహస', 'ప్రెస్ మీట్', 'జాతీయ',
     'రాజకీయ', 'మంత్రివర్గం', 'పార్టీ',
+    // Additional Telugu political terms for news channels
+    'ముఖ్యమంత్రి', 'గవర్నర్', 'ప్రభుత్వం', 'నేత', 'నాయకుడు', 'అధ్యక్షుడు',
+    'మోదీ', 'రేవంత్', 'చంద్రబాబు', 'జగన్', 'కేటీఆర్', 'హరీష్',
+    'బీజేపీ', 'కాంగ్రెస్', 'టీడీపీ', 'వైసీపీ', 'బీఆర్ఎస్', 'తెలంగాణ',
+    'ఆంధ్రప్రదేశ్', 'హైదరాబాద్', 'అమరావతి', 'విజయవాడ',
+    'చట్టసభ', 'ఓటు', 'ఎన్నిక', 'పోలింగ్', 'ఫలితాలు', 'విధానం',
+    'cmrevanthreddy', 'chandrababu', 'jagan',
   ],
   hi: [
     'मंत्री', 'मुख्यमंत्री', 'विधायक', 'सांसद', 'चुनाव', 'संसद', 'विधानसभा',
     'बहस', 'इंटरव्यू', 'प्रेस कॉन्फ्रेंस', 'भाजपा', 'कांग्रेस', 'भाषण',
     'राजनीति', 'सरकार', 'विरोध',
+    // Additional Hindi political terms
+    'प्रधानमंत्री', 'राज्यपाल', 'नेता', 'पार्टी', 'मोदी', 'राहुल',
+    'अमित शाह', 'योगी', 'केजरीवाल', 'ममता', 'लोकसभा', 'राज्यसभा',
+    'दिल्ली', 'उत्तर प्रदेश', 'बिहार', 'महाराष्ट्र', 'राजनेता',
+    'मतदान', 'वोट', 'चुनावी', 'घोषणापत्र', 'आरोप',
   ],
 };
 
 const BLACKLIST_KEYWORDS = [
   'movie', 'trailer', 'song', 'cricket', 'ipl', 'comedy', 'serial', 'astrology',
   'horoscope', 'rashifal', 'ज्योतिष', 'రాశి', 'teaser', 'lyrics', 'full video song',
-  'web series', 'ott', 'box office', 'highlights', 'match', 'wicket',
+  'web series', 'ott', 'box office', 'match', 'wicket',
+  // Note: 'highlights' removed — it's used in Telugu/Hindi political news (e.g. "press meet highlights")
 ];
 
 /** Label prototypes for MiniLM cosine classification (multilingual). */

@@ -98,12 +98,12 @@ function getIngestBudgetMs(language) {
   return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
-/** Default staggered news cron per language (minute offset avoids API/DB pile-up). */
+/** Default staggered news cron per language (offsets avoid Ollama/API pile-up). */
 function defaultNewsCronForLanguage(language) {
-  const offsets = { en: 0, hi: 1, te: 2 };
+  const offsets = { en: 0, hi: 5, te: 10 };
   const offset = offsets[normalizeLanguage(language)] ?? 0;
-  if (offset === 0) return process.env.SCRAPER_CRON || '*/5 * * * *';
-  return `${offset}-59/5 * * * *`;
+  if (offset === 0) return process.env.SCRAPER_CRON || '*/15 * * * *';
+  return `${offset}-59/15 * * * *`;
 }
 
 function defaultYoutubeCronForLanguage(language) {

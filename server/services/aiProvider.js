@@ -575,7 +575,7 @@ async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
 }
 
 function warmOllamaLanguages() {
-  const raw = process.env.OLLAMA_WARM_LANGS || 'en';
+  const raw = process.env.OLLAMA_WARM_LANGS || 'en,hi,te';
   return [...new Set(
     raw.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   )];

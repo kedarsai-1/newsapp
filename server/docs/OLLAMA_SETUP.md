@@ -89,7 +89,27 @@ OLLAMA_MODEL_HI=mashriram/sarvam-1
 OLLAMA_MODEL_TE=mashriram/sarvam-1
 ```
 
-## 4. Start services
+## 4. Limit loaded models (single VPS)
+
+On an 11 GB VPS running **chat** (`gemma2:2b` / `llama3.1:8b`) and **ingest** (`mashriram/sarvam-1`) together, keep only one model in RAM:
+
+```bash
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+sudo tee /etc/systemd/system/ollama.service.d/max-loaded-models.conf <<'EOF'
+[Service]
+Environment="OLLAMA_MAX_LOADED_MODELS=1"
+EOF
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+Verify (only one model should appear while a request is in flight):
+
+```bash
+curl -s http://127.0.0.1:11434/api/ps | jq .
+```
+
+## 5. Start services
 
 ```bash
 sudo systemctl enable ollama
@@ -110,7 +130,7 @@ curl -s 'http://127.0.0.1:5001/api/health?refresh=1' | jq .ai
 
 If a model is missing, logs list `missing` models and summaries fall back to extractive text until you `ollama pull` them.
 
-## 5. How ingest uses Ollama
+## 6. How ingest uses Ollama
 
 | Language | Model (default) | Behavior |
 |----------|-----------------|----------|
@@ -120,19 +140,24 @@ If a model is missing, logs list `missing` models and summaries fall back to ext
 
 Bad Ollama output → extractive summary fallback (no crash). Requests are queued (one at a time) to avoid OOM on 11 GB RAM.
 
-## 6. Security
+## 7. Security
 
 - Ollama on `127.0.0.1:11434` only — do not expose publicly.
 
-## 7. Tuning
+## 8. Tuning
 
 ```env
 OLLAMA_TEMPERATURE=0.1
+OLLAMA_WARM_LANGS=en,hi,te
 RSS_INSERTS_PER_FEED=4
 INGEST_MAX_RUNTIME_MS=400000
+INGEST_PARALLEL_LANGUAGES=false
+SCRAPER_CRON_EN=*/15 * * * *
+SCRAPER_CRON_HI=5-59/15 * * * *
+SCRAPER_CRON_TE=10-59/15 * * * *
 ```
 
-## 8. Switch back to Hugging Face
+## 9. Switch back to Hugging Face
 
 ```env
 AI_PROVIDER=huggingface

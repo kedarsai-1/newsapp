@@ -11,10 +11,12 @@ const {
   getComments,
   addComment,
   translateText,
+  getLocalNews,
 } = require('../controllers/newsController');
 const { optionalProtect } = require('../middleware/authMiddleware');
 
 router.get('/feed', optionalProtect, getFeed);
+router.get('/local', optionalProtect, getLocalNews);
 router.get('/proxy-image', getProxyImage);
 router.get('/extract', extractArticle);
 router.get('/bookmarks', optionalProtect, getBookmarks);

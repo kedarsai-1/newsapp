@@ -26,6 +26,10 @@ model User {
   likes               PostLike[]
   bookmarks           UserBookmark[]
   preferredCategories UserPreferredCategory[]
+  pollVotes           MatchPollVote[]
+  points              Int                     @default(0)
+  predictionStreak    Int                     @default(0) @map("prediction_streak")
+  maxPredictionStreak Int                     @default(0) @map("max_prediction_streak")
 
   @@index([role])
   @@map("users")
@@ -121,6 +125,11 @@ model NewsPost {
   @@index([politicsScope])
   @@index([constituency])
   @@index([videoCategory])
+  @@index([summaryFingerprint])
+  @@index([language, status, sourcePublishedAt])
+  @@index([status, sourcePublishedAt])
+  @@index([constituency, status, sourcePublishedAt])
+  @@index([locationCity, status, sourcePublishedAt])
   @@map("news_posts")
 }
 
@@ -244,3 +253,35 @@ model UserPreferredCategory {
   @@index([categoryId])
   @@map("user_preferred_categories")
 }
+
+model MatchPoll {
+  id           String          @id @default(uuid()) @db.Uuid
+  matchId      String          @unique @map("match_id")
+  optionATitle String          @map("option_a_title")
+  optionBTitle String          @map("option_b_title")
+  votesA       Int             @default(0) @map("votes_a")
+  votesB       Int             @default(0) @map("votes_b")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  isResolved   Boolean         @default(false) @map("is_resolved")
+  winnerOption String?         @map("winner_option")
+  votes        MatchPollVote[]
+
+  @@map("match_polls")
+}
+
+model MatchPollVote {
+  id        String    @id @default(uuid()) @db.Uuid
+  pollId    String    @map("poll_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  option      String    // "A" or "B"
+  isProcessed Boolean   @default(false) @map("is_processed")
+  isCorrect   Boolean?  @map("is_correct")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  poll        MatchPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@map("match_poll_votes")
+}
+

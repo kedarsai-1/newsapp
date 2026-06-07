@@ -81,6 +81,85 @@ async function existsVideo(videoId) {
   return false;
 }
 
+function inferPoliticsScope(title = '', description = '') {
+  const t = (title || '').toLowerCase();
+  
+  // Clean description of URLs, social media links, and boilerplate lines
+  const lines = (description || '').toLowerCase().split('\n');
+  const boilerplateKeywords = [
+    'http', 'www.', 'follow', 'subscribe', 'facebook', 'twitter', 'instagram',
+    'youtube', 'telegram', 'website', 'e-paper', 'android', 'ios', 'download',
+    'app', 'sakshi', 'tv9', 'eenadu', 'ntv', 'v6', 'abn', 'jyothy', 'etv',
+    't news', 'hmtv', '10tv', 'social', 'channel'
+  ];
+  
+  const cleanLines = lines.filter(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    return !boilerplateKeywords.some(kw => trimmed.includes(kw));
+  });
+  
+  const cleanDesc = cleanLines.join(' ');
+
+  // Check for International
+  const internationalKeywords = [
+    'international', 'global', 'biden', 'trump', 'putin', 'zelenskyy', 'netanyahu',
+    'xi jinping', 'macron', 'sunak', 'starmer', 'white house', 'pentagon', 'kremlin',
+    'gaza', 'israel', 'palestine', 'ukraine', 'taiwan', 'un security council',
+    'united nations', 'shehbaz sharif', 'imran khan', 'pakistan', 'bangladesh',
+    'sri lanka', 'nepal', 'maldives'
+  ];
+  if (
+    internationalKeywords.some(kw => t.includes(kw)) ||
+    (internationalKeywords.some(kw => cleanDesc.includes(kw)) && !t.includes('india') && !t.includes('modi'))
+  ) {
+    return 'international';
+  }
+
+  // Check for Andhra
+  const andhraKeywords = [
+    'andhra', 'ap election', 'ap assembly', 'ysrcp', 'tdp', 'janasena', 'pawan kalyan',
+    'chandrababu', 'jagan mohan', 'ys jagan', 'lokesh', 'amaravati', 'vijayawada',
+    'visakhapatnam', 'vizag', 'ఆంధ్ర', 'అమరావతి', 'విజయవాడ', 'విశాఖ', 'వైసీపీ', 'టీడీపీ',
+    'జనసేన', 'పవన్ కళ్యాణ్', 'chandra babu', 'చంద్రబాబు', 'జగన్', 'లోకేష్'
+  ];
+  if (
+    andhraKeywords.some(kw => t.includes(kw)) ||
+    andhraKeywords.some(kw => cleanDesc.includes(kw))
+  ) {
+    return 'andhra';
+  }
+
+  // Check for Telangana
+  const telanganaKeywords = [
+    'telangana', 'tg election', 'tg assembly', 'brs party', 'kcr', 'ktr', 'revanth',
+    'harish rao', 'hyderabad', 'secunderabad', 'తెలంగాణ', 'హైదరాబాద్', 'సికింద్రాబాద్',
+    'బీఆర్ఎస్', 'కేసీఆర్', 'కేటీఆర్', 'రేవంత్', 'హరీష్ రావు'
+  ];
+  if (
+    telanganaKeywords.some(kw => t.includes(kw)) ||
+    telanganaKeywords.some(kw => cleanDesc.includes(kw))
+  ) {
+    return 'telangana';
+  }
+
+  // Check for North / Delhi / States
+  const northKeywords = [
+    'uttar pradesh', 'yogi adityanath', 'delhi', 'kejriwal', 'akhilesh yadav',
+    'punjab', 'bihar', 'nitish kumar', 'tejashwi', 'haryana', 'rajasthan', 'madhya pradesh',
+    'उत्तर प्रदेश', 'दिल्ली', 'पंजाब', 'बिहार', 'योगी', 'केजरीवाल', 'मोदी', 'अखिलेश'
+  ];
+  if (
+    northKeywords.some(kw => t.includes(kw)) ||
+    northKeywords.some(kw => cleanDesc.includes(kw))
+  ) {
+    return 'north';
+  }
+
+  // Default to India
+  return 'india';
+}
+
 async function savePoliticalVideo(video, classification) {
   const category = await getPoliticsCategory();
   const reporter = await ensureSystemReporter();
@@ -131,7 +210,7 @@ async function savePoliticalVideo(video, classification) {
     videoCategory: classification.category,
     videoClassificationMethod: classification.method,
     videoClassificationScore: classification.confidence,
-    politicsScope: 'india',
+    politicsScope: inferPoliticsScope(video.title, video.description),
     scrapedAt: new Date(),
     scrapeConfidence: classification.confidence,
   };
@@ -348,4 +427,5 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron', lang
 
 module.exports = {
   runPoliticalVideoIngestion,
+  inferPoliticsScope,
 };

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const memoryCache = require('../utils/memoryCache');
+const cacheService = require('../utils/cacheService');
 
 const BASE = (process.env.CRICAPI_BASE_URL || 'https://api.cricapi.com/v1').replace(
   /\/$/,
@@ -46,22 +46,26 @@ function formatOvers(o) {
   return n % 1 === 0 ? String(n) : n.toFixed(1);
 }
 
+function scoreBelongsToTeam(s, teamName, otherTeams, idx) {
+  const inning = String(s.inning || s.innings || '').toLowerCase();
+  if (!inning) return false;
+  if (inning.includes(teamName.toLowerCase())) return true;
+  const hasOther = otherTeams.some((t) => inning.includes(t.toLowerCase()));
+  if (hasOther) return false;
+  return inning.includes(`inning ${idx + 1}`) || inning.includes(`innings ${idx + 1}`);
+}
+
 function parseTeams(match) {
   const names = Array.isArray(match.teams) ? match.teams : [];
   const scores = Array.isArray(match.score) ? match.score : [];
-  const byInning = new Map();
-  for (const s of scores) {
-    const label = String(s.inning || s.innings || '').toLowerCase();
-    byInning.set(label, s);
-  }
+  const otherTeamNames = (name) => names.filter((n) => n !== name);
 
   return names.slice(0, 2).map((name, idx) => {
     const teamName = String(name || '').trim();
     let score = null;
     let overs = null;
     for (const s of scores) {
-      const inning = String(s.inning || '').toLowerCase();
-      if (inning.includes(teamName.toLowerCase()) || inning.includes(`inning ${idx + 1}`)) {
+      if (scoreBelongsToTeam(s, teamName, otherTeamNames(name), idx)) {
         const runs = s.r ?? s.runs;
         const wkts = s.w ?? s.wickets;
         if (runs != null) {
@@ -70,13 +74,6 @@ function parseTeams(match) {
         overs = formatOvers(s.o ?? s.overs);
         break;
       }
-    }
-    if (!score && scores[idx]) {
-      const s = scores[idx];
-      const runs = s.r ?? s.runs;
-      const wkts = s.w ?? s.wickets;
-      if (runs != null) score = wkts != null ? `${runs}/${wkts}` : String(runs);
-      overs = formatOvers(s.o ?? s.overs);
     }
     const info = (match.teamInfo || []).find(
       (t) =>
@@ -235,19 +232,19 @@ async function findLatestLeagueSeries(search) {
 
 async function fetchSeriesMatchList(seriesId) {
   const cacheKey = `sports:series:${seriesId}`;
-  const hit = memoryCache.get(cacheKey);
+  const hit = await cacheService.get(cacheKey);
   if (hit) return hit;
 
   const body = await cricGet('/series_info', { id: seriesId });
   const list = Array.isArray(body.data?.matchList) ? body.data.matchList : [];
-  memoryCache.set(cacheKey, list, TTL_SERIES_MS);
+  await cacheService.set(cacheKey, list, TTL_SERIES_MS);
   return list;
 }
 
 /** IPL/WPL fixtures from series_info (currentMatches often omits them). */
 async function resolveLeagueSeriesIds() {
   const cacheKey = 'sports:resolvedLeagueSeriesIds';
-  const hit = memoryCache.get(cacheKey);
+  const hit = await cacheService.get(cacheKey);
   if (hit) return hit;
 
   const ids = new Set(configuredLeagueSeriesIds());
@@ -266,13 +263,13 @@ async function resolveLeagueSeriesIds() {
   }
 
   const out = [...ids];
-  memoryCache.set(cacheKey, out, TTL_SERIES_MS);
+  await cacheService.set(cacheKey, out, TTL_SERIES_MS);
   return out;
 }
 
 async function fetchLeagueSeriesMatches() {
   const cacheKey = 'sports:leagueSeriesMatches';
-  const cached = memoryCache.get(cacheKey);
+  const cached = await cacheService.get(cacheKey);
   if (cached) return cached;
 
   const merged = [];
@@ -285,7 +282,7 @@ async function fetchLeagueSeriesMatches() {
     }
   }
 
-  memoryCache.set(cacheKey, merged, TTL_SERIES_MS);
+  await cacheService.set(cacheKey, merged, TTL_SERIES_MS);
   return merged;
 }
 
@@ -576,7 +573,7 @@ function buildLivePayload(rawList) {
 async function fetchCurrentMatches() {
   const cacheKey = 'sports:currentMatches';
   const staleKey = 'sports:currentMatches:stale';
-  const cached = memoryCache.get(cacheKey);
+  const cached = await cacheService.get(cacheKey);
   if (cached) return cached;
 
   try {
@@ -596,7 +593,7 @@ async function fetchCurrentMatches() {
 
     // 2) IPL supplement — use 6h cache only when rate-limited; otherwise refresh cache quietly
     const leagueCacheKey = 'sports:leagueSeriesMatches';
-    let leagueRaw = memoryCache.get(leagueCacheKey);
+    let leagueRaw = await cacheService.get(leagueCacheKey);
     if (!leagueRaw && !rateLimited) {
       try {
         leagueRaw = await fetchLeagueSeriesMatches();
@@ -632,11 +629,11 @@ async function fetchCurrentMatches() {
     }
 
     const payload = { ...buildLivePayload(rawList), ...(warning ? { warning } : {}) };
-    memoryCache.set(cacheKey, payload, TTL_LIVE_MS);
-    memoryCache.set(staleKey, payload, TTL_STALE_MS);
+    await cacheService.set(cacheKey, payload, TTL_LIVE_MS);
+    await cacheService.set(staleKey, payload, TTL_STALE_MS);
     return payload;
   } catch (e) {
-    const stale = memoryCache.get(staleKey);
+    const stale = await cacheService.get(staleKey);
     if (stale) {
       return {
         ...stale,
@@ -653,7 +650,7 @@ async function fetchCurrentMatches() {
 
 async function fetchMatchById(id) {
   const cacheKey = `sports:match:${id}`;
-  const cached = memoryCache.get(cacheKey);
+  const cached = await cacheService.get(cacheKey);
   if (cached) return cached;
 
   let raw = null;
@@ -683,7 +680,7 @@ async function fetchMatchById(id) {
   }
 
   const detail = normalizeMatchDetail(raw, scorecardInnings);
-  memoryCache.set(cacheKey, detail, TTL_MATCH_MS);
+  await cacheService.set(cacheKey, detail, TTL_MATCH_MS);
   return detail;
 }
 

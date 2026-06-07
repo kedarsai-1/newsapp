@@ -326,41 +326,43 @@ async function isDuplicate(item) {
   const lang = String(item.language || 'en').toLowerCase();
   const langClause = lang && lang !== 'all' ? { language: lang } : {};
 
+  const orClauses = [];
+
   const canonical = canonicalizeUrl(item.sourceUrl);
   if (canonical) {
     const sourceUrlHash = hashUrl(canonical);
-    if (await prisma.newsPost.findFirst({ where: { sourceUrlHash, ...langClause }, select: { id: true } })) return true;
+    orClauses.push({ sourceUrlHash });
   }
 
   const fp = titleFingerprint(item.title);
-  if (fp && await prisma.newsPost.findFirst({ where: { titleFingerprint: fp, ...langClause }, select: { id: true } })) return true;
+  if (fp) {
+    orClauses.push({ titleFingerprint: fp });
+  }
 
   const sumFp = summaryFingerprint(item.summary);
-  if (sumFp && await prisma.newsPost.findFirst({ where: { summaryFingerprint: sumFp, ...langClause }, select: { id: true } })) return true;
+  if (sumFp) {
+    orClauses.push({ summaryFingerprint: sumFp });
+  }
 
   const titleNorm = normalizeTitle(item.title);
   if (titleNorm.length >= 8) {
-    if (await prisma.newsPost.findFirst({
-      where: {
-        titleNormalized: titleNorm,
-        createdAt: { gte: windowStart },
-        ...langClause,
-      },
-      select: { id: true },
-    })) {
-      return true;
-    }
+    orClauses.push({
+      titleNormalized: titleNorm,
+      createdAt: { gte: windowStart },
+    });
   }
 
-  const existsByExactTitle = await prisma.newsPost.findFirst({
+  if (orClauses.length === 0) return false;
+
+  const duplicate = await prisma.newsPost.findFirst({
     where: {
-      title: item.title,
-      createdAt: { gte: windowStart },
       ...langClause,
+      OR: orClauses,
     },
     select: { id: true },
   });
-  return !!existsByExactTitle;
+
+  return !!duplicate;
 }
 
 function toPostDoc(item, reporterId, categoryId, sourceName) {

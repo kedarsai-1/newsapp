@@ -1,4 +1,5 @@
 const { Prisma, prisma } = require('../config/prisma');
+const { reverseGeocode } = require('../utils/geocode');
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
 const {
   canonicalizeUrl,
@@ -106,7 +107,7 @@ function languageWhere(langParam) {
         { sourceName: containsInsensitive('ndtv khabar') },
         { sourceName: containsInsensitive('prabhat') },
         { sourceName: containsInsensitive('bhaskar') },
-        { sourceName: containsInsensitive('the print') },
+        { sourceName: containsInsensitive('the print hindi') },
         { sourceName: containsInsensitive('bbc hindi') },
         { sourceName: containsInsensitive('print hindi') },
       ],
@@ -115,7 +116,6 @@ function languageWhere(langParam) {
   return { language: lang };
 }
 
-/** Politics tab scope filters — keeps AP/TG out of India/International buckets. */
 function politicsScopeWhere(scope, langParam) {
   const ps = String(scope || '').toLowerCase().trim();
   if (!ps || ps === 'all') return null;
@@ -146,8 +146,17 @@ function politicsScopeWhere(scope, langParam) {
     return {
       OR: [
         { politicsScope: { in: ['north', 'states', 'delhi'] } },
-        { title: containsInsensitive('uttar pradesh') },
-        { title: containsInsensitive('delhi') },
+        {
+          politicsScope: { in: ['india', null] },
+          OR: [
+            { title: containsInsensitive('uttar pradesh') },
+            { title: containsInsensitive('delhi') },
+            { title: containsInsensitive('उत्तर प्रदेश') },
+            { title: containsInsensitive('दिल्ली') },
+            { title: containsInsensitive('पंजाब') },
+            { title: containsInsensitive('बिहार') },
+          ],
+        },
       ],
     };
   }
@@ -158,8 +167,19 @@ function politicsScopeWhere(scope, langParam) {
     return {
       OR: [
         { politicsScope: 'andhra' },
-        { title: containsInsensitive('andhra') },
-        { body: containsInsensitive('andhra') },
+        {
+          politicsScope: { in: ['india', null] },
+          OR: [
+            { title: containsInsensitive('andhra') },
+            { title: containsInsensitive('ఆంధ్ర') },
+            { title: containsInsensitive('amaravati') },
+            { title: containsInsensitive('అమరావతి') },
+            { title: containsInsensitive('vijayawada') },
+            { title: containsInsensitive('విజయవాడ') },
+            { title: containsInsensitive('visakhapatnam') },
+            { title: containsInsensitive('vizag') },
+          ],
+        },
       ],
     };
   }
@@ -167,9 +187,16 @@ function politicsScopeWhere(scope, langParam) {
     return {
       OR: [
         { politicsScope: 'telangana' },
-        { title: containsInsensitive('telangana') },
-        { title: containsInsensitive('hyderabad') },
-        { body: containsInsensitive('telangana') },
+        {
+          politicsScope: { in: ['india', null] },
+          OR: [
+            { title: containsInsensitive('telangana') },
+            { title: containsInsensitive('తెలంగాణ') },
+            { title: containsInsensitive('hyderabad') },
+            { title: containsInsensitive('హైదరాబాద్') },
+            { title: containsInsensitive('secunderabad') },
+          ],
+        },
       ],
     };
   }
@@ -213,7 +240,7 @@ const extractArticle = async (req, res) => {
 // GET /api/news/feed  — paginated, filterable by category and city
 const getFeed = async (req, res) => {
   try {
-    const cached = feedResponseCache.getCachedFeed(req.query);
+    const cached = await feedResponseCache.getCachedFeed(req.query);
     if (cached) {
       res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
       return res.json({ ...cached.body, cached: true });
@@ -421,7 +448,7 @@ const getFeed = async (req, res) => {
       posts,
       cached: false,
     };
-    feedResponseCache.setCachedFeed(req.query, payload);
+    await feedResponseCache.setCachedFeed(req.query, payload);
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.feedTtlMs()));
     res.json(payload);
   } catch (error) {
@@ -433,7 +460,7 @@ const getFeed = async (req, res) => {
 const getPost = async (req, res) => {
   try {
     const postId = String(req.params.id || '').trim();
-    const cached = feedResponseCache.getCachedPost(postId);
+    const cached = await feedResponseCache.getCachedPost(postId);
     if (cached) {
       res.set('Cache-Control', feedResponseCache.cacheControlHeader(cached.ttlMs));
       prisma.newsPost.update({
@@ -461,7 +488,7 @@ const getPost = async (req, res) => {
       post: sanitizeStoryTextFields(serializeNewsPost(post)),
       cached: false,
     };
-    feedResponseCache.setCachedPost(postId, payload);
+    await feedResponseCache.setCachedPost(postId, payload);
     res.set('Cache-Control', feedResponseCache.cacheControlHeader(feedResponseCache.postTtlMs()));
     res.json(payload);
   } catch (error) {
@@ -719,6 +746,159 @@ const getProxyImage = async (req, res) => {
   }
 };
 
+const getReverseGeocode = async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+    if (!lat || !lon) {
+      return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+    }
+    const result = await reverseGeocode(lat, lon);
+    return res.json({ success: true, location: result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getLocalNews = async (req, res) => {
+  try {
+    const {
+      latitude,
+      lat,
+      longitude,
+      lng,
+      radius = 50,
+      city,
+      constituency,
+      state,
+      language,
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.max(1, Math.min(50, parseInt(limit, 10) || 20));
+    const skip = (p - 1) * lim;
+
+    const queryLat = parseFloat(latitude || lat);
+    const queryLng = parseFloat(longitude || lng);
+    const queryRadius = parseFloat(radius);
+    const lang = language && language !== 'all' ? String(language).toLowerCase() : null;
+
+    let posts = [];
+    let total = 0;
+
+    if (!isNaN(queryLat) && !isNaN(queryLng)) {
+      // Fetch IDs within the radius limit using Haversine formula with LEAST/GREATEST clamp to avoid acos precision domain errors
+      const rows = await prisma.$queryRaw`
+        SELECT id::text FROM news_posts
+        WHERE status = 'approved'
+          AND location_latitude IS NOT NULL
+          AND location_longitude IS NOT NULL
+          AND (6371 * acos(LEAST(GREATEST(
+            cos(radians(${queryLat})) * cos(radians(location_latitude)) *
+            cos(radians(location_longitude) - radians(${queryLng})) +
+            sin(radians(${queryLat})) * sin(radians(location_latitude))
+          , -1.0), 1.0))) <= ${queryRadius}
+        ORDER BY (6371 * acos(LEAST(GREATEST(
+          cos(radians(${queryLat})) * cos(radians(location_latitude)) *
+          cos(radians(location_longitude) - radians(${queryLng})) +
+          sin(radians(${queryLat})) * sin(radians(location_latitude))
+        , -1.0), 1.0))) ASC
+        LIMIT ${lim} OFFSET ${skip}
+      `;
+
+      const totalRows = await prisma.$queryRaw`
+        SELECT COUNT(*)::int as count FROM news_posts
+        WHERE status = 'approved'
+          AND location_latitude IS NOT NULL
+          AND location_longitude IS NOT NULL
+          AND (6371 * acos(LEAST(GREATEST(
+            cos(radians(${queryLat})) * cos(radians(location_latitude)) *
+            cos(radians(location_longitude) - radians(${queryLng})) +
+            sin(radians(${queryLat})) * sin(radians(location_latitude))
+          , -1.0), 1.0))) <= ${queryRadius}
+      `;
+      total = Number(totalRows[0]?.count || 0);
+
+      const ids = rows.map(r => r.id);
+
+      if (ids.length > 0) {
+        let whereClause = { id: { in: ids } };
+        if (lang) {
+          whereClause.language = lang;
+        }
+        const fetched = await prisma.newsPost.findMany({
+          where: whereClause,
+          include: newsPostInclude,
+        });
+
+        // Retain the sorted order by distance
+        posts = ids
+          .map(id => fetched.find(post => post.id === id))
+          .filter(Boolean);
+      }
+    } else {
+      const andFilters = [{ status: 'approved' }];
+      if (lang) {
+        andFilters.push({ language: lang });
+      }
+
+      const orFilters = [];
+      if (city && String(city).trim()) {
+        orFilters.push({ locationCity: { equals: String(city).trim(), mode: 'insensitive' } });
+      }
+      if (constituency && String(constituency).trim() && String(constituency).toLowerCase() !== 'all') {
+        orFilters.push({ constituency: { equals: String(constituency).trim(), mode: 'insensitive' } });
+      }
+      if (state && String(state).trim()) {
+        orFilters.push({ locationState: { equals: String(state).trim(), mode: 'insensitive' } });
+      }
+
+      if (orFilters.length > 0) {
+        andFilters.push({ OR: orFilters });
+      } else {
+        const localCat = await prisma.category.findFirst({
+          where: { slug: 'local', isActive: true },
+          select: { id: true }
+        });
+        if (localCat) {
+          andFilters.push({ categoryId: localCat.id });
+        }
+      }
+
+      const whereClause = { AND: andFilters };
+      
+      const [fetched, count] = await Promise.all([
+        prisma.newsPost.findMany({
+          where: whereClause,
+          include: newsPostInclude,
+          orderBy: [{ sourcePublishedAt: 'desc' }, { createdAt: 'desc' }],
+          skip,
+          take: lim,
+        }),
+        prisma.newsPost.count({ where: whereClause })
+      ]);
+
+      posts = fetched;
+      total = count;
+    }
+
+    const serialized = posts.map(serializeNewsPost);
+    const pages = Math.ceil(total / lim) || 1;
+
+    return res.json({
+      success: true,
+      posts: serialized,
+      page: p,
+      pages,
+      total,
+    });
+  } catch (e) {
+    console.error('[news] local news failed:', e.message);
+    return res.status(500).json({ success: false, message: 'Could not load local news.' });
+  }
+};
+
 module.exports = {
   getFeed,
   getPost,
@@ -730,4 +910,6 @@ module.exports = {
   getComments,
   addComment,
   translateText,
+  getReverseGeocode,
+  getLocalNews,
 };

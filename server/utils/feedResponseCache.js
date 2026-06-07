@@ -2,7 +2,7 @@
  * In-process TTL cache for public read APIs (single Node instance / Contabo VPS).
  * Invalidated when cron ingest emits feed_updated.
  */
-const memoryCache = require('./memoryCache');
+const cacheService = require('./cacheService');
 
 const FEED_PREFIX = 'feed:';
 const POST_PREFIX = 'post:';
@@ -47,42 +47,42 @@ function shouldCacheFeedQuery(query = {}) {
   return true;
 }
 
-function getCachedFeed(query) {
+async function getCachedFeed(query) {
   if (!shouldCacheFeedQuery(query)) return null;
-  const entry = memoryCache.get(feedCacheKey(query));
+  const entry = await cacheService.get(feedCacheKey(query));
   if (!entry?.body) return null;
   return entry;
 }
 
-function setCachedFeed(query, body) {
+async function setCachedFeed(query, body) {
   if (!shouldCacheFeedQuery(query)) return;
   const ttlMs = feedTtlMs();
-  memoryCache.set(feedCacheKey(query), { body, ttlMs }, ttlMs);
+  await cacheService.set(feedCacheKey(query), { body, ttlMs }, ttlMs);
 }
 
-function getCachedCategories() {
-  return memoryCache.get(CATEGORIES_KEY);
+async function getCachedCategories() {
+  return await cacheService.get(CATEGORIES_KEY);
 }
 
-function setCachedCategories(body) {
+async function setCachedCategories(body) {
   const ttlMs = categoriesTtlMs();
-  memoryCache.set(CATEGORIES_KEY, { body, ttlMs }, ttlMs);
+  await cacheService.set(CATEGORIES_KEY, { body, ttlMs }, ttlMs);
 }
 
-function getCachedPost(id) {
-  return memoryCache.get(`${POST_PREFIX}${id}`);
+async function getCachedPost(id) {
+  return await cacheService.get(`${POST_PREFIX}${id}`);
 }
 
-function setCachedPost(id, body) {
+async function setCachedPost(id, body) {
   if (process.env.POST_CACHE_ENABLED === 'false') return;
   const ttlMs = postTtlMs();
-  memoryCache.set(`${POST_PREFIX}${id}`, { body, ttlMs }, ttlMs);
+  await cacheService.set(`${POST_PREFIX}${id}`, { body, ttlMs }, ttlMs);
 }
 
-function invalidateFeedCaches() {
-  memoryCache.deleteByPrefix(FEED_PREFIX);
-  memoryCache.deleteByPrefix(POST_PREFIX);
-  memoryCache.del(CATEGORIES_KEY);
+async function invalidateFeedCaches() {
+  await cacheService.deleteByPrefix(FEED_PREFIX);
+  await cacheService.deleteByPrefix(POST_PREFIX);
+  await cacheService.del(CATEGORIES_KEY);
 }
 
 function cacheControlHeader(ttlMs, { private: isPrivate = true } = {}) {

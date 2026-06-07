@@ -8,7 +8,7 @@ function setIngestionSocket(io) {
 }
 
 async function emitFeedUpdated(payload) {
-  invalidateFeedCaches();
+  await invalidateFeedCaches();
   if (ingestionSocket) {
     ingestionSocket.to('all').emit('feed_updated', payload);
   }

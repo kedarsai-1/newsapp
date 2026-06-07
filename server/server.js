@@ -86,6 +86,7 @@ async function buildAiHealthPayload(forceRefresh = false) {
   }
   const ping = await aiProvider.pingOllama();
   const byLang = ping.modelsByLang || {};
+  const chatByLang = ping.chatModelsByLang || {};
   const payload = {
     provider: 'ollama',
     summariesEnabled: aiProvider.isAiSummaryEnabled(),
@@ -94,6 +95,11 @@ async function buildAiHealthPayload(forceRefresh = false) {
       en: byLang.en ?? 'unknown',
       hi: byLang.hi ?? 'unknown',
       te: byLang.te ?? 'unknown',
+    },
+    chatModelsByLang: {
+      en: chatByLang.en ?? 'unknown',
+      hi: chatByLang.hi ?? 'unknown',
+      te: chatByLang.te ?? 'unknown',
     },
     missing: ping.missing || [],
     error: ping.error || null,
@@ -189,10 +195,16 @@ async function runBackgroundJobs() {
     const ollama = await aiProvider.pingOllama();
     if (ollama.ok) {
       const byLang = ollama.modelsByLang || {};
+      const chatByLang = ollama.chatModelsByLang || {};
       const en = byLang.en ?? 'unknown';
       const hi = byLang.hi ?? 'unknown';
       const te = byLang.te ?? 'unknown';
-      console.log(`[ai] Ollama ready en=${en} hi=${hi} te=${te}`);
+      const chatEn = chatByLang.en ?? en;
+      const chatHi = chatByLang.hi ?? hi;
+      const chatTe = chatByLang.te ?? te;
+      console.log(
+        `[ai] Ollama ready ingest en=${en} hi=${hi} te=${te} | chat en=${chatEn} hi=${chatHi} te=${chatTe}`,
+      );
       aiProvider.warmOllamaChatModels().catch((err) => {
         console.warn('[ai] Ollama warm on startup failed:', err?.message || err);
       });

@@ -20,7 +20,6 @@ const { optionalProtect } = require('../middleware/authMiddleware');
 const aiRateLimit = require('../middleware/aiRateLimit');
 const {
   requestTimeout,
-  chatRequestTimeoutMs,
   translateRequestTimeoutMs,
 } = require('../middleware/requestTimeout');
 
@@ -31,7 +30,7 @@ router.get('/proxy-image', getProxyImage);
 router.get('/extract', extractArticle);
 router.get('/bookmarks', optionalProtect, getBookmarks);
 router.post('/translate', optionalProtect, aiRateLimit, requestTimeout(translateRequestTimeoutMs()), translateText);
-router.post('/chat', optionalProtect, aiRateLimit, requestTimeout(chatRequestTimeoutMs()), chatWithNews);
+router.post('/chat', optionalProtect, aiRateLimit, chatWithNews);
 router.get('/:id', optionalProtect, getPost);
 router.post('/:id/like', optionalProtect, toggleLike);
 router.post('/:id/bookmark', optionalProtect, toggleBookmark);

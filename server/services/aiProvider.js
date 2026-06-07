@@ -16,6 +16,7 @@ const { chatRequestTimeoutMs } = require('../middleware/requestTimeout');
 
 let ollamaIngestionQueue = Promise.resolve();
 let ollamaChatQueue = Promise.resolve();
+let chatQueuePending = 0;
 
 function withOllamaIngestionQueue(fn) {
   const run = ollamaIngestionQueue.then(fn, fn);
@@ -29,6 +30,42 @@ function withOllamaChatQueue(fn) {
   return run;
 }
 
+/** Reserve FIFO position for queue-aware HTTP timeout (call at chat handler entry). */
+function acquireChatQueueSlot() {
+  const queueIndex = chatQueuePending;
+  chatQueuePending += 1;
+  return {
+    queueIndex,
+    release() {
+      chatQueuePending = Math.max(0, chatQueuePending - 1);
+    },
+  };
+}
+
+function getChatQueuePending() {
+  return chatQueuePending;
+}
+
+/** Wall-clock budget: context build + (queueIndex + 1) Ollama chat slots + buffer. */
+function chatHandlerTimeoutMs(queueIndex = 0) {
+  const contextMs = Math.max(
+    3000,
+    Number(process.env.CHAT_CONTEXT_TIMEOUT_MS || 8000),
+  );
+  const ollamaMs = ollamaChatTimeoutMs();
+  const bufferMs = Math.max(1000, Number(process.env.CHAT_HANDLER_TIMEOUT_BUFFER_MS || 5000));
+  const depth = Math.max(0, Number(queueIndex) || 0);
+  const total = contextMs + (depth + 1) * ollamaMs + bufferMs;
+  const cap = Math.min(
+    600_000,
+    Math.max(
+      chatRequestTimeoutMs(),
+      Number(process.env.CHAT_HANDLER_TIMEOUT_MS_CAP || 360_000),
+    ),
+  );
+  return Math.min(cap, total);
+}
+
 function getAiProvider() {
   return String(process.env.AI_PROVIDER || 'huggingface').toLowerCase().trim();
 }
@@ -39,6 +76,13 @@ function isOllamaProvider() {
 
 function ollamaBaseUrl() {
   return String(process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').replace(/\/$/, '');
+}
+
+/** Optional separate Ollama instance for chat (falls back to ingest URL). */
+function ollamaChatBaseUrl() {
+  const chatUrl = String(process.env.OLLAMA_CHAT_BASE_URL || '').trim();
+  if (chatUrl) return chatUrl.replace(/\/$/, '');
+  return ollamaBaseUrl();
 }
 
 /** Default model if no per-language override. */
@@ -68,11 +112,40 @@ function ollamaModelForLanguage(lang) {
   return ollamaModel();
 }
 
+/** Fast model for user chat — separate from ingest summarization models. */
+function ollamaChatModelDefault() {
+  return String(process.env.OLLAMA_MODEL_CHAT || 'gemma2:2b').trim();
+}
+
+function ollamaModelForChat(lang) {
+  const l = String(lang || 'en').toLowerCase();
+  const chatDefault = ollamaChatModelDefault();
+
+  if (l === 'hi') {
+    return String(process.env.OLLAMA_MODEL_CHAT_HI || chatDefault).trim();
+  }
+  if (l === 'te') {
+    return String(process.env.OLLAMA_MODEL_CHAT_TE || chatDefault).trim();
+  }
+  if (l === 'en') {
+    return String(process.env.OLLAMA_MODEL_CHAT_EN || chatDefault).trim();
+  }
+  return chatDefault;
+}
+
 function getConfiguredOllamaModels() {
   return [...new Set([
     ollamaModelForLanguage('en'),
     ollamaModelForLanguage('hi'),
     ollamaModelForLanguage('te'),
+  ])];
+}
+
+function getConfiguredOllamaChatModels() {
+  return [...new Set([
+    ollamaModelForChat('en'),
+    ollamaModelForChat('hi'),
+    ollamaModelForChat('te'),
   ])];
 }
 
@@ -180,9 +253,15 @@ function translationUserPrompt(text) {
   return String(text || '').trim().slice(0, 1200);
 }
 
-async function ollamaChat(system, user, lang = 'en', timeoutMs = null) {
-  const url = `${ollamaBaseUrl()}/api/chat`;
-  const model = ollamaModelForLanguage(lang);
+async function ollamaChatRequest({
+  baseUrl,
+  model,
+  system,
+  user,
+  timeoutMs = null,
+  forChat = false,
+}) {
+  const url = `${baseUrl}/api/chat`;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs ?? ollamaTimeoutMs());
   try {
@@ -198,8 +277,14 @@ async function ollamaChat(system, user, lang = 'en', timeoutMs = null) {
         stream: false,
         keep_alive: ollamaKeepAlive(),
         options: {
-          temperature: Number(process.env.OLLAMA_CHAT_TEMPERATURE || process.env.OLLAMA_TEMPERATURE || 0.2),
-          num_predict: ollamaChatMaxTokens(),
+          temperature: Number(
+            forChat
+              ? (process.env.OLLAMA_CHAT_TEMPERATURE || process.env.OLLAMA_TEMPERATURE || 0.2)
+              : (process.env.OLLAMA_TEMPERATURE || 0.1),
+          ),
+          num_predict: forChat
+            ? ollamaChatMaxTokens()
+            : Number(process.env.OLLAMA_MAX_TOKENS || 150),
           top_p: 0.9,
         },
       }),
@@ -216,6 +301,28 @@ async function ollamaChat(system, user, lang = 'en', timeoutMs = null) {
   }
 }
 
+async function ollamaChatForIngest(system, user, lang = 'en', timeoutMs = null) {
+  return ollamaChatRequest({
+    baseUrl: ollamaBaseUrl(),
+    model: ollamaModelForLanguage(lang),
+    system,
+    user,
+    timeoutMs,
+    forChat: false,
+  });
+}
+
+async function ollamaChatForUser(system, user, lang = 'en', timeoutMs = null) {
+  return ollamaChatRequest({
+    baseUrl: ollamaChatBaseUrl(),
+    model: ollamaModelForChat(lang),
+    system,
+    user,
+    timeoutMs,
+    forChat: true,
+  });
+}
+
 function ollamaSummaryTimeoutMs() {
   return Math.min(
     180_000,
@@ -226,7 +333,7 @@ function ollamaSummaryTimeoutMs() {
 async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
   const model = ollamaModelForLanguage(lang);
   if (useOllamaChatApi()) {
-    return ollamaChat(system, user, lang, timeoutMs ?? ollamaTimeoutMs());
+    return ollamaChatForIngest(system, user, lang, timeoutMs ?? ollamaTimeoutMs());
   }
   const url = `${ollamaBaseUrl()}/api/generate`;
   const ac = new AbortController();
@@ -524,40 +631,159 @@ async function areTitlesSameStory(titleA, titleB, lang = 'en') {
   const user = `Title A: ${a}\nTitle B: ${b}\nSame story?`;
 
   try {
-    const out = await withOllamaIngestionQueue(() => ollamaChat(system, user, lang));
+    const out = await withOllamaIngestionQueue(() => ollamaChatForIngest(system, user, lang));
     return /^yes\b/i.test(String(out || '').trim());
   } catch {
     return false;
   }
 }
 
+function modelIsInstalled(name, installed) {
+  return installed.some((n) => n === name || n.startsWith(`${name}:`));
+}
+
+async function fetchOllamaInstalledModels(baseUrl) {
+  const res = await fetch(`${baseUrl}/api/tags`, {
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return (data?.models || []).map((m) => m.name);
+}
+
+function buildOllamaPingResult({ installed, required, modelsByLang, baseUrl }) {
+  const missing = required.filter((name) => !modelIsInstalled(name, installed));
+  return {
+    ok: missing.length === 0,
+    baseUrl,
+    models: installed,
+    required,
+    missing,
+    modelsByLang,
+  };
+}
+
+async function pingOllamaAt(baseUrl, required, modelsByLang) {
+  try {
+    const installed = await fetchOllamaInstalledModels(baseUrl);
+    return buildOllamaPingResult({ installed, required, modelsByLang, baseUrl });
+  } catch (e) {
+    return {
+      ok: false,
+      baseUrl,
+      error: e.message,
+      required,
+      missing: required,
+      modelsByLang,
+    };
+  }
+}
+
 async function pingOllama() {
   if (!isOllamaProvider()) return { ok: false, skipped: true };
-  try {
-    const res = await fetch(`${ollamaBaseUrl()}/api/tags`, {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
-    const data = await res.json();
-    const installed = (data?.models || []).map((m) => m.name);
-    const required = getConfiguredOllamaModels();
-    const missing = required.filter(
-      (name) => !installed.some((n) => n === name || n.startsWith(`${name}:`)),
+
+  const ingestRequired = getConfiguredOllamaModels();
+  const ingestModelsByLang = {
+    en: ollamaModelForLanguage('en'),
+    hi: ollamaModelForLanguage('hi'),
+    te: ollamaModelForLanguage('te'),
+  };
+  const ingestPing = await pingOllamaAt(ollamaBaseUrl(), ingestRequired, ingestModelsByLang);
+
+  const chatBase = ollamaChatBaseUrl();
+  const chatRequired = getConfiguredOllamaChatModels();
+  const chatModelsByLang = {
+    en: ollamaModelForChat('en'),
+    hi: ollamaModelForChat('hi'),
+    te: ollamaModelForChat('te'),
+  };
+
+  let chatPing;
+  if (chatBase === ollamaBaseUrl()) {
+    const chatMissing = chatRequired.filter(
+      (name) => !modelIsInstalled(name, ingestPing.models || []),
     );
-    return {
-      ok: missing.length === 0,
-      models: installed,
-      required,
-      missing,
-      modelsByLang: {
-        en: ollamaModelForLanguage('en'),
-        hi: ollamaModelForLanguage('hi'),
-        te: ollamaModelForLanguage('te'),
-      },
+    chatPing = {
+      ok: chatMissing.length === 0,
+      baseUrl: chatBase,
+      models: ingestPing.models,
+      required: chatRequired,
+      missing: chatMissing,
+      modelsByLang: chatModelsByLang,
     };
-  } catch (e) {
-    return { ok: false, error: e.message };
+  } else {
+    chatPing = await pingOllamaAt(chatBase, chatRequired, chatModelsByLang);
   }
+
+  const allMissing = [...new Set([
+    ...(ingestPing.missing || []),
+    ...(chatPing.missing || []),
+  ])];
+
+  return {
+    ok: ingestPing.ok === true && chatPing.ok === true,
+    models: ingestPing.models || [],
+    required: [...new Set([...ingestRequired, ...chatRequired])],
+    missing: allMissing,
+    modelsByLang: ingestModelsByLang,
+    chatModelsByLang,
+    ingest: ingestPing,
+    chat: chatPing,
+    error: ingestPing.error || chatPing.error || null,
+  };
+}
+
+const OLLAMA_CHAT_STATUS_TTL_MS = Math.max(
+  10_000,
+  Number(process.env.OLLAMA_HEALTH_TTL_MS || 60_000),
+);
+let ollamaChatStatusCache = { at: 0, payload: null };
+
+async function getOllamaChatStatus(forceRefresh = false) {
+  if (!isOllamaProvider()) return { ok: false, skipped: true };
+
+  const now = Date.now();
+  if (
+    !forceRefresh
+    && ollamaChatStatusCache.payload
+    && now - ollamaChatStatusCache.at < OLLAMA_CHAT_STATUS_TTL_MS
+  ) {
+    return ollamaChatStatusCache.payload;
+  }
+
+  const chatBase = ollamaChatBaseUrl();
+  const chatRequired = getConfiguredOllamaChatModels();
+  const chatModelsByLang = {
+    en: ollamaModelForChat('en'),
+    hi: ollamaModelForChat('hi'),
+    te: ollamaModelForChat('te'),
+  };
+
+  let payload;
+  if (chatBase === ollamaBaseUrl()) {
+    const full = await pingOllama();
+    payload = {
+      ok: full.chat?.ok === true,
+      baseUrl: chatBase,
+      required: chatRequired,
+      missing: full.chat?.missing || [],
+      modelsByLang: chatModelsByLang,
+      error: full.chat?.error || full.error || null,
+    };
+  } else {
+    const chatPing = await pingOllamaAt(chatBase, chatRequired, chatModelsByLang);
+    payload = {
+      ok: chatPing.ok === true,
+      baseUrl: chatBase,
+      required: chatRequired,
+      missing: chatPing.missing || [],
+      modelsByLang: chatModelsByLang,
+      error: chatPing.error || null,
+    };
+  }
+
+  ollamaChatStatusCache = { at: now, payload };
+  return payload;
 }
 
 function isOllamaAbortError(err) {
@@ -570,7 +796,7 @@ async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
     throw new Error('Ollama provider is not enabled in environment');
   }
   return withOllamaChatQueue(() =>
-    ollamaChat(systemPrompt, userPrompt, lang, ollamaChatTimeoutMs()),
+    ollamaChatForUser(systemPrompt, userPrompt, lang, ollamaChatTimeoutMs()),
   );
 }
 
@@ -594,12 +820,12 @@ async function warmOllamaChatModels() {
   const results = {};
 
   for (const lang of langs) {
-    const model = ollamaModelForLanguage(lang);
+    const model = ollamaModelForChat(lang);
     if (seenModels.has(model)) continue;
     seenModels.add(model);
     try {
       // eslint-disable-next-line no-await-in-loop
-      await withOllamaChatQueue(() => ollamaChat(
+      await withOllamaChatQueue(() => ollamaChatForUser(
         'Reply with exactly: OK',
         'warmup',
         lang,
@@ -646,8 +872,12 @@ module.exports = {
   translateToEnglish,
   translateToFeedLanguage,
   pingOllama,
+  getOllamaChatStatus,
+  ollamaChatBaseUrl,
   ollamaModelForLanguage,
+  ollamaModelForChat,
   getConfiguredOllamaModels,
+  getConfiguredOllamaChatModels,
   validateLanguageOutput,
   cleanModelOutput,
   areTitlesSameStory,
@@ -660,4 +890,7 @@ module.exports = {
   isOllamaAbortError,
   withOllamaChatQueue,
   withOllamaIngestionQueue,
+  acquireChatQueueSlot,
+  getChatQueuePending,
+  chatHandlerTimeoutMs,
 };

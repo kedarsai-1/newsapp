@@ -1272,41 +1272,72 @@ async function chatWithNews(req, res) {
         message: 'AI chat requires Ollama. Set AI_PROVIDER=ollama on the server.',
       });
     }
-    const ollamaStatus = await aiProvider.pingOllama();
-    if (!ollamaStatus.ok) {
-      return res.status(503).json({
-        success: false,
-        message: 'Ollama is not ready. Pull the configured models and try again.',
-        ai: ollamaStatus,
+
+    const queueSlot = aiProvider.acquireChatQueueSlot();
+    const handlerTimeoutMs = aiProvider.chatHandlerTimeoutMs(queueSlot.queueIndex);
+    const handlerTimer = setTimeout(() => {
+      if (!res.headersSent) {
+        res.status(504).json({
+          success: false,
+          message: 'AI chat timed out. Please try again.',
+        });
+      }
+    }, handlerTimeoutMs);
+    handlerTimer.unref?.();
+
+    const clearHandlerTimer = () => clearTimeout(handlerTimer);
+    res.on('finish', clearHandlerTimer);
+    res.on('close', clearHandlerTimer);
+
+    try {
+      const ollamaStatus = await aiProvider.getOllamaChatStatus();
+      if (res.headersSent) return;
+      if (!ollamaStatus.ok) {
+        return res.status(503).json({
+          success: false,
+          message: 'Ollama chat is not ready. Pull the configured chat models and try again.',
+          ai: ollamaStatus,
+        });
+      }
+
+      const { runNewsChat } = require('../services/newsChatService');
+      const result = await runNewsChat({
+        message: trimmedMessage,
+        language,
+        latitude,
+        longitude,
+        lat,
+        lng,
+        city,
+        state,
+        country,
+        articleId,
+        category,
+        history,
       });
+
+      if (res.headersSent) return;
+
+      try {
+        return res.json({
+          success: true,
+          answer: result.answer,
+          aiGenerated: result.aiGenerated,
+          relatedArticles: result.relatedArticles,
+          weather: result.weather,
+          sourcesUsed: result.sourcesUsed,
+        });
+      } catch (sendErr) {
+        if (sendErr?.code === 'ERR_HTTP_HEADERS_SENT') return;
+        throw sendErr;
+      }
+    } finally {
+      queueSlot.release();
     }
-
-    const { runNewsChat } = require('../services/newsChatService');
-    const result = await runNewsChat({
-      message: trimmedMessage,
-      language,
-      latitude,
-      longitude,
-      lat,
-      lng,
-      city,
-      state,
-      country,
-      articleId,
-      category,
-      history,
-    });
-
-    return res.json({
-      success: true,
-      answer: result.answer,
-      aiGenerated: result.aiGenerated,
-      relatedArticles: result.relatedArticles,
-      weather: result.weather,
-      sourcesUsed: result.sourcesUsed,
-    });
   } catch (error) {
+    if (error?.code === 'ERR_HTTP_HEADERS_SENT') return;
     console.error('[ai-chat] Error in chatWithNews:', error.message);
+    if (res.headersSent) return;
     if (error.message?.includes('_timeout')) {
       return res.status(504).json({
         success: false,

@@ -80,6 +80,39 @@ describe('aiProvider', () => {
     }
   });
 
+  it('ollamaModelForChat uses dedicated chat models separate from ingest', () => {
+    const {
+      ollamaModelForChat,
+      getConfiguredOllamaChatModels,
+    } = require('../../services/aiProvider');
+    const keys = [
+      'OLLAMA_MODEL_CHAT',
+      'OLLAMA_MODEL_CHAT_EN',
+      'OLLAMA_MODEL_CHAT_HI',
+      'OLLAMA_MODEL_CHAT_TE',
+      'OLLAMA_MODEL_INDIC',
+    ];
+    const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    process.env.OLLAMA_MODEL_CHAT = 'gemma2:2b';
+    process.env.OLLAMA_MODEL_INDIC = 'mashriram/sarvam-1';
+    delete process.env.OLLAMA_MODEL_CHAT_HI;
+    delete process.env.OLLAMA_MODEL_CHAT_TE;
+
+    assert.equal(ollamaModelForChat('en'), 'gemma2:2b');
+    assert.equal(ollamaModelForChat('hi'), 'gemma2:2b');
+    assert.equal(ollamaModelForChat('te'), 'gemma2:2b');
+    assert.deepEqual(getConfiguredOllamaChatModels(), ['gemma2:2b']);
+
+    process.env.OLLAMA_MODEL_CHAT_HI = 'qwen2.5:3b';
+    assert.equal(ollamaModelForChat('hi'), 'qwen2.5:3b');
+    assert.deepEqual(getConfiguredOllamaChatModels().sort(), ['gemma2:2b', 'qwen2.5:3b']);
+
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
   it('ollamaChatTimeoutMs stays below chat request timeout', () => {
     const {
       ollamaChatTimeoutMs,
@@ -99,5 +132,27 @@ describe('aiProvider', () => {
     else process.env.OLLAMA_CHAT_TIMEOUT_MS = savedChat;
     if (savedReq === undefined) delete process.env.CHAT_REQUEST_TIMEOUT_MS;
     else process.env.CHAT_REQUEST_TIMEOUT_MS = savedReq;
+  });
+
+  it('chatHandlerTimeoutMs scales with queue depth', () => {
+    const {
+      chatHandlerTimeoutMs,
+      ollamaChatTimeoutMs,
+    } = require('../../services/aiProvider');
+    const savedContext = process.env.CHAT_CONTEXT_TIMEOUT_MS;
+    const savedCap = process.env.CHAT_HANDLER_TIMEOUT_MS_CAP;
+    process.env.CHAT_CONTEXT_TIMEOUT_MS = '8000';
+    delete process.env.CHAT_HANDLER_TIMEOUT_MS_CAP;
+
+    const single = chatHandlerTimeoutMs(0);
+    const fifth = chatHandlerTimeoutMs(4);
+    assert.ok(single >= 8000 + ollamaChatTimeoutMs());
+    assert.ok(fifth > single);
+    assert.equal(fifth, 8000 + 5 * ollamaChatTimeoutMs() + 5000);
+
+    if (savedContext === undefined) delete process.env.CHAT_CONTEXT_TIMEOUT_MS;
+    else process.env.CHAT_CONTEXT_TIMEOUT_MS = savedContext;
+    if (savedCap === undefined) delete process.env.CHAT_HANDLER_TIMEOUT_MS_CAP;
+    else process.env.CHAT_HANDLER_TIMEOUT_MS_CAP = savedCap;
   });
 });

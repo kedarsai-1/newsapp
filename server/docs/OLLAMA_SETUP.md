@@ -27,6 +27,7 @@ Avoid **`qwen2.5:7b`** for English — often mixes Chinese and `(Note:...)` meta
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.1:8b
 ollama pull mashriram/sarvam-1
+ollama pull gemma2:2b
 ```
 
 Optional fallback:
@@ -91,22 +92,48 @@ OLLAMA_MODEL_TE=mashriram/sarvam-1
 
 ## 4. Limit loaded models (single VPS)
 
-On an 11 GB VPS running **chat** (`gemma2:2b` / `llama3.1:8b`) and **ingest** (`mashriram/sarvam-1`) together, keep only one model in RAM:
+On an 11 GB VPS running **chat** (`gemma2:2b`) and **ingest** (`mashriram/sarvam-1`) together, allow **two** models in RAM so chat and ingest do not swap on every request:
 
 ```bash
 sudo mkdir -p /etc/systemd/system/ollama.service.d
 sudo tee /etc/systemd/system/ollama.service.d/max-loaded-models.conf <<'EOF'
 [Service]
-Environment="OLLAMA_MAX_LOADED_MODELS=1"
+Environment="OLLAMA_MAX_LOADED_MODELS=2"
 EOF
 sudo systemctl daemon-reload
 sudo systemctl restart ollama
 ```
 
-Verify (only one model should appear while a request is in flight):
+If RAM is tight, use `OLLAMA_MAX_LOADED_MODELS=1` — chat and ingest will serialize at the Ollama layer.
+
+Verify loaded models during ingest + chat:
 
 ```bash
 curl -s http://127.0.0.1:11434/api/ps | jq .
+```
+
+## 4b. Separate chat vs ingest models (recommended)
+
+Chat and ingest use **different model env vars**:
+
+| Purpose | Env vars | Default |
+|---------|----------|---------|
+| **Ingest summaries** | `OLLAMA_MODEL_EN`, `OLLAMA_MODEL_INDIC`, `OLLAMA_MODEL_HI/TE` | `llama3.1:8b` / `mashriram/sarvam-1` |
+| **User chat** | `OLLAMA_MODEL_CHAT`, `OLLAMA_MODEL_CHAT_EN/HI/TE` | `gemma2:2b` (all langs) |
+
+Production two-model setup on one Ollama instance (fast chat + Indic ingest):
+
+```env
+OLLAMA_MODEL_EN=llama3.1:8b
+OLLAMA_MODEL_INDIC=mashriram/sarvam-1
+OLLAMA_MODEL_CHAT=gemma2:2b
+OLLAMA_MAX_LOADED_MODELS=2   # systemd — keeps gemma2:2b + sarvam-1 hot
+```
+
+Optional: run a second Ollama on `:11435` for chat only:
+
+```env
+OLLAMA_CHAT_BASE_URL=http://127.0.0.1:11435
 ```
 
 ## 5. Start services
@@ -119,7 +146,7 @@ cd server && npm start
 
 On startup you should see:
 
-`[ai] Ollama ready en=llama3.1:8b hi=mashriram/sarvam-1 te=mashriram/sarvam-1`
+`[ai] Ollama ready ingest en=... hi=mashriram/sarvam-1 te=mashriram/sarvam-1 | chat en=gemma2:2b hi=gemma2:2b te=gemma2:2b`
 
 **Health check** (cached 60s by default):
 

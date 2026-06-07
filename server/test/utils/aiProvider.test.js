@@ -134,6 +134,19 @@ describe('aiProvider', () => {
     else process.env.CHAT_REQUEST_TIMEOUT_MS = savedReq;
   });
 
+  it('shouldYieldIngestToChat when chat slot reserved', () => {
+    const {
+      acquireChatQueueSlot,
+      shouldYieldIngestToChat,
+      hasPendingChatWork,
+    } = require('../../services/aiProvider');
+    const slot = acquireChatQueueSlot();
+    assert.equal(hasPendingChatWork(), true);
+    assert.equal(shouldYieldIngestToChat(), true);
+    slot.release();
+    assert.equal(hasPendingChatWork(), false);
+  });
+
   it('chatHandlerTimeoutMs scales with queue depth', () => {
     const {
       chatHandlerTimeoutMs,
@@ -146,7 +159,7 @@ describe('aiProvider', () => {
 
     const single = chatHandlerTimeoutMs(0);
     const fifth = chatHandlerTimeoutMs(4);
-    assert.ok(single >= 8000 + ollamaChatTimeoutMs());
+    assert.ok(single >= 8000 + ollamaChatTimeoutMs() + 15000);
     assert.ok(fifth > single);
     assert.equal(fifth, 8000 + 5 * ollamaChatTimeoutMs() + 5000);
 

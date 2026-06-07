@@ -14,26 +14,111 @@ const FEED_LANG_LABELS = {
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 const { chatRequestTimeoutMs } = require('../middleware/requestTimeout');
 
-let ollamaIngestionQueue = Promise.resolve();
-let ollamaChatQueue = Promise.resolve();
 let chatQueuePending = 0;
+let ollamaChatInFlight = 0;
+let ollamaChatQueue = Promise.resolve();
+let activeIngestAbortController = null;
+
+function abortActiveIngestInference() {
+  try {
+    activeIngestAbortController?.abort();
+  } catch {
+    /* ignore */
+  }
+  activeIngestAbortController = null;
+}
+
+function trackIngestAbortController(ac) {
+  if (!ollamaInstancesSeparate()) {
+    activeIngestAbortController = ac;
+  }
+}
+
+function releaseIngestAbortController(ac) {
+  if (activeIngestAbortController === ac) {
+    activeIngestAbortController = null;
+  }
+}
+
+/** Global Ollama scheduler — one inference at a time; chat jumps ahead of ingest. */
+const OLLAMA_PRIORITY_CHAT = 2;
+const OLLAMA_PRIORITY_INGEST = 1;
+const OLLAMA_PRIORITY_WARM = 0;
+let ollamaJobQueue = [];
+let ollamaJobRunning = false;
+let ollamaJobSeq = 0;
+
+function drainOllamaJobQueue() {
+  if (ollamaJobRunning || !ollamaJobQueue.length) return;
+  ollamaJobRunning = true;
+  const job = ollamaJobQueue.shift();
+  Promise.resolve()
+    .then(() => job.fn())
+    .then((result) => job.resolve(result))
+    .catch((err) => job.reject(err))
+    .finally(() => {
+      ollamaJobRunning = false;
+      drainOllamaJobQueue();
+    });
+}
+
+function enqueueOllamaJob(fn, priority = OLLAMA_PRIORITY_INGEST) {
+  return new Promise((resolve, reject) => {
+    if (priority >= OLLAMA_PRIORITY_CHAT && !ollamaInstancesSeparate()) {
+      abortActiveIngestInference();
+    }
+    const seq = ollamaJobSeq++;
+    ollamaJobQueue.push({ fn, priority, seq, resolve, reject });
+    ollamaJobQueue.sort((a, b) => b.priority - a.priority || a.seq - b.seq);
+    drainOllamaJobQueue();
+  });
+}
+
+function hasPendingChatWork() {
+  if (chatQueuePending > 0 || ollamaChatInFlight > 0) return true;
+  return ollamaJobQueue.some((j) => j.priority >= OLLAMA_PRIORITY_CHAT);
+}
+
+function shouldYieldIngestToChat() {
+  if (process.env.OLLAMA_INGEST_YIELD_TO_CHAT === 'false') return false;
+  if (ollamaInstancesSeparate()) return false;
+  return hasPendingChatWork();
+}
+
+function isChatPriorityError(err) {
+  return String(err?.message || '').includes('OLLAMA_CHAT_PRIORITY');
+}
+
+function ollamaInstancesSeparate() {
+  return ollamaChatBaseUrl() !== ollamaBaseUrl();
+}
 
 function withOllamaIngestionQueue(fn) {
-  const run = ollamaIngestionQueue.then(fn, fn);
-  ollamaIngestionQueue = run.catch(() => {});
-  return run;
+  if (ollamaInstancesSeparate()) {
+    return Promise.resolve().then(fn);
+  }
+  if (shouldYieldIngestToChat()) {
+    return Promise.reject(new Error('OLLAMA_CHAT_PRIORITY'));
+  }
+  return enqueueOllamaJob(fn, OLLAMA_PRIORITY_INGEST);
 }
 
 function withOllamaChatQueue(fn) {
-  const run = ollamaChatQueue.then(fn, fn);
-  ollamaChatQueue = run.catch(() => {});
-  return run;
+  if (ollamaInstancesSeparate()) {
+    const run = ollamaChatQueue.then(fn, fn);
+    ollamaChatQueue = run.catch(() => {});
+    return run;
+  }
+  return enqueueOllamaJob(fn, OLLAMA_PRIORITY_CHAT);
 }
 
 /** Reserve FIFO position for queue-aware HTTP timeout (call at chat handler entry). */
 function acquireChatQueueSlot() {
   const queueIndex = chatQueuePending;
   chatQueuePending += 1;
+  if (!ollamaInstancesSeparate()) {
+    abortActiveIngestInference();
+  }
   return {
     queueIndex,
     release() {
@@ -56,6 +141,7 @@ function chatHandlerTimeoutMs(queueIndex = 0) {
   const bufferMs = Math.max(1000, Number(process.env.CHAT_HANDLER_TIMEOUT_BUFFER_MS || 5000));
   const depth = Math.max(0, Number(queueIndex) || 0);
   const total = contextMs + (depth + 1) * ollamaMs + bufferMs;
+  const floor = contextMs + ollamaMs + Math.max(15000, bufferMs);
   const cap = Math.min(
     600_000,
     Math.max(
@@ -63,7 +149,7 @@ function chatHandlerTimeoutMs(queueIndex = 0) {
       Number(process.env.CHAT_HANDLER_TIMEOUT_MS_CAP || 360_000),
     ),
   );
-  return Math.min(cap, total);
+  return Math.min(cap, Math.max(total, floor));
 }
 
 function getAiProvider() {
@@ -263,6 +349,7 @@ async function ollamaChatRequest({
 }) {
   const url = `${baseUrl}/api/chat`;
   const ac = new AbortController();
+  if (!forChat) trackIngestAbortController(ac);
   const timer = setTimeout(() => ac.abort(), timeoutMs ?? ollamaTimeoutMs());
   try {
     const response = await fetch(url, {
@@ -298,6 +385,7 @@ async function ollamaChatRequest({
     return cleanModelOutput(data?.message?.content || '');
   } finally {
     clearTimeout(timer);
+    releaseIngestAbortController(ac);
   }
 }
 
@@ -337,6 +425,7 @@ async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
   }
   const url = `${ollamaBaseUrl()}/api/generate`;
   const ac = new AbortController();
+  trackIngestAbortController(ac);
   const timer = setTimeout(() => ac.abort(), timeoutMs ?? ollamaTimeoutMs());
   try {
     const response = await fetch(url, {
@@ -358,11 +447,21 @@ async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
     return cleanModelOutput(data?.response || '');
   } finally {
     clearTimeout(timer);
+    releaseIngestAbortController(ac);
   }
 }
 
 async function ollamaCompleteQueued(system, user, lang = 'en', timeoutMs = null) {
-  return withOllamaIngestionQueue(() => ollamaComplete(system, user, lang, timeoutMs));
+  if (!ollamaInstancesSeparate() && shouldYieldIngestToChat()) {
+    throw new Error('OLLAMA_CHAT_PRIORITY');
+  }
+  if (ollamaInstancesSeparate()) {
+    return ollamaComplete(system, user, lang, timeoutMs);
+  }
+  return enqueueOllamaJob(
+    () => ollamaComplete(system, user, lang, timeoutMs),
+    OLLAMA_PRIORITY_INGEST,
+  );
 }
 
 function parseHfSummarizationJson(result) {
@@ -469,6 +568,7 @@ async function summarize(text, targetLang = 'en') {
         const out = validateLanguageOutput(raw, 'en');
         if (out) return out;
       } catch (e) {
+        if (isChatPriorityError(e)) return '';
         console.error(`[ai] English Ollama summarization failed: ${e.message}`);
       }
     }
@@ -498,6 +598,7 @@ async function summarize(text, targetLang = 'en') {
           `[ai] Ollama summary rejected (lang=${lang}, model=${model}). Trying HF backup...`,
         );
       } catch (e) {
+        if (isChatPriorityError(e)) return '';
         console.error(`Ollama summarization failed: ${e.message || e}. Trying HF backup...`);
       }
     }
@@ -795,9 +896,19 @@ async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
   if (!isOllamaProvider()) {
     throw new Error('Ollama provider is not enabled in environment');
   }
-  return withOllamaChatQueue(() =>
-    ollamaChatForUser(systemPrompt, userPrompt, lang, ollamaChatTimeoutMs()),
-  );
+  return withOllamaChatQueue(async () => {
+    ollamaChatInFlight += 1;
+    try {
+      return await ollamaChatForUser(
+        systemPrompt,
+        userPrompt,
+        lang,
+        ollamaChatTimeoutMs(),
+      );
+    } finally {
+      ollamaChatInFlight = Math.max(0, ollamaChatInFlight - 1);
+    }
+  });
 }
 
 function warmOllamaLanguages() {
@@ -825,12 +936,15 @@ async function warmOllamaChatModels() {
     seenModels.add(model);
     try {
       // eslint-disable-next-line no-await-in-loop
-      await withOllamaChatQueue(() => ollamaChatForUser(
-        'Reply with exactly: OK',
-        'warmup',
-        lang,
-        warmTimeoutMs,
-      ));
+      await enqueueOllamaJob(
+        () => ollamaChatForUser(
+          'Reply with exactly: OK',
+          'warmup',
+          lang,
+          warmTimeoutMs,
+        ),
+        OLLAMA_PRIORITY_WARM,
+      );
       results[model] = 'ok';
     } catch (err) {
       results[model] = err?.message || String(err);
@@ -874,6 +988,7 @@ module.exports = {
   pingOllama,
   getOllamaChatStatus,
   ollamaChatBaseUrl,
+  ollamaInstancesSeparate,
   ollamaModelForLanguage,
   ollamaModelForChat,
   getConfiguredOllamaModels,
@@ -888,6 +1003,8 @@ module.exports = {
   ollamaChatMaxTokens,
   ollamaSummaryTimeoutMs,
   isOllamaAbortError,
+  hasPendingChatWork,
+  shouldYieldIngestToChat,
   withOllamaChatQueue,
   withOllamaIngestionQueue,
   acquireChatQueueSlot,

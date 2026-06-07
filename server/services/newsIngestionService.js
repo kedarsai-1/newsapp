@@ -1048,7 +1048,8 @@ async function runIngestion({
     stats.endedAt = new Date();
     console.log(
       `[ingest] summary stats: aiOk=${stats.summaryAiOk} retries=${stats.summaryAiRetries} `
-        + `budgetSkip=${stats.summarySkippedBudget} extractive=${stats.summaryExtractiveFallback} `
+        + `budgetSkip=${stats.summarySkippedBudget} chatYield=${stats.summarySkippedChatPriority || 0} `
+        + `extractive=${stats.summaryExtractiveFallback} `
         + `noImage=${stats.skippedNoImage}`,
     );
     if (stats.fetched === 0 && stats.inserted === 0) {

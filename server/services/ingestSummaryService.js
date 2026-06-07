@@ -1,5 +1,5 @@
 const { summarizeForRssIngest } = require('./rssService');
-const { isAiSummaryEnabled, isOllamaProvider } = require('./aiProvider');
+const { isAiSummaryEnabled, isOllamaProvider, shouldYieldIngestToChat } = require('./aiProvider');
 
 function summaryMinBudgetMs() {
   const ollama = isOllamaProvider();
@@ -54,6 +54,11 @@ async function summarizeForIngest({
     return { summary: '', source: 'budget' };
   }
 
+  if (shouldYieldIngestToChat()) {
+    stats && (stats.summarySkippedChatPriority += 1);
+    return { summary: '', source: 'chat_priority' };
+  }
+
   const retries = summaryMaxRetries();
   let lastError = null;
 
@@ -69,6 +74,10 @@ async function summarizeForIngest({
       }
     } catch (err) {
       lastError = err;
+      if (String(err?.message || '').includes('OLLAMA_CHAT_PRIORITY')) {
+        stats && (stats.summarySkippedChatPriority += 1);
+        return { summary: '', source: 'chat_priority' };
+      }
       if (attempt < retries) {
         stats && (stats.summaryAiRetries += 1);
         // eslint-disable-next-line no-await-in-loop
@@ -99,6 +108,7 @@ function createSummaryStats() {
     summarySkippedBudget: 0,
     summarySkippedConfig: 0,
     summarySkippedAiOff: 0,
+    summarySkippedChatPriority: 0,
     summaryExtractiveFallback: 0,
   };
 }

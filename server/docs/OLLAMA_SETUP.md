@@ -130,11 +130,21 @@ OLLAMA_MODEL_CHAT=gemma2:2b
 OLLAMA_MAX_LOADED_MODELS=2   # systemd — keeps gemma2:2b + sarvam-1 hot
 ```
 
-Optional: run a second Ollama on `:11435` for chat only:
+Optional: run a second Ollama on `:11435` for chat only (needs extra RAM — do not run two full instances on 11 GB under load):
 
 ```env
 OLLAMA_CHAT_BASE_URL=http://127.0.0.1:11435
 ```
+
+When chat and ingest share one Ollama URL (default), the app:
+
+- Routes **chat** to `OLLAMA_MODEL_CHAT*` (`gemma2:2b`)
+- Routes **ingest** to `OLLAMA_MODEL_*` / `OLLAMA_MODEL_INDIC` (`sarvam-1`, etc.)
+- Uses a **chat-priority scheduler** (one inference at a time)
+- **Preempts in-flight ingest** Ollama calls when a user opens chat
+- Skips queued ingest AI while chat is waiting (`OLLAMA_INGEST_YIELD_TO_CHAT`, default on)
+
+Do **not** set `OLLAMA_MODEL_EN=gemma2:2b` for ingest if chat uses `gemma2:2b` — use `llama3.1:8b` for English ingest summaries instead.
 
 ## 5. Start services
 

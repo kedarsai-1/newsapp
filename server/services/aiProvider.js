@@ -13,6 +13,10 @@ const FEED_LANG_LABELS = {
 
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 const { chatRequestTimeoutMs } = require('../middleware/requestTimeout');
+const {
+  clipSummaryForStorage,
+  SUMMARY_STORAGE_MAX_CHARS,
+} = require('../utils/summaryText');
 
 let chatQueuePending = 0;
 let ollamaChatInFlight = 0;
@@ -315,6 +319,10 @@ function validateLanguageOutput(text, targetLang, options = {}) {
   if (lang === 'hi' && devanagari / total < 0.35 && latin / total < 0.35) return '';
   if (lang === 'te' && telugu / total < 0.35) return '';
 
+  if (options.forSummary) {
+    return clipSummaryForStorage(t);
+  }
+
   const maxChars = Math.max(
     320,
     Number(options.maxChars || process.env.CHAT_ANSWER_MAX_CHARS || 320),
@@ -331,17 +339,29 @@ function validateLanguageOutput(text, targetLang, options = {}) {
   return `${slice.slice(0, 317).trim()}…`;
 }
 
+function ollamaSummaryMaxTokens() {
+  return Math.min(
+    1024,
+    Math.max(256, Number(process.env.OLLAMA_SUMMARY_MAX_TOKENS || 512)),
+  );
+}
+
 function summarySystemPrompt(targetLang) {
   const lang = FEED_LANG_LABELS[String(targetLang || 'en').toLowerCase()] || 'English';
   return (
     `You write news summaries for an Indian news app. `
-    + `Reply with ONE short summary in ${lang} only. Max 280 characters. `
+    + `Reply with ONE complete summary in ${lang} only. Write 4–6 full sentences (up to ${SUMMARY_STORAGE_MAX_CHARS} characters). `
+    + `Cover who, what, when, where, and why. End with a complete sentence — never stop mid-word or mid-thought. `
     + `Factual, neutral. No bullets, no quotes, no Chinese, no meta notes, no "(Note:" text.`
   );
 }
 
 function summaryUserPrompt(text) {
-  return `Article:\n${String(text || '').trim().slice(0, 1800)}\n\nSummary:`;
+  const maxInput = Math.min(
+    6000,
+    Math.max(1200, Number(process.env.RSS_SUMMARY_INPUT_MAX_CHARS || 3000)),
+  );
+  return `Article:\n${String(text || '').trim().slice(0, maxInput)}\n\nSummary:`;
 }
 
 function translationSystemPrompt(targetLang) {
@@ -361,6 +381,7 @@ async function ollamaChatRequest({
   lang = 'en',
   timeoutMs = null,
   forChat = false,
+  numPredict = null,
 }) {
   const url = `${baseUrl}/api/chat`;
   const ac = new AbortController();
@@ -384,9 +405,9 @@ async function ollamaChatRequest({
               ? (process.env.OLLAMA_CHAT_TEMPERATURE || process.env.OLLAMA_TEMPERATURE || 0.2)
               : (process.env.OLLAMA_TEMPERATURE || 0.1),
           ),
-          num_predict: forChat
+          num_predict: numPredict ?? (forChat
             ? ollamaChatMaxTokensForLang(lang)
-            : Number(process.env.OLLAMA_MAX_TOKENS || 150),
+            : Number(process.env.OLLAMA_MAX_TOKENS || 150)),
           top_p: 0.9,
         },
       }),
@@ -435,10 +456,19 @@ function ollamaSummaryTimeoutMs() {
   );
 }
 
-async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
+async function ollamaComplete(system, user, lang = 'en', timeoutMs = null, numPredict = null) {
   const model = ollamaModelForLanguage(lang);
   if (useOllamaChatApi()) {
-    return ollamaChatForIngest(system, user, lang, timeoutMs ?? ollamaTimeoutMs());
+    return ollamaChatRequest({
+      baseUrl: ollamaBaseUrl(),
+      model,
+      system,
+      user,
+      lang,
+      timeoutMs: timeoutMs ?? ollamaTimeoutMs(),
+      forChat: false,
+      numPredict,
+    });
   }
   const url = `${ollamaBaseUrl()}/api/generate`;
   const ac = new AbortController();
@@ -454,7 +484,7 @@ async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
         stream: false,
         options: {
           temperature: Number(process.env.OLLAMA_TEMPERATURE || 0.1),
-          num_predict: Number(process.env.OLLAMA_MAX_TOKENS || 150),
+          num_predict: numPredict ?? Number(process.env.OLLAMA_MAX_TOKENS || 150),
         },
       }),
       signal: ac.signal,
@@ -468,16 +498,26 @@ async function ollamaComplete(system, user, lang = 'en', timeoutMs = null) {
   }
 }
 
-async function ollamaCompleteQueued(system, user, lang = 'en', timeoutMs = null) {
+async function ollamaCompleteQueued(system, user, lang = 'en', timeoutMs = null, numPredict = null) {
   if (!ollamaInstancesSeparate() && shouldYieldIngestToChat()) {
     throw new Error('OLLAMA_CHAT_PRIORITY');
   }
   if (ollamaInstancesSeparate()) {
-    return ollamaComplete(system, user, lang, timeoutMs);
+    return ollamaComplete(system, user, lang, timeoutMs, numPredict);
   }
   return enqueueOllamaJob(
-    () => ollamaComplete(system, user, lang, timeoutMs),
+    () => ollamaComplete(system, user, lang, timeoutMs, numPredict),
     OLLAMA_PRIORITY_INGEST,
+  );
+}
+
+async function ollamaCompleteForSummary(system, user, lang = 'en') {
+  return ollamaCompleteQueued(
+    system,
+    user,
+    lang,
+    ollamaSummaryTimeoutMs(),
+    ollamaSummaryMaxTokens(),
   );
 }
 
@@ -576,13 +616,12 @@ async function summarize(text, targetLang = 'en') {
     if (isOllamaProvider()) {
       try {
         const model = ollamaModelForLanguage('en');
-        const raw = await ollamaCompleteQueued(
+        const raw = await ollamaCompleteForSummary(
           summarySystemPrompt('en'),
           summaryUserPrompt(input),
           'en',
-          ollamaSummaryTimeoutMs(),
         );
-        const out = validateLanguageOutput(raw, 'en');
+        const out = validateLanguageOutput(raw, 'en', { forSummary: true });
         if (out) return out;
       } catch (e) {
         if (isChatPriorityError(e)) return '';
@@ -603,13 +642,12 @@ async function summarize(text, targetLang = 'en') {
     if (isOllamaProvider()) {
       try {
         const model = ollamaModelForLanguage(lang);
-        const raw = await ollamaCompleteQueued(
+        const raw = await ollamaCompleteForSummary(
           summarySystemPrompt(lang),
           summaryUserPrompt(input),
           lang,
-          ollamaSummaryTimeoutMs(),
         );
-        const out = validateLanguageOutput(raw, lang);
+        const out = validateLanguageOutput(raw, lang, { forSummary: true });
         if (out) return out;
         console.warn(
           `[ai] Ollama summary rejected (lang=${lang}, model=${model}). Trying HF backup...`,

@@ -22,8 +22,16 @@ bool isUnusableFeedImageUrl(String? url) {
       u.contains('/profile/') ||
       u.contains('1x1') ||
       u.contains('pixel') ||
+      u.contains('scorecardresearch.com') ||
+      u.contains('doubleclick.net') ||
+      u.contains('googletagmanager.com') ||
+      u.contains('google-analytics.com') ||
       u.endsWith('.svg') ||
       u.endsWith('.ico')) {
+    return true;
+  }
+  if (!RegExp(r'\.(jpg|jpeg|png|webp|gif|avif)(\?|$)').hasMatch(u) &&
+      RegExp(r'[?&]cj=1(&|$)').hasMatch(u)) {
     return true;
   }
   if (u.contains('news.google.com') ||

@@ -13,7 +13,6 @@ const {
 } = require('../config/ingestLanguages');
 const { emitFeedUpdated } = require('./feedSocket');
 const { isPoliticalShortContent } = require('../utils/shortsFeedFilter');
-const { truncateSummary } = require('../utils/summaryText');
 const {
   isYoutubeQuotaError,
   isYoutubeQuotaBlocked,
@@ -237,7 +236,7 @@ function normalizeFromVideoResource(
   return {
     title: title.slice(0, 200),
     body: desc.slice(0, 2000) || title,
-    summary: truncateSummary(desc, 280) || null,
+    summary: require('../utils/summaryText').clipSummaryForStorage(desc) || null,
     sourceUrl: youtube.watchUrl,
     sourcePublishedAt: publishedAt,
     sourceType: 'youtube',
@@ -350,15 +349,7 @@ function toYoutubePostDoc(item, reporterId, categoryId, sourceName) {
     status: SCRAPER_AUTO_APPROVE ? 'approved' : 'pending',
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
     tags: item.tags || ['youtube'],
-    language: (() => {
-      let l = item.language || 'en';
-      if (l === 'en') {
-        const titleStr = item.title || '';
-        if (/[\u0900-\u097F]/.test(titleStr)) return 'hi';
-        if (/[\u0C00-\u0C7F]/.test(titleStr)) return 'te';
-      }
-      return l;
-    })(),
+    language: item.language || 'en',
     sourceName,
     sourceUrl: y.watchUrl,
     sourceUrlHash: (() => {
@@ -407,7 +398,7 @@ async function insertNormalizedItem(item, reporter, stats) {
   }
 
   const category = await getCategoryBySlug(normalized.categorySlug);
-  const label = normalized.youtube.channelTitle || 'YouTube';
+  const label = `YouTube · ${normalized.youtube.channelTitle}`;
   const doc = toYoutubePostDoc(normalized, reporter.id, category.id, label);
   try {
     await createNewsPost(doc);
@@ -606,7 +597,7 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube', languages } = {}) 
         + `restricted=${stats.youtubeSkippedRestricted} failed=${stats.youtubeFailed}`,
     );
     if (stats.youtubeInserted > 0) {
-      emitFeedUpdated({ inserted: stats.youtubeInserted, source: 'youtube', at: new Date() });
+      emitFeedUpdated({ inserted: stats.youtubeInserted, at: new Date() });
     }
     return { success: true, stats };
   } catch (error) {

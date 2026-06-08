@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:provider/provider.dart';
@@ -13,7 +14,7 @@ import '../../services/auth_provider.dart';
 import '../../constants.dart';
 import '../../users/media_widgets.dart';
 import '../../widgets/location_label.dart';
-import '../../widgets/feed/feed_xpresso_theme.dart';
+import '../../utils/text_truncation.dart';
 import '../../widgets/shimmer_widgets.dart';
 
 /// Media shown below the byline: videos, multi-asset posts, or extra items after the app-bar hero image.
@@ -44,10 +45,6 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   bool _liked = false;
   bool _bookmarked = false;
   double _readScale = 1.0;
-  String? _fullText;
-  bool _fullLoading = false;
-  String? _fullError;
-  bool _fullTriedByUser = false;
   final _commentCtrl = TextEditingController();
   final _commentFocus = FocusNode();
   final _scrollCtrl = ScrollController();
@@ -86,58 +83,19 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     }
   }
 
+  /// Article detail shows the stored AI summary — not the raw RSS body or scraped full article.
   String _displayText(NewsPost post) {
-    final short = post.summary?.trim();
-    if (_fullText != null && _fullText!.trim().isNotEmpty) {
-      return _fullText!.trim();
-    }
-    if (short != null && short.isNotEmpty) return short;
-    final body = post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (body.length <= 420) return body;
-    return '${body.substring(0, 420).trim()}...';
+    final summary = post.summary?.trim() ?? '';
+    if (summary.isNotEmpty) return summary;
+    return post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
-  bool _shouldTryExtract(NewsPost post) {
-    final url = post.sourceUrl?.trim();
-    if (url == null || url.isEmpty) return false;
-    // Heuristic: reporter stories (no sourceUrl OR has location/media) are already full.
-    // For API-ingested items (sourceUrl present), try extraction.
-    return true;
-  }
-
-  Future<void> _loadFullIfPossible({required bool showError}) async {
-    final post = _post;
-    if (post == null) return;
-    if (_fullLoading || _fullText != null) return;
-    if (!_shouldTryExtract(post)) return;
-
-    setState(() {
-      _fullLoading = true;
-      _fullError = null;
-    });
-    final res = await ApiService.extractArticle(post.sourceUrl!.trim());
-    if (!mounted) return;
-    final text = res['text']?.toString();
-    if (res['success'] == true && text != null && text.trim().isNotEmpty) {
-      setState(() {
-        _fullText = text.trim();
-        _fullLoading = false;
-        _fullError = null;
-      });
-      return;
-    }
-    if (!showError) {
-      setState(() {
-        _fullLoading = false;
-        _fullError = null;
-      });
-      return;
-    }
-    setState(() {
-      _fullLoading = false;
-      _fullError =
-          (res['message'] ?? 'Could not load full article.').toString();
-    });
+  Future<void> _openSourceArticle() async {
+    final url = _post?.sourceUrl?.trim();
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _toggleLike() async {
@@ -225,7 +183,10 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     buf.writeln();
     final preview =
         post.summary?.trim().isNotEmpty == true ? post.summary! : post.body;
-    final ex = preview.length > 600 ? '${preview.substring(0, 600)}…' : preview;
+    final ex = truncateAtWordBoundary(
+      preview.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      600,
+    );
     buf.writeln(ex);
     if (post.sourceUrl?.trim().isNotEmpty == true) {
       buf.writeln();
@@ -305,59 +266,68 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   Widget _commentComposer(BuildContext context, dynamic p) {
-    final fx = FeedXpressoTheme.fx(context);
-    return Material(
-      elevation: 12,
-      shadowColor: Colors.black.withValues(alpha: 0.18),
-      color: fx.sheet,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: fx.divider)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.s12,
-              AppSpacing.s8,
-              AppSpacing.s4,
-              AppSpacing.s8,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 16), // Floating margins
+        child: GlassCard(
+          radius: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          color: isDark
+              ? Colors.black.withOpacity(0.40)
+              : Colors.white.withOpacity(0.65),
+          borderColor: isDark
+              ? Colors.white.withOpacity(0.16)
+              : Colors.black.withOpacity(0.08),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _commentCtrl,
-                    focusNode: _commentFocus,
-                    minLines: 1,
-                    maxLines: 4,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _submitComment(),
-                    decoration: InputDecoration(
-                      hintText: 'Write a comment…',
-                      hintStyle: TextStyle(fontSize: 14, color: p.textHint),
-                      filled: true,
-                      fillColor: fx.surfaceElevated,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.s16,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
+          ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentCtrl,
+                  focusNode: _commentFocus,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _submitComment(),
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                    fontSize: 14,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Write a comment…',
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white.withOpacity(0.50) : p.textHint,
                     ),
+                    filled: false,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.s4),
-                IconButton(
-                  tooltip: 'Post comment',
-                  icon: Icon(Icons.send_rounded, color: fx.accent),
-                  onPressed: _submitComment,
+              ),
+              const SizedBox(width: AppSpacing.s8),
+              _GlassActionIconButton(
+                icon: Icon(
+                  Icons.send_rounded,
+                  color: isDark ? p.primary : p.primaryDark,
+                  size: 18,
                 ),
-              ],
-            ),
+                onPressed: _submitComment,
+                tooltip: 'Post comment',
+              ),
+            ],
           ),
         ),
       ),
@@ -404,22 +374,64 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     return false;
   }
 
-  List<Widget> _paragraphs(String text, TextStyle style) {
+  List<Widget> _paragraphs(String text, TextStyle style, BuildContext context) {
+    final p = context.palette;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final raw = text.replaceAll('\r\n', '\n');
     final parts = raw
         .split(RegExp(r'\n\s*\n+'))
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
+        .map((pr) => pr.trim())
+        .where((pr) => pr.isNotEmpty)
         .toList();
     if (parts.isEmpty) {
-      return [Text(text, style: style)];
+      return [_renderParagraph(text, style, p, isDark)];
     }
     return [
       for (var i = 0; i < parts.length; i++) ...[
-        Text(parts[i], style: style),
-        if (i != parts.length - 1) const SizedBox(height: AppSpacing.s12),
+        _renderParagraph(parts[i], style, p, isDark),
+        if (i != parts.length - 1) const SizedBox(height: AppSpacing.s16),
       ]
     ];
+  }
+
+  Widget _renderParagraph(String paragraphText, TextStyle style, AppPalette p, bool isDark) {
+    final isQuote = paragraphText.startsWith('>') || paragraphText.startsWith('"') || paragraphText.startsWith('“');
+    var cleanText = paragraphText;
+    if (paragraphText.startsWith('>')) {
+      cleanText = paragraphText.substring(1).trim();
+    }
+
+    if (isQuote) {
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.only(left: 16, top: 4, bottom: 4),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: p.primary,
+              width: 4,
+            ),
+          ),
+        ),
+        child: Text(
+          cleanText,
+          style: style.copyWith(
+            color: isDark ? Colors.white.withOpacity(0.92) : p.textPrimary.withOpacity(0.85),
+            fontStyle: FontStyle.italic,
+            fontSize: (style.fontSize ?? 15) + 1,
+            height: 1.6,
+          ),
+        ),
+      );
+    }
+
+    return Text(
+      paragraphText,
+      style: style.copyWith(
+        letterSpacing: 0.15,
+        color: isDark ? Colors.white.withOpacity(0.88) : p.textPrimary.withOpacity(0.92),
+      ),
+    );
   }
 
   Widget _glassActionShell({
@@ -429,21 +441,29 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ClipOval(
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
-          width: 34,
-          height: 34,
+          width: 38,
+          height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.black.withValues(alpha: 0.50)
-                : Colors.white.withValues(alpha: 0.78),
+                ? Colors.black.withOpacity(0.40)
+                : Colors.white.withOpacity(0.65),
             shape: BoxShape.circle,
             border: Border.all(
               color: isDark
-                  ? Colors.white.withValues(alpha: 0.22)
-                  : Colors.black.withValues(alpha: 0.20),
+                  ? Colors.white.withOpacity(0.24)
+                  : Colors.black.withOpacity(0.12),
+              width: 1.0,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: child,
         ),
@@ -458,11 +478,11 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     VoidCallback? onLongPress,
     String? tooltip,
   }) {
-    return IconButton(
-      tooltip: tooltip,
+    return _GlassActionIconButton(
+      icon: icon,
       onPressed: onPressed,
       onLongPress: onLongPress,
-      icon: _glassActionShell(context: context, child: icon),
+      tooltip: tooltip,
     );
   }
 
@@ -473,13 +493,20 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     final overlayBase = isDark ? Colors.black : Colors.white;
     final actionIconColor = isDark ? Colors.white : Colors.black;
     if (_loading) {
-      return Scaffold(
-        backgroundColor: p.glassSurface,
-        body: const ArticleDetailShimmer(),
+      return GlassBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: const ArticleDetailShimmer(),
+        ),
       );
     }
     if (_post == null) {
-      return const Scaffold(body: Center(child: Text('Article not found.')));
+      return const GlassBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: Text('Article not found.')),
+        ),
+      );
     }
     final post = _post!;
 
@@ -487,11 +514,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       data: MediaQuery.of(context).copyWith(
         textScaler: TextScaler.linear(_readScale),
       ),
-      child: Scaffold(
-        backgroundColor: p.scaffoldBackground,
-        resizeToAvoidBottomInset: true,
-        bottomNavigationBar: _commentComposer(context, p),
-        body: CustomScrollView(
+      child: GlassBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          resizeToAvoidBottomInset: true,
+          extendBody: true,
+          bottomNavigationBar: _commentComposer(context, p),
+          body: CustomScrollView(
           controller: _scrollCtrl,
           physics: const BouncingScrollPhysics(),
           slivers: [
@@ -523,67 +552,89 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              CachedNetworkImage(
-                                imageUrl: AppConstants.imageUrlForDisplay(
-                                  post.firstImage!.url,
-                                  articleReferer: post.sourceUrl,
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  bottom: Radius.circular(24),
                                 ),
-                                imageBuilder: (context, provider) {
-                                  final isLogo =
-                                      _looksLikeLogoUrl(post.firstImage!.url);
-                                  return Container(
-                                    color: p.scaffoldBackground,
-                                    padding: isLogo
-                                        ? const EdgeInsets.all(14)
-                                        : EdgeInsets.zero,
-                                    alignment: Alignment.center,
-                                    child: Image(
-                                      image: provider,
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      fit: isLogo
-                                          ? BoxFit.contain
-                                          : BoxFit.cover,
+                                child: CachedNetworkImage(
+                                  imageUrl: AppConstants.imageUrlForDisplay(
+                                    post.firstImage!.url,
+                                    articleReferer: post.sourceUrl,
+                                  ),
+                                  imageBuilder: (context, provider) {
+                                    final isLogo =
+                                        _looksLikeLogoUrl(post.firstImage!.url);
+                                    return Container(
+                                      color: Colors.transparent,
+                                      padding: isLogo
+                                          ? const EdgeInsets.all(14)
+                                          : EdgeInsets.zero,
                                       alignment: Alignment.center,
-                                      filterQuality: FilterQuality.high,
-                                    ),
-                                  );
-                                },
-                                memCacheWidth: kIsWeb ? null : 2200,
-                                fadeInDuration:
-                                    const Duration(milliseconds: 280),
-                                placeholder: (_, __) => Container(
-                                  color: p.scaffoldBackground,
-                                  alignment: Alignment.center,
-                                  child: const CircularProgressIndicator(
-                                      strokeWidth: 2),
-                                ),
-                                errorWidget: (_, __, ___) => Container(
-                                  color: p.scaffoldBackground,
-                                  alignment: Alignment.center,
-                                  child: Icon(
-                                      Icons.image_not_supported_outlined,
-                                      color: p.textHint,
-                                      size: 48),
+                                      child: Image(
+                                        image: provider,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        fit: isLogo
+                                            ? BoxFit.contain
+                                            : BoxFit.cover,
+                                        alignment: Alignment.center,
+                                        filterQuality: FilterQuality.high,
+                                      ),
+                                    );
+                                  },
+                                  memCacheWidth: kIsWeb ? null : 2200,
+                                  fadeInDuration:
+                                      const Duration(milliseconds: 280),
+                                  placeholder: (_, __) => Container(
+                                    color: Colors.transparent,
+                                    alignment: Alignment.center,
+                                    child: const CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.transparent,
+                                    alignment: Alignment.center,
+                                    child: Icon(
+                                        Icons.image_not_supported_outlined,
+                                        color: p.textHint,
+                                        size: 48),
+                                  ),
                                 ),
                               ),
                               // Ensures top-right actions/back button are always readable.
                               Positioned.fill(
-                                child: IgnorePointer(
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topCenter,
-                                        end: Alignment.bottomCenter,
-                                        colors: [
-                                          overlayBase.withValues(alpha: 0.78),
-                                          overlayBase.withValues(alpha: 0.16),
-                                          overlayBase.withValues(alpha: 0.56),
-                                        ],
-                                        stops: const [0.0, 0.50, 1.0],
+                                child: ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                    bottom: Radius.circular(24),
+                                  ),
+                                  child: IgnorePointer(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            overlayBase.withOpacity(0.70),
+                                            overlayBase.withOpacity(0.12),
+                                            overlayBase.withOpacity(0.50),
+                                          ],
+                                          stops: const [0.0, 0.50, 1.0],
+                                        ),
                                       ),
                                     ),
                                   ),
+                                ),
+                              ),
+                              // Frosted bottom edge border
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: Container(
+                                  height: 1,
+                                  color: isDark
+                                      ? Colors.white.withOpacity(0.15)
+                                      : Colors.black.withOpacity(0.08),
                                 ),
                               ),
                             ],
@@ -593,22 +644,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                     )
                   : null,
               actions: [
-                _glassActionIcon(
-                  context: context,
-                  tooltip: _fullText != null
-                      ? 'Full article loaded'
-                      : 'Load full article',
-                  icon: Icon(
-                    Icons.article_outlined,
-                    color: _fullText != null ? p.primary : actionIconColor,
+                if (post.sourceUrl?.trim().isNotEmpty == true)
+                  _glassActionIcon(
+                    context: context,
+                    tooltip: 'Read original article',
+                    icon: Icon(Icons.open_in_new_rounded, color: actionIconColor),
+                    onPressed: _openSourceArticle,
                   ),
-                  onPressed: _fullLoading
-                      ? null
-                      : () async {
-                          setState(() => _fullTriedByUser = true);
-                          await _loadFullIfPossible(showError: true);
-                        },
-                ),
                 PopupMenuButton<double>(
                   tooltip: 'Text size',
                   icon: _glassActionShell(
@@ -693,122 +735,161 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Category & breaking badge
-                        Wrap(spacing: AppSpacing.s8, children: [
-                          if (post.isBreaking)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.s8, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: p.breaking,
-                                  borderRadius: BorderRadius.circular(10)),
-                              child: const Text(
-                                'BREAKING',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 0.2),
+                        // Title Editorial Card
+                        GlassCard(
+                          margin: const EdgeInsets.only(bottom: 24),
+                          radius: 24,
+                          padding: const EdgeInsets.all(20),
+                          borderColor: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.08),
+                          color: isDark
+                              ? Colors.black.withValues(alpha: 0.25)
+                              : Colors.white.withValues(alpha: 0.50),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Category & breaking badge
+                              Wrap(
+                                spacing: AppSpacing.s8,
+                                runSpacing: 6,
+                                children: [
+                                  if (post.isBreaking)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.s8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                          color: p.breaking,
+                                          borderRadius: BorderRadius.circular(10)),
+                                      child: const Text(
+                                        'BREAKING',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.2),
+                                      ),
+                                    ),
+                                  if (post.category != null)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.s8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                          color: p.categoryChipBg,
+                                          borderRadius: BorderRadius.circular(10)),
+                                      child: Text(
+                                          '${post.category!.icon} ${post.category!.name}',
+                                          style: TextStyle(
+                                              color: isDark ? p.primary : p.primaryDark,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600)),
+                                    ),
+                                  if ((post.constituency ?? '').trim().isNotEmpty &&
+                                      (post.constituency ?? '').trim().toLowerCase() !=
+                                          'unknown')
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: AppSpacing.s8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                          color: p.primary.withValues(alpha: 0.14),
+                                          borderRadius: BorderRadius.circular(10)),
+                                      child: Text(
+                                          '📍 ${(post.constituency ?? '').trim()}',
+                                          style: TextStyle(
+                                              color: p.primary,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700)),
+                                    ),
+                                ],
                               ),
-                            ),
-                          if (post.category != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.s8, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: p.categoryChipBg,
-                                  borderRadius: BorderRadius.circular(10)),
-                              child: Text(
-                                  '${post.category!.icon} ${post.category!.name}',
-                                  style: TextStyle(
-                                      color: p.primaryDark,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600)),
-                            ),
-                          if ((post.constituency ?? '').trim().isNotEmpty &&
-                              (post.constituency ?? '').trim().toLowerCase() !=
-                                  'unknown')
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.s8, vertical: 4),
-                              decoration: BoxDecoration(
-                                  color: p.primary.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(10)),
-                              child: Text(
-                                  '📍 ${(post.constituency ?? '').trim()}',
-                                  style: TextStyle(
-                                      color: p.primary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                        ]),
-                        const SizedBox(height: AppSpacing.s16),
+                              const SizedBox(height: AppSpacing.s16),
 
-                        // Title
-                        Text(
-                          post.title,
-                          style: context.titleText.copyWith(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            height: 1.18,
-                            letterSpacing: -0.3,
-                            color: p.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.s16),
+                              // Title
+                              Text(
+                                post.title,
+                                style: context.titleText.copyWith(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.25,
+                                  letterSpacing: -0.3,
+                                  color: p.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.s16),
 
-                        // Meta
-                        Wrap(
-                          spacing: AppSpacing.s12,
-                          runSpacing: AppSpacing.s8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (post.reporter != null)
-                              Row(mainAxisSize: MainAxisSize.min, children: [
-                                CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: p.primary,
-                                    child: Text(
-                                        (post.sourceName?.trim().isNotEmpty == true
-                                            ? post.sourceName!.trim()
-                                            : post.reporter!.name)[0],
+                              // Meta (Reporter, time, location)
+                              Row(
+                                children: [
+                                  if (post.reporter != null) ...[
+                                    CircleAvatar(
+                                      radius: 14,
+                                      backgroundColor: p.primary,
+                                      child: Text(
+                                        post.reporter!.name[0].toUpperCase(),
                                         style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 12))),
-                                const SizedBox(width: AppSpacing.s8),
-                                Text(
-                                  post.sourceName?.trim().isNotEmpty == true
-                                      ? post.sourceName!.trim()
-                                      : post.reporter!.name,
-                                  style: context.subtitleText.copyWith(
-                                    color: p.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ]),
-                            Text(
-                              timeago.format(post.displayTime),
-                              style:
-                                  context.metaText.copyWith(color: p.textHint),
-                            ),
-                          ],
-                        ),
-
-                        if (post.location != null) ...[
-                          const SizedBox(height: AppSpacing.s8),
-                          LocationLabel(
-                            location: post.location!,
-                            style: TextStyle(fontSize: 12, color: p.textHint),
-                            iconSize: 14,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.s8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            post.reporter!.name,
+                                            style: context.subtitleText.copyWith(
+                                              color: p.textPrimary,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            timeago.format(post.displayTime),
+                                            style: context.metaText.copyWith(
+                                              color: p.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    Expanded(
+                                      child: Text(
+                                        timeago.format(post.displayTime),
+                                        style: context.metaText.copyWith(
+                                          color: p.textSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  if (post.location != null) ...[
+                                    const SizedBox(width: AppSpacing.s8),
+                                    LocationLabel(
+                                      location: post.location!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: p.textSecondary,
+                                      ),
+                                      iconSize: 14,
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
 
                         if (_bodyMediaForGallery(post).isNotEmpty) ...[
                           const SizedBox(height: AppSpacing.s16),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child:
-                                MediaGallery(media: _bodyMediaForGallery(post)),
+                                MediaGallery(media: _bodyMediaForGallery(post), post: post),
                           ),
                         ],
 
@@ -816,46 +897,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                         Divider(height: 1, color: p.glassBorder),
                         const SizedBox(height: AppSpacing.s16),
 
-                        // Article body
-                        if (_fullLoading)
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.s12),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: p.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.s12),
-                                Text(
-                                  'Loading full article…',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: p.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (_fullError != null && _fullTriedByUser)
-                          Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: AppSpacing.s12),
-                            child: Text(
-                              _fullError!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: p.error,
-                                height: 1.35,
-                              ),
-                            ),
-                          ),
+                        // AI summary (full stored summary — feed cards use shorter snippets)
                         ..._paragraphs(
                           _displayText(post),
                           Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -868,6 +910,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 height: 1.85,
                                 color: p.textPrimary,
                               ),
+                          context,
                         ),
 
                         // Tags
@@ -896,72 +939,129 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
                         // Stats row
                         const SizedBox(height: AppSpacing.s24),
-                        Row(children: [
-                          Icon(Icons.visibility_outlined,
-                              size: 16, color: p.textHint),
-                          const SizedBox(width: 4),
-                          Text('${post.views} views',
-                              style:
-                                  TextStyle(fontSize: 13, color: p.textHint)),
-                          const SizedBox(width: 16),
-                          Icon(_liked ? Icons.favorite : Icons.favorite_border,
-                              size: 16,
-                              color: _liked ? Colors.red : p.textHint),
-                          const SizedBox(width: 4),
-                          Text('${post.likes} likes',
-                              style:
-                                  TextStyle(fontSize: 13, color: p.textHint)),
-                        ]),
-
-                        const SizedBox(height: AppSpacing.s16),
-                        Material(
-                          color: p.inputFill,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: _comments.isEmpty
-                                ? _focusCommentField
-                                : _scrollToComments,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.s16,
-                                vertical: AppSpacing.s12,
-                              ),
+                        Wrap(
+                          spacing: AppSpacing.s12,
+                          runSpacing: AppSpacing.s8,
+                          children: [
+                            // Views Chip
+                            GlassCard(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              radius: 12,
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.04)
+                                  : Colors.black.withOpacity(0.03),
+                              borderColor: isDark
+                                  ? Colors.white.withOpacity(0.10)
+                                  : Colors.black.withOpacity(0.06),
                               child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    Icons.forum_outlined,
-                                    size: 20,
-                                    color: p.primary,
+                                    Icons.visibility_outlined,
+                                    size: 15,
+                                    color: isDark ? Colors.white.withOpacity(0.70) : p.textSecondary,
                                   ),
-                                  const SizedBox(width: AppSpacing.s12),
-                                  Expanded(
-                                    child: Text(
-                                      _comments.isEmpty
-                                          ? 'Be the first to comment'
-                                          : '${_comments.length} comment${_comments.length == 1 ? '' : 's'}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: p.textPrimary,
-                                      ),
-                                    ),
-                                  ),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    _comments.isEmpty ? 'Comment' : 'View all',
+                                    '${post.views} views',
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: p.primary,
+                                      color: isDark ? Colors.white.withOpacity(0.80) : p.textPrimary,
                                     ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    size: 20,
-                                    color: p.primary,
                                   ),
                                 ],
                               ),
+                            ),
+                            // Likes Chip
+                            GestureDetector(
+                              onTap: _toggleLike,
+                              child: GlassCard(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                radius: 12,
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.04)
+                                    : Colors.black.withOpacity(0.03),
+                                borderColor: isDark
+                                    ? Colors.white.withOpacity(0.10)
+                                    : Colors.black.withOpacity(0.06),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _liked ? Icons.favorite : Icons.favorite_border,
+                                      size: 15,
+                                      color: _liked
+                                          ? Colors.redAccent
+                                          : (isDark ? Colors.white.withOpacity(0.70) : p.textSecondary),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '${post.likes} likes',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.white.withOpacity(0.80) : p.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: AppSpacing.s16),
+                        GestureDetector(
+                          onTap: _comments.isEmpty
+                              ? _focusCommentField
+                              : _scrollToComments,
+                          child: GlassCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.s16,
+                              vertical: AppSpacing.s12,
+                            ),
+                            radius: 16,
+                            color: isDark
+                                ? Colors.white.withOpacity(0.04)
+                                : Colors.black.withOpacity(0.03),
+                            borderColor: isDark
+                                ? Colors.white.withOpacity(0.10)
+                                : Colors.black.withOpacity(0.06),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.forum_outlined,
+                                  size: 20,
+                                  color: p.primary,
+                                ),
+                                const SizedBox(width: AppSpacing.s12),
+                                Expanded(
+                                  child: Text(
+                                    _comments.isEmpty
+                                        ? 'Be the first to comment'
+                                        : '${_comments.length} comment${_comments.length == 1 ? '' : 's'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.white.withOpacity(0.90) : p.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  _comments.isEmpty ? 'Comment' : 'View all',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: p.primary,
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 20,
+                                  color: p.primary,
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -1000,46 +1100,77 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           ),
 
                         // Comments list
-                        ..._comments.map((c) => Padding(
-                              padding:
-                                  const EdgeInsets.only(bottom: AppSpacing.s12),
+                        ..._comments.map((c) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: AppSpacing.s12),
+                            child: GlassCard(
+                              padding: const EdgeInsets.all(12),
+                              radius: 16,
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.03)
+                                  : Colors.black.withOpacity(0.02),
+                              borderColor: isDark
+                                  ? Colors.white.withOpacity(0.08)
+                                  : Colors.black.withOpacity(0.04),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   CircleAvatar(
-                                      radius: 16,
-                                      backgroundColor: p.primary,
-                                      child: Text(c.user?.name[0] ?? '?',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12))),
-                                  const SizedBox(width: 10),
+                                    radius: 16,
+                                    backgroundColor: p.primary,
+                                    child: Text(
+                                      (c.user?.name ?? '?')[0].toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(c.user?.name ?? 'User',
-                                              style: const TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w500)),
-                                          const SizedBox(height: 2),
-                                          Text(c.text,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              c.user?.name ?? 'User',
                                               style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: p.textPrimary)),
-                                          const SizedBox(height: 3),
-                                          Text(timeago.format(c.createdAt),
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark ? Colors.white : p.textPrimary,
+                                              ),
+                                            ),
+                                            Text(
+                                              timeago.format(c.createdAt),
                                               style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: p.textHint)),
-                                        ]),
+                                                fontSize: 11,
+                                                color: isDark ? Colors.white.withOpacity(0.50) : p.textHint,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          c.text,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            height: 1.4,
+                                            color: isDark ? Colors.white.withOpacity(0.90) : p.textPrimary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
-                            )),
+                            ),
+                          );
+                        }),
 
-                        const SizedBox(height: AppSpacing.s24),
+                        const SizedBox(height: 100),
                       ],
                     ),
                   ),
@@ -1049,8 +1180,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // Extension to allow NewsPost to export a map (for local mutation)
@@ -1109,4 +1241,77 @@ extension NewPostMap on NewsPost {
           'sourcePublishedAt': sourcePublishedAt!.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
       };
+}
+
+class _GlassActionIconButton extends StatefulWidget {
+  final Widget icon;
+  final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
+  final String? tooltip;
+
+  const _GlassActionIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.onLongPress,
+    this.tooltip,
+  });
+
+  @override
+  State<_GlassActionIconButton> createState() => _GlassActionIconButtonState();
+}
+
+class _GlassActionIconButtonState extends State<_GlassActionIconButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: widget.onPressed,
+      onLongPress: widget.onLongPress,
+      child: AnimatedScale(
+        scale: _isPressed ? 0.88 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Tooltip(
+          message: widget.tooltip ?? '',
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: ClipOval(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withOpacity(0.40)
+                        : Colors.white.withOpacity(0.65),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.24)
+                          : Colors.black.withOpacity(0.12),
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: widget.icon,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const {
   normalizeSummarySource,
   truncateSummary,
+  clipSummaryForStorage,
+  clipSummaryForSnippet,
   isSuspiciousSummary,
 } = require('../../utils/summaryText');
 
@@ -61,6 +63,19 @@ describe('summaryText', () => {
     assert.ok(!out.endsWith('leade'));
   });
 
+  it('clipSummaryForStorage keeps text under storage cap', () => {
+    const long = `${'Sentence one ends here. '.repeat(120)}Final.`;
+    const out = clipSummaryForStorage(long);
+    assert.ok(out.length <= 2000);
+    assert.ok(out.endsWith('.') || out.endsWith('…'));
+  });
+
+  it('clipSummaryForSnippet truncates feed snippets', () => {
+    const long = `${'Word '.repeat(200)}end.`;
+    const out = clipSummaryForSnippet(long);
+    assert.ok(out.length <= 300);
+  });
+
   it('isSuspiciousSummary flags legacy hard cuts', () => {
     assert.equal(isSuspiciousSummary('Opposition leade'), false);
     assert.equal(
@@ -77,7 +92,7 @@ describe('newsApiService.summarize', () => {
     const long = `${'Market analysts expect strong growth this quarter. '.repeat(8)}More text here.`;
     const out = summarize(long);
     assert.ok(out);
-    assert.ok(out.length <= 300);
+    assert.ok(out.length <= 2000);
     assert.ok(out.endsWith('…') || /[.!?]$/.test(out));
     assert.ok(!out.endsWith('...'));
   });

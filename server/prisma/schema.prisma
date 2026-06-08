@@ -57,7 +57,7 @@ model NewsPost {
   id                        String           @id @default(uuid()) @db.Uuid
   title                     String           @db.VarChar(200)
   body                      String           @db.Text
-  summary                   String?          @db.VarChar(300)
+  summary                   String?          @db.VarChar(2000)
   reporterId                String           @map("reporter_id") @db.Uuid
   categoryId                String           @map("category_id") @db.Uuid
   status                    String           @default("pending")

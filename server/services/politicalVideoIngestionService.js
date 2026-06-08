@@ -25,7 +25,6 @@ const { emitFeedUpdated } = require('./feedSocket');
 const { hashUrl, canonicalizeUrl, normalizeTitle } = require('../utils/storyDedupe');
 const { isYoutubeQuotaBlocked } = require('../utils/youtubeQuota');
 const { createNewsPost } = require('../utils/prismaNewsPost');
-const { truncateSummary } = require('../utils/summaryText');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
@@ -189,7 +188,7 @@ async function savePoliticalVideo(video, classification) {
   const newsDoc = {
     title: video.title,
     body: (video.description || video.title).slice(0, 2000),
-    summary: truncateSummary(video.description || '', 280) || null,
+    summary: require('../utils/summaryText').clipSummaryForStorage(video.description || '') || null,
     reporterId: reporter.id,
     categoryId: category.id,
     media: [{
@@ -385,20 +384,19 @@ async function runPoliticalVideoIngestion({ triggeredBy = 'political-cron', lang
     }
 
     const embeddable = await filterEmbeddableVideos(toEmbedCheck);
-    const embeddableMap = new Map(embeddable.map((v) => [v.videoId, v]));
+    const embeddableIds = new Set(embeddable.map((v) => v.videoId));
 
     const toSave = [
-      ...keywordAccepted.filter((x) => embeddableMap.has(x.video.videoId)),
-      ...mlAccepted.filter((x) => embeddableMap.has(x.video.videoId)),
+      ...keywordAccepted.filter((x) => embeddableIds.has(x.video.videoId)),
+      ...mlAccepted.filter((x) => embeddableIds.has(x.video.videoId)),
     ];
 
     for (const row of toSave) {
       try {
-        const enrichedVideo = embeddableMap.get(row.video.videoId);
         // eslint-disable-next-line no-await-in-loop
-        await savePoliticalVideo(enrichedVideo, row.classification);
+        await savePoliticalVideo(row.video, row.classification);
         stats.saved += 1;
-        if (enrichedVideo.isShort) stats.shortsSaved += 1;
+        if (row.video.isShort) stats.shortsSaved += 1;
         if (isInterviewCategory(row.classification.category)) {
           stats.interviewsSaved += 1;
         }

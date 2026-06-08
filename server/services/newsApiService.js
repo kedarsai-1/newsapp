@@ -5,7 +5,7 @@
  */
 
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
-const { truncateSummary } = require('../utils/summaryText');
+const { clipSummaryForStorage } = require('../utils/summaryText');
 
 function stripHtml(input = '') {
   return String(input || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -14,8 +14,7 @@ function stripHtml(input = '') {
 function summarize(text) {
   if (!text) return null;
   const cleaned = stripNewsWireTruncationMarkers(text);
-  const out = truncateSummary(cleaned, 300);
-  return out || null;
+  return clipSummaryForStorage(cleaned);
 }
 
 /** Plain text from API fields: HTML stripped, wire truncation markers removed. */
@@ -127,6 +126,9 @@ function looksLikeDecorativeImage(url) {
   // Theme placeholder paths only — many publishers serve real heroes under /og-image/…
   if (u.includes('/theme/images/') || /\/default[_-]?og[_-]?image/i.test(u)) return true;
   if (u.includes('1x1') || u.includes('pixel') || u.includes('placeholder')) return true;
+  if (u.includes('scorecardresearch.com') || u.includes('doubleclick.net')) return true;
+  if (u.includes('googletagmanager.com') || u.includes('google-analytics.com')) return true;
+  if (!/\.(jpg|jpeg|png|webp|gif|avif)(\?|$)/i.test(u) && /[?&]cj=1(&|$)/.test(u)) return true;
   if (/\/default[/-]/.test(u) || u.includes('thumbnail-default')) return true;
   if (u.includes('avatar') || u.includes('/profile/')) return true;
   if (u.endsWith('.svg') || u.includes('.svg?') || u.endsWith('.ico') || u.includes('.ico?')) return true;
@@ -504,13 +506,11 @@ async function fetchGNewsItems(options = {}) {
 module.exports = {
   fetchNewsApiItems,
   fetchGNewsItems,
+  summarize,
   normalizeMediaUrl,
   fetchOgImageFallback,
   fetchBestImageFallback,
   buildDomainImageFallbackCandidates,
   looksLikeDecorativeImage,
   isUnusableFeedImageUrl,
-  parseOgImageFromHtml,
-  parseFirstContentImageFromHtml,
-  summarize,
 };

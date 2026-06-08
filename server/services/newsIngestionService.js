@@ -9,13 +9,18 @@ const {
   summariesAreNearDuplicates,
 } = require('../utils/storyDedupe');
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
+const { clipSummaryForStorage } = require('../utils/summaryText');
 const { acceptPoliticsRssItem } = require('../utils/politicalStoryFilter');
 const { passesIngestCategoryGate } = require('../utils/categoryRelevance');
 const { createNewsPost } = require('../utils/prismaNewsPost');
 const {
   fetchNewsApiItems,
   fetchGNewsItems,
+  fetchBestImageFallback,
+  isUnusableFeedImageUrl,
 } = require('./newsApiService');
+const { newsApiIngestPlan } = require('../config/newsApiIngestPlan');
+const { rehostExternalImageToCloudinary } = require('../utils/rehostExternalImage');
 const { getRssFeeds } = require('../config/rssFeeds');
 const {
   resolveIngestLanguages,
@@ -32,14 +37,10 @@ const {
   detectLanguage,
   prepareForSummaryFromIngestItem,
   prepareForSummarization,
+  summarizeForRssIngest,
   translateEnglishToFeedLanguage,
 } = require('./rssService');
-const {
-  summarizeForIngest,
-  isSummaryBudgetTight,
-  createSummaryStats,
-} = require('./ingestSummaryService');
-const { resolveIngestImage } = require('../utils/resolveIngestImage');
+const { isOllamaProvider } = require('./aiProvider');
 const { extractReadableArticle } = require('./articleExtractionService');
 const { classifyArticleConstituency } = require('./constituencyClassifierService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
@@ -133,14 +134,6 @@ function interleaveFeedsByLanguageAndCategory(feeds) {
  * RSS-only runs with many feeds + og:image + body enrich + HF summarize can exceed 15–30+ minutes otherwise.
  * Set INGEST_MAX_RUNTIME_MS=0 for no limit (not recommended on PaaS).
  */
-function rssFeedMinRemainingMs() {
-  return Math.max(5000, Number(process.env.INGEST_RSS_FEED_MIN_REMAINING_MS || 20_000));
-}
-
-function rssItemMinRemainingMs() {
-  return Math.max(3000, Number(process.env.INGEST_RSS_ITEM_MIN_REMAINING_MS || 10_000));
-}
-
 function createIngestBudget({ language } = {}) {
   const ms = getIngestBudgetMs(language);
   if (ms == null) {
@@ -175,6 +168,7 @@ const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_
 const DEFAULT_CATEGORY_SLUG = process.env.SCRAPER_DEFAULT_CATEGORY || 'general';
 const SCRAPER_AUTO_APPROVE = process.env.SCRAPER_AUTO_APPROVE !== 'false';
 const NEWSAPI_MULTI_CATEGORY = process.env.NEWSAPI_MULTI_CATEGORY !== 'false';
+const INGEST_REHOST_IMAGES = process.env.INGEST_REHOST_IMAGES !== 'false';
 
 function stripMarkup(input = '') {
   return decodeHtmlEntities(
@@ -383,15 +377,7 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     status: SCRAPER_AUTO_APPROVE ? 'approved' : 'pending',
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
     tags: item.tags || [],
-    language: (() => {
-      let l = item.language || 'en';
-      if (l === 'en') {
-        const titleStr = item.title || '';
-        if (/[\u0900-\u097F]/.test(titleStr)) return 'hi';
-        if (/[\u0C00-\u0C7F]/.test(titleStr)) return 'te';
-      }
-      return l;
-    })(),
+    language: item.language || 'en',
     originalLanguage: item.originalLanguage || null,
     sourceName,
     sourceUrl: item.sourceUrl || null,
@@ -417,28 +403,29 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
 function summarizeForPost(text) {
   const t = decodeHtmlEntities(String(text || ''));
   if (!t) return null;
-  const { truncateSummary } = require('../utils/summaryText');
-  return truncateSummary(t, 300) || null;
+  return clipSummaryForStorage(t);
 }
 
-/** AI/extractive summary for ingest via production summary service. */
+/** AI/extractive summary for ingest; respects budget and RSS_SKIP_AI_SUMMARY only. */
 async function summarizeIngestItem({
   item,
   rawRssItem = null,
   feedLang = 'en',
   budget = null,
-  stats = null,
 }) {
+  if (process.env.RSS_SKIP_AI_SUMMARY === 'true') return '';
+  if (budget?.limitMs != null && budget.remainingMs() < 45_000) return '';
   const prep = prepareForSummaryFromIngestItem(item, rawRssItem);
   if (!prep.textForSummary) return '';
-  const { summary } = await summarizeForIngest({
-    text: prep.textForSummary,
-    originalLang: prep.originalLang,
-    feedLang,
-    budget,
-    stats,
-  });
-  return summary;
+  try {
+    return await summarizeForRssIngest(
+      prep.textForSummary,
+      prep.originalLang,
+      feedLang,
+    );
+  } catch {
+    return '';
+  }
 }
 
 function getIngestPlans() {
@@ -482,17 +469,6 @@ async function runIngestion({
     };
   }
 
-  // Prevent concurrent execution of multiple language pipelines to protect single-core CPU
-  const anyRunning = [...ingestStateByLock.entries()].find(([k, v]) => v.isRunning && k !== lockKey);
-  if (anyRunning) {
-    return {
-      success: false,
-      skipped: true,
-      message: `Ingestion skipped: another pipeline (${anyRunning[0]}) is currently running.`,
-      state: lockState,
-    };
-  }
-
   lockState.isRunning = true;
   lockState.lastRunAt = new Date();
   lockState.lastError = null;
@@ -522,7 +498,6 @@ async function runIngestion({
     languageFiltered: 0,
     politicsFiltered: 0,
     sourceRuns: [],
-    ...createSummaryStats(),
   };
 
   try {
@@ -637,40 +612,34 @@ async function runIngestion({
                 item,
                 feedLang: ingestLang,
                 budget,
-                stats,
               });
               if (apiAiSummary && String(apiAiSummary).trim()) {
                 apiSummary = String(apiAiSummary).trim();
-              } else if (item.body || item.summary) {
-                stats.summaryExtractiveFallback += 1;
-                const fallback = summarizeForPost(
-                  decodeHtmlEntities(String(item.body || item.summary || '').trim()),
-                );
-                if (fallback) apiSummary = fallback;
               }
 
-              if (apiSummary) {
-                apiSummary = summarizeForPost(decodeHtmlEntities(String(apiSummary).trim()))
-                  || apiSummary;
-              } else if (item.body) {
-                apiSummary = summarizeForPost(
-                  decodeHtmlEntities(String(item.body).trim()),
-                );
-              }
-
+              // Re-host external thumbnails on Cloudinary for reliability (no hotlink blocking).
               let postFields = { ...item, summary: apiSummary };
-              const imageResult = await resolveIngestImage({
-                mediaUrl: item.mediaUrl,
-                sourceUrl: item.sourceUrl,
-                feed: null,
-              });
-              if (imageResult.skipped) {
-                stats.skippedNoImage += 1;
-                continue;
+              let mediaUrl = item.mediaUrl;
+              if (mediaUrl && isUnusableFeedImageUrl(mediaUrl)) mediaUrl = null;
+              if (!mediaUrl && item.sourceUrl) {
+                // eslint-disable-next-line no-await-in-loop
+                mediaUrl = await fetchBestImageFallback(item.sourceUrl);
               }
-              postFields = { ...postFields, mediaUrl: imageResult.mediaUrl };
+              if (mediaUrl && !isUnusableFeedImageUrl(mediaUrl)) {
+                postFields = { ...item, summary: apiSummary, mediaUrl };
+                if (INGEST_REHOST_IMAGES) {
+                  const reh = await rehostExternalImageToCloudinary(mediaUrl, {
+                    referer: item.sourceUrl || null,
+                  });
+                  if (reh.ok && reh.url) {
+                    postFields = { ...postFields, mediaUrl: reh.url };
+                  }
+                }
+              } else {
+                postFields = { ...item, summary: apiSummary, mediaUrl: null };
+              }
 
-              const label = item.apiSourceName || providerLabel || 'headlines';
+              const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
               const { apiSourceName, ...postDocFields } = postFields;
               try {
                 await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
@@ -739,15 +708,6 @@ async function runIngestion({
       let feedIdx = 0;
       for (const feed of feeds) {
         feedIdx += 1;
-        const feedMinRemaining = rssFeedMinRemainingMs();
-        if (budget.limitMs != null && budget.remainingMs() < feedMinRemaining) {
-          console.warn(
-            `[ingest] Time budget running low (${Math.round(budget.remainingMs() / 1000)}s remaining, `
-              + `min ${Math.round(feedMinRemaining / 1000)}s) at feed ${feedIdx}/${feeds.length} `
-              + `(${feed.name || 'feed'}). Gracefully ending RSS ingestion loop.`,
-          );
-          break;
-        }
         budget.throwIfExpired(`rss:feed-start:${feedIdx}/${feeds.length}`);
         if (!feed?.url) continue;
         let category;
@@ -770,15 +730,6 @@ async function runIngestion({
 
           for (let ri = 0; ri < slice.length; ri++) {
             if (insertedThisFeed >= targetInsertsPerFeed) break;
-            const itemMinRemaining = rssItemMinRemainingMs();
-            if (budget.limitMs != null && budget.remainingMs() < itemMinRemaining) {
-              console.warn(
-                `[ingest] Time budget running low inside feed items loop `
-                  + `(${Math.round(budget.remainingMs() / 1000)}s remaining, `
-                  + `min ${Math.round(itemMinRemaining / 1000)}s). Gracefully breaking items loop.`,
-              );
-              break;
-            }
             if (ri % 10 === 0) {
               budget.throwIfExpired(`rss:${feedIdx}/${feeds.length}:${feed.name || 'feed'}`);
             }
@@ -838,11 +789,12 @@ async function runIngestion({
               || summarizeForPost(decodeHtmlEntities(String(item.summary || '').trim()));
 
             let summaryPrimary = '';
-            const budgetTight = isSummaryBudgetTight(budget);
+            const ollamaSummary = isOllamaProvider();
+            const budgetTight = budget.limitMs != null
+              && budget.remainingMs() < (ollamaSummary ? 90_000 : 45_000);
             let displayTitle = decodeHtmlEntities(String(item.title || '')).slice(0, 200);
             if (
-              !budgetTight
-              && ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
+              ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
               && originalLang === 'eng'
             ) {
               try {
@@ -855,18 +807,21 @@ async function runIngestion({
               } catch { /* keep RSS title */ }
             }
 
-            if (summaryInput && !budgetTight) {
-              // eslint-disable-next-line no-await-in-loop
-              summaryPrimary = await summarizeIngestItem({
-                item,
-                rawRssItem: raw,
-                feedLang: feed.language || '',
-                budget,
-                stats,
-              });
-              if (!summaryPrimary) stats.summaryExtractiveFallback += 1;
-            } else if (summaryInput && budgetTight) {
-              stats.summarySkippedBudget += 1;
+            if (summaryInput && process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                summaryPrimary = await summarizeForRssIngest(
+                  summaryInput,
+                  originalLang,
+                  feed.language || '',
+                );
+              } catch (e) {
+                summaryPrimary = '';
+                stats.fallbacks += 1;
+                console.warn(
+                  `[rss] summary fallback (${feed.name || 'RSS'}): ${e?.message || e}`,
+                );
+              }
             }
 
             let postFields = {
@@ -879,11 +834,7 @@ async function runIngestion({
               originalLanguage: originalLang,
               politicsScope: resolvePoliticsScope(item, feed),
             };
-            if (
-              !budgetTight
-              && feedLang === 'te'
-              && (feedCat === 'local' || feedCat === 'politics')
-            ) {
+            if (feedLang === 'te' && (feedCat === 'local' || feedCat === 'politics')) {
               const constituencyResult = await classifyArticleConstituency(raw);
               postFields = {
                 ...postFields,
@@ -921,9 +872,26 @@ async function runIngestion({
               continue;
             }
 
-            let articleHtmlForImage = null;
+            // Some RSS (notably Google News RSS, but also several publisher feeds) ship without
+            // enclosure/media tags. Always try og:image from the article page as a safety net so
+            // every card has a real image — feeds can opt out by setting `ogImageFallback: false`,
+            // and the global `RSS_OG_FALLBACK=false` env still disables it everywhere.
+            if (
+              !postFields.mediaUrl
+              && feed.ogImageFallback !== false
+              && process.env.RSS_OG_FALLBACK !== 'false'
+              && postFields.sourceUrl
+            ) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                const og = await fetchBestImageFallback(postFields.sourceUrl);
+                if (og && !isUnusableFeedImageUrl(og)) {
+                  postFields = { ...postFields, mediaUrl: og };
+                }
+              } catch { /* ignore */ }
+            }
 
-            // Enrich short bodies from the source URL (full article → better AI summary + image).
+            // Enrich short bodies from the source URL (full article → better AI summary).
             const bodyTooShort = String(postFields.body || '').trim().length < 400;
             const enrichForSummary =
               process.env.RSS_ENRICH_FOR_SUMMARY !== 'false' && bodyTooShort;
@@ -943,39 +911,39 @@ async function runIngestion({
                   maxBytes: Number(process.env.RSS_ENRICH_MAX_BYTES || 900000),
                   cacheTtlMs: Number(process.env.RSS_ENRICH_CACHE_TTL_MS || 30 * 60 * 1000),
                 });
-                articleHtmlForImage = ext?.html || null;
                 const full = String(ext?.text || '').replace(/\s+/g, ' ').trim();
                 if (ext?.success && full.length >= 80) {
                   let summaryAfterEnrich = '';
-                  if (!budgetTight) {
-                    const prepFull = prepareForSummarization(full);
-                    if (prepFull.textForSummary) {
-                      // eslint-disable-next-line no-await-in-loop
-                      const enriched = await summarizeForIngest({
-                        text: prepFull.textForSummary,
-                        originalLang: prepFull.originalLang,
-                        feedLang: feed.language || '',
-                        budget,
-                        stats,
-                      });
-                      summaryAfterEnrich = enriched.summary;
+                  if (process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
+                    try {
+                      const prepFull = prepareForSummarization(full);
+                      if (prepFull.textForSummary) {
+                        // eslint-disable-next-line no-await-in-loop
+                        summaryAfterEnrich = await summarizeForRssIngest(
+                          prepFull.textForSummary,
+                          prepFull.originalLang,
+                          feed.language || '',
+                        );
+                      }
+                      if (
+                        (!postFields.originalLanguage || postFields.originalLanguage === 'und')
+                        && prepFull.originalLang
+                        && prepFull.originalLang !== 'und'
+                      ) {
+                        postFields = { ...postFields, originalLanguage: prepFull.originalLang };
+                      }
+                    } catch (e) {
+                      stats.fallbacks += 1;
+                      console.warn(
+                        `[rss] summary after enrich (${feed.name || 'RSS'}): ${e?.message || e}`,
+                      );
                     }
-                    if (
-                      (!postFields.originalLanguage || postFields.originalLanguage === 'und')
-                      && prepFull.originalLang
-                      && prepFull.originalLang !== 'und'
-                    ) {
-                      postFields = { ...postFields, originalLanguage: prepFull.originalLang };
-                    }
-                  } else {
-                    stats.summarySkippedBudget += 1;
                   }
                   if (!summaryAfterEnrich || !String(summaryAfterEnrich).trim()) {
                     summaryAfterEnrich =
                       (summaryPrimary && String(summaryPrimary).trim())
                       || summarizeForPost(full)
                       || fallbackSummary;
-                    stats.summaryExtractiveFallback += 1;
                   }
                   postFields = {
                     ...postFields,
@@ -986,21 +954,45 @@ async function runIngestion({
               } catch { /* ignore */ }
             }
 
-            // eslint-disable-next-line no-await-in-loop
-            const imageResult = await resolveIngestImage({
-              mediaUrl: postFields.mediaUrl,
-              sourceUrl: postFields.sourceUrl,
-              feedUrl: feed.url,
-              feed,
-              articleHtml: articleHtmlForImage,
-            });
-            if (imageResult.skipped) {
+            if (postFields.mediaUrl && isUnusableFeedImageUrl(postFields.mediaUrl)) {
+              postFields = { ...postFields, mediaUrl: null };
+            }
+
+            // RSS HTML often embeds tracking pixels as the first <img>; retry og:image after stripping them.
+            if (
+              !postFields.mediaUrl
+              && feed.ogImageFallback !== false
+              && process.env.RSS_OG_FALLBACK !== 'false'
+              && postFields.sourceUrl
+            ) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                const og = await fetchBestImageFallback(postFields.sourceUrl);
+                if (og && !isUnusableFeedImageUrl(og)) {
+                  postFields = { ...postFields, mediaUrl: og };
+                }
+              } catch { /* ignore */ }
+            }
+
+            if (postFields.mediaUrl && INGEST_REHOST_IMAGES) {
+              const reh = await rehostExternalImageToCloudinary(postFields.mediaUrl, {
+                referer: postFields.sourceUrl || feed.url || null,
+              });
+              if (reh.ok && reh.url) {
+                postFields = { ...postFields, mediaUrl: reh.url };
+              }
+            }
+
+            // Skip stories with no usable thumbnail (RSS + og:image both failed).
+            if (
+              process.env.RSS_REQUIRE_IMAGE === 'true'
+              && (!postFields.mediaUrl || isUnusableFeedImageUrl(postFields.mediaUrl))
+            ) {
               stats.skippedNoImage += 1;
               continue;
             }
-            postFields = { ...postFields, mediaUrl: imageResult.mediaUrl };
 
-            const label = postFields.apiSourceName || feed.name || 'RSS';
+            const label = `RSS · ${feed.name || 'RSS'}`;
             const { apiSourceName, ...postDocFields } = postFields;
             try {
               await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
@@ -1069,12 +1061,6 @@ async function runIngestion({
     }
 
     stats.endedAt = new Date();
-    console.log(
-      `[ingest] summary stats: aiOk=${stats.summaryAiOk} retries=${stats.summaryAiRetries} `
-        + `budgetSkip=${stats.summarySkippedBudget} chatYield=${stats.summarySkippedChatPriority || 0} `
-        + `extractive=${stats.summaryExtractiveFallback} `
-        + `noImage=${stats.skippedNoImage}`,
-    );
     if (stats.fetched === 0 && stats.inserted === 0) {
       console.warn(
         '[ingest] no articles fetched or inserted this run — typical causes: '

@@ -1,117 +1,91 @@
 #!/usr/bin/env node
 /**
- * Re-apply boundary-aware truncation to existing post summaries.
- * Fixes legacy hard-slice artifacts (mid-word cuts at 277/280 chars).
- *
- * Usage:
- *   node scripts/backfill-summaries.js [--dry-run] [--limit=500] [--source=youtube|rss|api]
+ * Re-generate AI summaries for posts stored with legacy short clips (< 350 chars).
+ * Usage: node scripts/backfill-summaries.js [--limit=50] [--language=en|hi|te]
  */
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { prisma } = require('../config/prisma');
 const {
-  truncateSummary,
-  isSuspiciousSummary,
-  normalizeSummarySource,
-} = require('../utils/summaryText');
+  summarizeForRssIngest,
+  prepareForSummarization,
+} = require('../services/rssService');
 
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const out = { dryRun: false, limit: 500, source: null };
-  for (const arg of args) {
-    if (arg === '--dry-run') out.dryRun = true;
-    else if (arg.startsWith('--limit=')) out.limit = Math.max(1, Number(arg.split('=')[1]) || 500);
-    else if (arg.startsWith('--source=')) out.source = arg.split('=')[1] || null;
-  }
-  return out;
-}
-
-function rebuildSummary(post) {
-  const body = normalizeSummarySource(post.body || '');
-  const current = normalizeSummarySource(post.summary || '');
-  const source = body.length > current.length ? body : (current || body);
-  if (!source) return null;
-  const max = post.sourceType === 'youtube' ? 280 : 300;
-  return truncateSummary(source, max) || null;
+function parseArg(name, fallback) {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.split('=').slice(1).join('=') : fallback;
 }
 
 async function main() {
-  const { dryRun, limit, source } = parseArgs();
-  const where = {
-    status: 'approved',
-    OR: [
-      { summary: null },
-      { summary: '' },
-    ],
-  };
+  const limit = Math.min(200, Math.max(1, Number(parseArg('limit', 40))));
+  const language = String(parseArg('language', 'en')).toLowerCase();
+  const maxStored = Math.max(350, Number(process.env.SUMMARY_BACKFILL_MAX_CHARS || 350));
 
-  // Also fetch posts with suspicious summaries when not empty-only mode
-  const suspiciousWhere = {
-    status: 'approved',
-    summary: { not: null },
-    NOT: { summary: '' },
-  };
-  if (source) suspiciousWhere.sourceType = source;
-
-  const emptyPosts = await prisma.newsPost.findMany({
-    where: source ? { ...where, sourceType: source } : where,
-    take: Math.floor(limit / 4),
+  const posts = await prisma.newsPost.findMany({
+    where: {
+      status: 'approved',
+      language,
+      NOT: [{ summary: null }, { summary: '' }, { body: '' }],
+    },
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      summary: true,
+      originalLanguage: true,
+      language: true,
+    },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, title: true, body: true, summary: true, sourceType: true },
+    take: limit * 4,
   });
 
-  const candidatePosts = await prisma.newsPost.findMany({
-    where: suspiciousWhere,
-    take: limit,
-    orderBy: { createdAt: 'desc' },
-    select: { id: true, title: true, body: true, summary: true, sourceType: true },
-  });
+  const candidates = posts.filter((p) => {
+    const sl = String(p.summary || '').trim().length;
+    const bl = String(p.body || '').trim().length;
+    return sl > 0 && sl <= maxStored && bl > sl + 80;
+  }).slice(0, limit);
 
-  const seen = new Set();
-  const toProcess = [];
-  for (const p of [...emptyPosts, ...candidatePosts]) {
-    if (seen.has(p.id)) continue;
-    seen.add(p.id);
-    if (!p.summary || !p.summary.trim() || isSuspiciousSummary(p.summary)) {
-      toProcess.push(p);
-    }
-  }
+  console.log(`[backfill-summaries] ${candidates.length} ${language} posts to refresh`);
 
   let updated = 0;
-  let skipped = 0;
+  let failed = 0;
 
-  for (const post of toProcess.slice(0, limit)) {
-    const next = rebuildSummary(post);
-    if (!next || next === post.summary) {
-      skipped += 1;
+  for (const p of candidates) {
+    const input = String(p.body || p.summary || p.title || '').trim();
+    if (input.length < 80) {
+      failed += 1;
       continue;
     }
-    if (dryRun) {
-      console.log(`[dry-run] ${post.id} (${post.sourceType})`);
-      console.log(`  was: ${(post.summary || '').slice(-50)}`);
-      console.log(`  now: ${next.slice(-50)}`);
+    try {
+      const prep = prepareForSummarization(input);
+      // eslint-disable-next-line no-await-in-loop
+      const next = await summarizeForRssIngest(
+        prep.textForSummary || input,
+        prep.originalLang || p.originalLanguage || 'eng',
+        p.language || language,
+      );
+      if (!next || next.trim().length <= String(p.summary || '').trim().length) {
+        failed += 1;
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      await prisma.newsPost.update({
+        where: { id: p.id },
+        data: { summary: next.trim() },
+      });
       updated += 1;
-      continue;
+      if (updated % 5 === 0) console.log(`[backfill-summaries] updated ${updated}…`);
+    } catch (e) {
+      failed += 1;
+      console.warn(`[backfill-summaries] skip ${p.id}: ${e?.message || e}`);
     }
-    await prisma.newsPost.update({
-      where: { id: post.id },
-      data: { summary: next },
-    });
-    updated += 1;
   }
 
-  console.log(JSON.stringify({
-    dryRun,
-    candidates: toProcess.length,
-    updated,
-    skipped,
-    source: source || 'all',
-  }, null, 2));
-
+  console.log(`[backfill-summaries] done — updated ${updated}, skipped/failed ${failed}`);
   await prisma.$disconnect();
 }
 
-main().catch((err) => {
-  console.error(err);
+main().catch((e) => {
+  console.error(e);
   process.exit(1);
 });

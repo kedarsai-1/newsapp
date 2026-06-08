@@ -3,6 +3,10 @@ const { franc } = require('franc');
 const aiProvider = require('./aiProvider');
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 const {
+  clipSummaryForStorage,
+  SUMMARY_STORAGE_MAX_CHARS,
+} = require('../utils/summaryText');
+const {
   summarize: aiSummarize,
   translateToEnglish: aiTranslateToEnglish,
   translateToFeedLanguage: aiTranslateToFeedLanguage,
@@ -39,12 +43,9 @@ function stripHtml(input = '') {
   );
 }
 
-const { truncateSummary } = require('../utils/summaryText');
-
 function summarizeLocal(text) {
   if (!text) return null;
-  const out = truncateSummary(String(text), 280);
-  return out || null;
+  return clipSummaryForStorage(String(text));
 }
 
 function summaryInputMaxChars() {
@@ -119,7 +120,7 @@ async function summarize(text, feedLang = 'en') {
   return aiSummarize(text, feedLang);
 }
 
-function extractiveSummaryNative(text, maxLen = 500) {
+function extractiveSummaryNative(text, maxLen = SUMMARY_STORAGE_MAX_CHARS) {
   const t = sanitizeForSummarization(text);
   if (!t) return '';
   if (t.length <= maxLen) return t;
@@ -138,8 +139,8 @@ function extractiveSummaryNative(text, maxLen = 500) {
   return `${cut.trim()}…`;
 }
 
-function clipSummarySchema(s, max = 500) {
-  return truncateSummary(s, max);
+function clipSummarySchema(s) {
+  return clipSummaryForStorage(s);
 }
 
 /** Devanagari, Telugu, Tamil, etc. — if dominant, do not run English-only distilbart. */
@@ -223,7 +224,7 @@ async function summarizeIndicViaEnglish(src, feedLang) {
   if (isOllamaProvider()) {
     try {
       const out = await aiSummarize(raw, fl);
-      return out ? clipSummarySchema(out, 300) : '';
+      return out ? clipSummarySchema(out) : '';
     } catch {
       return '';
     }
@@ -242,12 +243,12 @@ async function summarizeIndicViaEnglish(src, feedLang) {
   }
   if (!summaryEn) return '';
 
-  summaryEn = clipSummarySchema(summaryEn, 300);
+  summaryEn = clipSummarySchema(summaryEn);
   if (fl === 'hi' || fl === 'te') {
     try {
       const localized = await translateEnglishToFeedLanguage(summaryEn, fl);
       if (localized && localized.trim()) {
-        return clipSummarySchema(localized, 300);
+        return clipSummarySchema(localized);
       }
     } catch { /* keep English summary */ }
   }
@@ -279,31 +280,20 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
         summary = '';
       }
     }
-    // If AI summary is too short, try extractive with more characters
-    if (!summary || String(summary).trim().length < 150) {
-      const extractive = extractiveSummaryNative(src, 500);
-      if (extractive.length > String(summary || '').trim().length) {
-        summary = extractive;
-      }
-    }
+    if (!summary) summary = extractiveSummaryNative(src);
   } else if (isIndicAiSummaryEnabled() && (isIndicContent || fl === 'hi' || fl === 'te')) {
     try {
       summary = await summarizeIndicViaEnglish(src, fl);
     } catch {
       summary = '';
     }
-    if (!summary || String(summary).trim().length < 150) {
-      const extractive = extractiveSummaryNative(src, 500);
-      if (extractive.length > String(summary || '').trim().length) {
-        summary = extractive;
-      }
-    }
+    if (!summary) summary = extractiveSummaryNative(src);
   } else {
-    summary = extractiveSummaryNative(src, 500);
+    summary = extractiveSummaryNative(src);
   }
 
   if (!summary) summary = summarizeLocal(src) || '';
-  summary = clipSummarySchema(summary, 500);
+  summary = clipSummarySchema(summary);
 
   if (
     (fl === 'hi' || fl === 'te')
@@ -314,7 +304,7 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
   ) {
     try {
       const tr = await translateEnglishToFeedLanguage(summary, fl);
-      if (tr && tr.trim()) summary = clipSummarySchema(tr, 500);
+      if (tr && tr.trim()) summary = clipSummarySchema(tr);
     } catch { /* keep English */ }
   }
   return summary;
@@ -546,21 +536,6 @@ async function fetchRssItems(feedUrl) {
  * @param {object} item rss-parser item
  * @param {object} feedCfg { name, url, categorySlug, language }
  */
-/**
- * Extract the clean source provider from a feed name.
- * e.g. "Times of India - Sports" → "Times of India"
- *      "NDTV Khabar"            → "NDTV Khabar"
- */
-function extractSourceProvider(feedName) {
-  const name = String(feedName || '').trim();
-  if (!name) return 'RSS';
-  const sep = name.indexOf(' - ');
-  if (sep > 0) return name.slice(0, sep).trim();
-  const sep2 = name.indexOf(' · ');
-  if (sep2 > 0) return name.slice(0, sep2).trim();
-  return name;
-}
-
 function normalizeRssItem(item, feedCfg, { sourceUrlOverride } = {}) {
   const title = stripHtml(item.title || '').slice(0, 200);
   const link = sourceUrlOverride || item.link || item.guid || null;
@@ -580,7 +555,7 @@ function normalizeRssItem(item, feedCfg, { sourceUrlOverride } = {}) {
     sourceType: 'rss',
     language: (feedCfg.language || 'en').toLowerCase(),
     scrapeConfidence: img ? 0.85 : 0.75,
-    apiSourceName: extractSourceProvider(feedCfg.name),
+    apiSourceName: feedCfg.name || 'RSS',
   };
 }
 

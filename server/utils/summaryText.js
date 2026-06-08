@@ -1,3 +1,15 @@
+/** Storage vs feed-snippet limits for AI/RSS summaries (detail view uses stored summary). */
+
+const SUMMARY_STORAGE_MAX_CHARS = Math.min(
+  10_000,
+  Math.max(500, Number(process.env.SUMMARY_STORAGE_MAX_CHARS || 2000)),
+);
+
+const SUMMARY_SNIPPET_MAX_CHARS = Math.min(
+  SUMMARY_STORAGE_MAX_CHARS,
+  Math.max(120, Number(process.env.SUMMARY_SNIPPET_MAX_CHARS || 300)),
+);
+
 /**
  * Normalize raw text before summarization (YouTube descriptions, wire copy, etc.).
  * @param {string} text
@@ -10,23 +22,19 @@ function normalizeSummarySource(text) {
     .trim();
   if (!x) return '';
 
-  // Strip URLs (common in YouTube descriptions).
   x = x.replace(/https?:\/\/\S+/gi, ' ');
-
-  // Long hashtag runs (common on YouTube) — drop the tag block, keep prose.
   x = x.replace(/(?:#\S+\s*){4,}/g, ' ');
-  // Individual hashtags → plain words so truncation can land on boundaries.
   x = x.replace(/#(\S+)/g, '$1');
   return x.replace(/\s+/g, ' ').trim();
 }
 
 /**
- * Truncate feed summaries at sentence or word boundaries (never mid-word).
+ * Truncate at sentence or word boundaries (never mid-word).
  * @param {string} text
  * @param {number} max
  * @returns {string}
  */
-function truncateSummary(text, max = 300) {
+function truncateSummary(text, max = SUMMARY_SNIPPET_MAX_CHARS) {
   const x = normalizeSummarySource(text);
   if (!x) return '';
   if (x.length <= max) return x;
@@ -57,6 +65,16 @@ function truncateSummary(text, max = 300) {
   return `${cut.slice(0, max - 1).trim()}…`;
 }
 
+/** Full summary persisted for article detail (word-aware cap). */
+function clipSummaryForStorage(s) {
+  return truncateSummary(s, SUMMARY_STORAGE_MAX_CHARS);
+}
+
+/** Short snippet for feed cards / API wire descriptions. */
+function clipSummaryForSnippet(s) {
+  return truncateSummary(s, SUMMARY_SNIPPET_MAX_CHARS);
+}
+
 /** True when summary likely ends mid-word (legacy hard-slice artifact). */
 function isSuspiciousSummary(summary) {
   const s = String(summary || '').trim();
@@ -67,7 +85,11 @@ function isSuspiciousSummary(summary) {
 }
 
 module.exports = {
+  SUMMARY_STORAGE_MAX_CHARS,
+  SUMMARY_SNIPPET_MAX_CHARS,
   normalizeSummarySource,
   truncateSummary,
+  clipSummaryForStorage,
+  clipSummaryForSnippet,
   isSuspiciousSummary,
 };

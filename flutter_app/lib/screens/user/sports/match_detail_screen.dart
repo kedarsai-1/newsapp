@@ -1,10 +1,12 @@
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/sports_models.dart';
 import '../../../providers/sports_provider.dart';
+import '../../../services/auth_provider.dart';
 import '../../../constants.dart';
 import '../../../widgets/premium_animations.dart';
 import '../../../widgets/sports/pulsing_live_indicator.dart';
@@ -26,8 +28,11 @@ class MatchDetailScreen extends StatefulWidget {
 class _MatchDetailScreenState extends State<MatchDetailScreen>
     with SingleTickerProviderStateMixin {
   SportsMatch? _match;
+  SportsMatchPoll? _poll;
   bool _loading = true;
+  bool _voting = false;
   String? _error;
+  String? _pollError;
   TabController? _inningsTab;
 
   @override
@@ -66,12 +71,15 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
       _loading = _match == null;
       _error = null;
     });
-    final m = await context.read<SportsProvider>().fetchMatchDetail(widget.matchId);
+    final detail =
+        await context.read<SportsProvider>().fetchMatchDetail(widget.matchId);
     if (!mounted) return;
     setState(() {
-      _match = m ?? _match;
+      _match = detail.match ?? _match;
+      _poll = detail.poll ?? _poll;
       _loading = false;
       _error = _match == null ? 'Match not found or scores unavailable.' : null;
+      _pollError = null;
     });
     _syncInningsTabs(_match);
     if (mounted) setState(() {});
@@ -160,9 +168,16 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
             index: 0,
             child: _summaryCard(m),
           ),
+          if (_poll != null) ...[
+            const SizedBox(height: 16),
+            StaggeredEntranceAnimation(
+              index: 1,
+              child: _pollCard(context, m, _poll!),
+            ),
+          ],
           const SizedBox(height: 24),
           StaggeredEntranceAnimation(
-            index: 1,
+            index: _poll != null ? 2 : 1,
             child: Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Row(
@@ -302,6 +317,233 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
       return '${parts.first} ${parts.last.replaceAll('Inning', '').trim()}';
     }
     return label.length > 18 ? '${label.substring(0, 16)}…' : label;
+  }
+
+  String _pollOutcomeMessage(SportsMatchPoll poll) {
+    if (poll.userVoteCorrect == true) {
+      return 'Correct! +100 pts added to your score.';
+    }
+    if (poll.userVoteCorrect == false) {
+      return 'Incorrect pick — prediction streak reset.';
+    }
+    if (poll.winnerOption == null) {
+      return 'Match tied or no result — no points awarded.';
+    }
+    return 'Poll closed.';
+  }
+
+  Future<void> _vote(String option) async {
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    if (!loggedIn) {
+      if (!mounted) return;
+      context.push('/login');
+      return;
+    }
+    setState(() {
+      _voting = true;
+      _pollError = null;
+    });
+    final err = await context
+        .read<SportsProvider>()
+        .voteMatchPoll(widget.matchId, option);
+    if (!mounted) return;
+    if (err != null) {
+      setState(() {
+        _voting = false;
+        _pollError = err;
+      });
+      return;
+    }
+    final detail =
+        await context.read<SportsProvider>().fetchMatchDetail(widget.matchId);
+    if (!mounted) return;
+    setState(() {
+      _poll = detail.poll ?? _poll;
+      _voting = false;
+    });
+  }
+
+  Widget _pollCard(BuildContext context, SportsMatch m, SportsMatchPoll poll) {
+    final canVote = !poll.isResolved &&
+        m.status != SportsMatchStatus.finished &&
+        poll.userVote == null;
+    final total = poll.totalVotes > 0 ? poll.totalVotes : 1;
+    final pctA = poll.votesA / total;
+    final pctB = poll.votesB / total;
+
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      color: Colors.white.withOpacity(0.04),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Who will win?',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            poll.isResolved
+                ? 'Poll closed'
+                : m.status == SportsMatchStatus.finished
+                    ? 'Match ended'
+                    : '${poll.totalVotes} prediction${poll.totalVotes == 1 ? '' : 's'}',
+            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.45)),
+          ),
+          if (_pollError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _pollError!,
+              style: const TextStyle(fontSize: 12, color: Colors.redAccent),
+            ),
+          ],
+          const SizedBox(height: 12),
+          _pollOption(
+            title: poll.optionATitle,
+            percent: pctA,
+            votes: poll.votesA,
+            selected: poll.userVote == 'A',
+            winner: poll.isResolved && poll.winnerOption == 'A',
+            enabled: canVote && !_voting,
+            onTap: () => _vote('A'),
+          ),
+          const SizedBox(height: 8),
+          _pollOption(
+            title: poll.optionBTitle,
+            percent: pctB,
+            votes: poll.votesB,
+            selected: poll.userVote == 'B',
+            winner: poll.isResolved && poll.winnerOption == 'B',
+            enabled: canVote && !_voting,
+            onTap: () => _vote('B'),
+          ),
+          if (_voting)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: GlassColors.accentGreen,
+                  ),
+                ),
+              ),
+            ),
+          if (poll.userVote != null && !poll.isResolved)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                'You picked ${poll.userVote == 'A' ? poll.optionATitle : poll.optionBTitle}. +100 pts if correct.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.white.withOpacity(0.55),
+                  height: 1.35,
+                ),
+              ),
+            ),
+          if (poll.isResolved && poll.userVote != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                _pollOutcomeMessage(poll),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: poll.userVoteCorrect == true
+                      ? GlassColors.accentGreenLight
+                      : poll.userVoteCorrect == false
+                          ? Colors.redAccent
+                          : Colors.white.withOpacity(0.45),
+                  height: 1.35,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pollOption({
+    required String title,
+    required double percent,
+    required int votes,
+    required bool selected,
+    required bool winner,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    final barColor = winner
+        ? GlassColors.accentGreen
+        : selected
+            ? GlassColors.accentGreen.withOpacity(0.85)
+            : GlassColors.accentGreen.withOpacity(0.45);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected || winner
+                  ? barColor.withOpacity(0.45)
+                  : Colors.white.withOpacity(0.08),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${(percent * 100).round()}%',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white.withOpacity(0.45),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: percent.clamp(0.0, 1.0),
+                  minHeight: 6,
+                  backgroundColor: Colors.white.withOpacity(0.08),
+                  color: barColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$votes votes',
+                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.40)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _summaryCard(SportsMatch m) {

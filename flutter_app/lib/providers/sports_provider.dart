@@ -14,8 +14,10 @@ class SportsProvider extends ChangeNotifier {
   List<SportsMatch> _ipl = [];
   String _iplSectionTitle = 'IPL';
   List<NewsPost> _posts = [];
+  SportsLeaderboardSnapshot _leaderboard = const SportsLeaderboardSnapshot();
 
   bool _loadingLive = false;
+  bool _loadingLeaderboard = false;
   bool _loadingNews = false;
   bool _loadingMoreNews = false;
   String? _liveError;
@@ -31,7 +33,9 @@ class SportsProvider extends ChangeNotifier {
   List<SportsMatch> get ipl => _ipl;
   String get iplSectionTitle => _iplSectionTitle;
   List<NewsPost> get posts => _posts;
+  SportsLeaderboardSnapshot get leaderboard => _leaderboard;
   bool get loadingLive => _loadingLive;
+  bool get loadingLeaderboard => _loadingLeaderboard;
   bool get loadingNews => _loadingNews;
   bool get loadingMoreNews => _loadingMoreNews;
   String? get liveError => _liveError;
@@ -71,6 +75,7 @@ class SportsProvider extends ChangeNotifier {
     }
     await Future.wait([
       refreshLive(silent: _live.isNotEmpty),
+      refreshLeaderboard(),
       refreshNews(reset: true),
     ]);
   }
@@ -78,8 +83,32 @@ class SportsProvider extends ChangeNotifier {
   Future<void> refreshAll() async {
     await Future.wait([
       refreshLive(),
+      refreshLeaderboard(),
       refreshNews(reset: true),
     ]);
+  }
+
+  Future<void> refreshLeaderboard() async {
+    _loadingLeaderboard = true;
+    notifyListeners();
+    final res = await SportsApiService.getLeaderboard();
+    if (res['success'] == true) {
+      final top = (res['leaderboard'] is List ? res['leaderboard'] as List : [])
+          .whereType<Map>()
+          .map((e) => SportsLeaderboardEntry.fromJson(
+                Map<String, dynamic>.from(e),
+              ))
+          .toList();
+      SportsLeaderboardEntry? me;
+      if (res['currentUser'] is Map) {
+        me = SportsLeaderboardEntry.fromJson(
+          Map<String, dynamic>.from(res['currentUser'] as Map),
+        );
+      }
+      _leaderboard = SportsLeaderboardSnapshot(top: top, currentUser: me);
+    }
+    _loadingLeaderboard = false;
+    notifyListeners();
   }
 
   Future<void> refreshLive({bool silent = false}) async {
@@ -187,14 +216,32 @@ class SportsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<SportsMatch?> fetchMatchDetail(String id) async {
+  Future<({SportsMatch? match, SportsMatchPoll? poll})> fetchMatchDetail(
+    String id,
+  ) async {
     final res = await SportsApiService.getMatch(id);
-    if (res['success'] == true && res['match'] is Map) {
-      return SportsMatch.fromJson(
+    if (res['success'] != true) {
+      return (match: null, poll: null);
+    }
+    SportsMatch? match;
+    if (res['match'] is Map) {
+      match = SportsMatch.fromJson(
         Map<String, dynamic>.from(res['match'] as Map),
       );
     }
-    return null;
+    SportsMatchPoll? poll;
+    if (res['poll'] is Map) {
+      poll = SportsMatchPoll.fromJson(
+        Map<String, dynamic>.from(res['poll'] as Map),
+      );
+    }
+    return (match: match, poll: poll);
+  }
+
+  Future<String?> voteMatchPoll(String matchId, String option) async {
+    final res = await SportsApiService.voteMatchPoll(matchId, option);
+    if (res['success'] == true) return null;
+    return res['message']?.toString() ?? 'Could not cast vote.';
   }
 
   @override

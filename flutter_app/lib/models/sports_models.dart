@@ -263,6 +263,115 @@ class SportsNewsItem {
   }
 }
 
+class SportsMatchPoll {
+  final String id;
+  final String optionATitle;
+  final String optionBTitle;
+  final int votesA;
+  final int votesB;
+  final int totalVotes;
+  final String? userVote;
+  final bool? userVoteCorrect;
+  final bool isResolved;
+  final String? winnerOption;
+
+  const SportsMatchPoll({
+    required this.id,
+    required this.optionATitle,
+    required this.optionBTitle,
+    this.votesA = 0,
+    this.votesB = 0,
+    this.totalVotes = 0,
+    this.userVote,
+    this.userVoteCorrect,
+    this.isResolved = false,
+    this.winnerOption,
+  });
+
+  factory SportsMatchPoll.fromJson(Map<String, dynamic> j) {
+    final a = int.tryParse('${j['votesA']}') ?? 0;
+    final b = int.tryParse('${j['votesB']}') ?? 0;
+    final total = int.tryParse('${j['totalVotes']}') ?? (a + b);
+    return SportsMatchPoll(
+      id: j['id']?.toString() ?? '',
+      optionATitle: j['optionATitle']?.toString() ?? 'Team A',
+      optionBTitle: j['optionBTitle']?.toString() ?? 'Team B',
+      votesA: a,
+      votesB: b,
+      totalVotes: total,
+      userVote: j['userVote']?.toString(),
+      userVoteCorrect: j['userVoteCorrect'] is bool ? j['userVoteCorrect'] as bool : null,
+      isResolved: j['isResolved'] == true,
+      winnerOption: j['winnerOption']?.toString(),
+    );
+  }
+
+  SportsMatchPoll copyWith({
+    int? votesA,
+    int? votesB,
+    int? totalVotes,
+    String? userVote,
+    bool? userVoteCorrect,
+    bool? isResolved,
+    String? winnerOption,
+  }) {
+    return SportsMatchPoll(
+      id: id,
+      optionATitle: optionATitle,
+      optionBTitle: optionBTitle,
+      votesA: votesA ?? this.votesA,
+      votesB: votesB ?? this.votesB,
+      totalVotes: totalVotes ?? this.totalVotes,
+      userVote: userVote ?? this.userVote,
+      userVoteCorrect: userVoteCorrect ?? this.userVoteCorrect,
+      isResolved: isResolved ?? this.isResolved,
+      winnerOption: winnerOption ?? this.winnerOption,
+    );
+  }
+}
+
+class SportsLeaderboardEntry {
+  final String id;
+  final String name;
+  final String? avatar;
+  final int points;
+  final int predictionStreak;
+  final int maxPredictionStreak;
+  final int rank;
+
+  const SportsLeaderboardEntry({
+    required this.id,
+    required this.name,
+    this.avatar,
+    this.points = 0,
+    this.predictionStreak = 0,
+    this.maxPredictionStreak = 0,
+    this.rank = 0,
+  });
+
+  factory SportsLeaderboardEntry.fromJson(Map<String, dynamic> j) {
+    return SportsLeaderboardEntry(
+      id: j['id']?.toString() ?? '',
+      name: j['name']?.toString() ?? 'User',
+      avatar: j['avatar']?.toString(),
+      points: int.tryParse('${j['points']}') ?? 0,
+      predictionStreak: int.tryParse('${j['predictionStreak']}') ?? 0,
+      maxPredictionStreak: int.tryParse('${j['maxPredictionStreak']}') ?? 0,
+      rank: int.tryParse('${j['rank']}') ?? 0,
+    );
+  }
+}
+
+class SportsLeaderboardSnapshot {
+  final List<SportsLeaderboardEntry> top;
+  final SportsLeaderboardEntry? currentUser;
+
+  const SportsLeaderboardSnapshot({
+    this.top = const [],
+    this.currentUser,
+  });
+}
+
 class SportsHighlight {
   final String id;
   final String title;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
 
@@ -11,13 +12,25 @@ abstract final class SportsApiService {
   /// Server deployed without `/api/sports/*` routes (needs Railway redeploy).
   static const String codeSportsApiMissing = 'SPORTS_API_MISSING';
 
+  static Future<Map<String, String>> _authHeaders({bool jsonBody = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(AppConstants.tokenKey);
+    return {
+      'Accept': 'application/json',
+      if (jsonBody) 'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
   static Future<Map<String, dynamic>> _get(String path,
       [Map<String, String>? query]) async {
     final uri = Uri.parse('${AppConstants.baseUrl}$path').replace(
       queryParameters: query,
     );
     try {
-      final res = await http.get(uri).timeout(_timeout);
+      final res = await http
+          .get(uri, headers: await _authHeaders())
+          .timeout(_timeout);
       final body = res.body.trim();
 
       if (res.statusCode == 404) {
@@ -79,6 +92,49 @@ abstract final class SportsApiService {
 
   static Future<Map<String, dynamic>> getMatch(String id) =>
       _get('/sports/match/$id');
+
+  static Future<Map<String, dynamic>> voteMatchPoll(
+    String matchId,
+    String option,
+  ) async {
+    final uri = Uri.parse('${AppConstants.baseUrl}/sports/match/$matchId/poll/vote');
+    try {
+      final res = await http
+          .post(
+            uri,
+            headers: await _authHeaders(jsonBody: true),
+            body: jsonEncode({'option': option}),
+          )
+          .timeout(_timeout);
+      final body = res.body.trim();
+      if (body.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Empty response from server (${res.statusCode}).',
+        };
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        if (res.statusCode >= 400) {
+          return {
+            'success': false,
+            'statusCode': res.statusCode,
+            'message': decoded['message']?.toString() ?? 'Vote failed.',
+          };
+        }
+        return decoded;
+      }
+      return {'success': false, 'message': 'Unexpected response format.'};
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Cannot reach ${AppConstants.apiConnectionHint}.',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> getLeaderboard() =>
+      _get('/sports/leaderboard');
 
   static Future<Map<String, dynamic>> getNews({
     int page = 1,

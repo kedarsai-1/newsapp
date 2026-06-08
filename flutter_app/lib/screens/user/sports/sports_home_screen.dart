@@ -222,6 +222,7 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
                 child: _LiveSection(onMatchTap: _openMatch),
               ),
             ),
+            const SliverToBoxAdapter(child: _LeaderboardSection()),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 24, 14, 8),
@@ -412,6 +413,131 @@ class _LiveSection extends StatelessWidget {
               ),
             ],
           ],
+        );
+      },
+    );
+  }
+}
+
+class _LeaderboardSection extends StatelessWidget {
+  const _LeaderboardSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<SportsProvider, (SportsLeaderboardSnapshot, bool)>(
+      selector: (_, p) => (p.leaderboard, p.loadingLeaderboard),
+      builder: (context, data, _) {
+        final board = data.$1;
+        final loading = data.$2;
+        if (loading && board.top.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: GlassColors.accentGreen,
+                ),
+              ),
+            ),
+          );
+        }
+        if (board.top.isEmpty && board.currentUser == null) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+            child: Text(
+              'Prediction leaderboard — vote on match polls while logged in to earn points.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white.withOpacity(0.45),
+                height: 1.35,
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+          child: GlassCard(
+            padding: const EdgeInsets.all(14),
+            color: Colors.white.withOpacity(0.04),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.emoji_events_outlined,
+                      size: 18,
+                      color: GlassColors.accentGreen,
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Prediction leaderboard',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+                if (board.currentUser != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'You: #${board.currentUser!.rank} · ${board.currentUser!.points} pts · streak ${board.currentUser!.predictionStreak}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: GlassColors.accentGreenLight,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                ...board.top.take(5).map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          child: Text(
+                            '#${e.rank}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white.withOpacity(0.45),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            e.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${e.points} pts',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white.withOpacity(0.65),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

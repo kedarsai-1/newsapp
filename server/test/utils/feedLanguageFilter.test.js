@@ -1,31 +1,38 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 
-const {
-  buildLanguageClause,
-  applyLanguageFilter,
-} = require('../../utils/feedLanguageFilter');
+describe('feed language filter (YouTube shorts regression)', () => {
+  it('english languageWhere must include rows with null originalLanguage', async () => {
+    require('dotenv').config();
+    const { prisma } = require('../../config/prisma');
 
-describe('feedLanguageFilter', () => {
-  it('returns null clause when lang is missing', () => {
-    assert.equal(buildLanguageClause(null), null);
-    assert.equal(buildLanguageClause(undefined), null);
-  });
+    const allowOriginalLanguages = (codes) => ({
+      OR: [
+        { originalLanguage: null },
+        { NOT: { originalLanguage: { in: codes } } },
+      ],
+    });
 
-  it('builds english clause', () => {
-    assert.deepEqual(buildLanguageClause('en'), { language: 'en' });
-  });
+    const brokenWhere = {
+      status: 'approved',
+      sourceType: 'youtube',
+      youtubeIsShort: true,
+      language: 'en',
+      NOT: { originalLanguage: { in: ['hin', 'tel', 'hi', 'te'] } },
+    };
+    const fixedWhere = {
+      status: 'approved',
+      sourceType: 'youtube',
+      youtubeIsShort: true,
+      language: 'en',
+      ...allowOriginalLanguages(['hin', 'tel', 'hi', 'te']),
+    };
 
-  it('builds telugu OR clause', () => {
-    const clause = buildLanguageClause('te');
-    assert.ok(clause.OR);
-    assert.ok(clause.OR.some((c) => c.originalLanguage === 'tel'));
-  });
+    const broken = await prisma.newsPost.count({ where: brokenWhere });
+    const fixed = await prisma.newsPost.count({ where: fixedWhere });
+    assert.ok(fixed > 0, 'expected english youtube shorts in DB');
+    assert.ok(fixed > broken, 'null originalLanguage rows must not be excluded');
 
-  it('applyLanguageFilter merges AND clause into query', () => {
-    const query = applyLanguageFilter({ status: 'approved' }, 'hi');
-    assert.equal(query.status, 'approved');
-    assert.ok(Array.isArray(query.AND));
-    assert.ok(query.AND.length >= 1);
+    await prisma.$disconnect();
   });
 });

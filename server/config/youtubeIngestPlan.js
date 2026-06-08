@@ -5,6 +5,9 @@
 const youtubeSearchPlan = [
   // English
   { categorySlug: 'general', query: 'india news today', language: 'en' },
+  { categorySlug: 'general', query: '#shorts india news today', language: 'en' },
+  { categorySlug: 'entertainment', query: '#shorts india entertainment', language: 'en' },
+  { categorySlug: 'sports', query: '#shorts cricket india', language: 'en' },
   { categorySlug: 'politics', query: 'india politics news', language: 'en' },
   { categorySlug: 'sports', query: 'india sports news', language: 'en' },
   { categorySlug: 'business', query: 'india business news', language: 'en' },
@@ -12,13 +15,16 @@ const youtubeSearchPlan = [
   { categorySlug: 'technology', query: 'technology news india', language: 'en' },
   // Telugu
   { categorySlug: 'general', query: 'telugu news today', language: 'te' },
+  { categorySlug: 'general', query: '#shorts telugu news', language: 'te' },
   { categorySlug: 'politics', query: 'telugu politics news', language: 'te' },
+  { categorySlug: 'politics', query: '#shorts telugu politics', language: 'te' },
   { categorySlug: 'sports', query: 'telugu sports news', language: 'te' },
   { categorySlug: 'business', query: 'telugu business news', language: 'te' },
   { categorySlug: 'entertainment', query: 'telugu entertainment news', language: 'te' },
   { categorySlug: 'technology', query: 'telugu technology news', language: 'te' },
   // Hindi
   { categorySlug: 'general', query: 'hindi news today', language: 'hi' },
+  { categorySlug: 'general', query: '#shorts hindi news', language: 'hi' },
   { categorySlug: 'politics', query: 'hindi politics news', language: 'hi' },
   { categorySlug: 'sports', query: 'hindi sports news', language: 'hi' },
   { categorySlug: 'business', query: 'hindi business news', language: 'hi' },
@@ -60,6 +66,9 @@ function getYoutubeChannelIds() {
 /** Built-in channels when env lists are empty (public channel IDs). */
 const defaultYoutubeChannels = [
   { channelId: 'UCumtYpCY26F6Jr3satUgMvA', language: 'te', categorySlug: 'general' },
+  { channelId: 'UC_2irx_BQR7RsBKmUV9fePQ', language: 'te', categorySlug: 'general' },
+  { channelId: 'UCZ9m4KOh8Ei60428xeGYDCQ', language: 'te', categorySlug: 'general' },
+  { channelId: 'UCPXTXMecYqnRKNdqdVOGSFg', language: 'te', categorySlug: 'general' },
   { channelId: 'UCwqusr8YDwM-3mEYTDeJHzw', language: 'en', categorySlug: 'general' },
   { channelId: 'UCt4t-jeY85JegMlZ-E5UWtA', language: 'hi', categorySlug: 'general' },
 ];

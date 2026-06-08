@@ -119,14 +119,17 @@ Chat and ingest use **different model env vars**:
 | Purpose | Env vars | Default |
 |---------|----------|---------|
 | **Ingest summaries** | `OLLAMA_MODEL_EN`, `OLLAMA_MODEL_INDIC`, `OLLAMA_MODEL_HI/TE` | `llama3.1:8b` / `mashriram/sarvam-1` |
-| **User chat** | `OLLAMA_MODEL_CHAT`, `OLLAMA_MODEL_CHAT_EN/HI/TE` | `gemma2:2b` (all langs) |
+| **User chat** | `OLLAMA_MODEL_CHAT_EN` | `gemma2:2b` |
+| **User chat hi/te** | `OLLAMA_MODEL_CHAT_HI`, `OLLAMA_MODEL_CHAT_TE` | `mashriram/sarvam-1` |
 
 Production two-model setup on one Ollama instance (fast chat + Indic ingest):
 
 ```env
 OLLAMA_MODEL_EN=llama3.1:8b
 OLLAMA_MODEL_INDIC=mashriram/sarvam-1
-OLLAMA_MODEL_CHAT=gemma2:2b
+OLLAMA_MODEL_CHAT_EN=gemma2:2b
+OLLAMA_MODEL_CHAT_HI=mashriram/sarvam-1
+OLLAMA_MODEL_CHAT_TE=mashriram/sarvam-1
 OLLAMA_MAX_LOADED_MODELS=2   # systemd — keeps gemma2:2b + sarvam-1 hot
 ```
 

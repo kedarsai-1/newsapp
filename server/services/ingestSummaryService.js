@@ -26,7 +26,7 @@ function isSummaryBudgetTight(budget) {
 
 /**
  * Production ingest summarization for en / hi / te feed languages.
- * Retries once on transient Ollama failures; always falls back via summarizeForRssIngest.
+ * Retries once on transient Ollama failures; callers apply RSS extractive fallback when this returns empty.
  */
 async function summarizeForIngest({
   text,

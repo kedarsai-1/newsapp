@@ -39,10 +39,12 @@ function stripHtml(input = '') {
   );
 }
 
+const { truncateSummary } = require('../utils/summaryText');
+
 function summarizeLocal(text) {
   if (!text) return null;
-  const t = String(text);
-  return t.length > 280 ? `${t.slice(0, 277)}...` : t;
+  const out = truncateSummary(String(text), 280);
+  return out || null;
 }
 
 function summaryInputMaxChars() {
@@ -137,9 +139,7 @@ function extractiveSummaryNative(text, maxLen = 500) {
 }
 
 function clipSummarySchema(s, max = 500) {
-  const x = String(s || '').replace(/\s+/g, ' ').trim();
-  if (x.length <= max) return x;
-  return `${x.slice(0, max - 1).trim()}…`;
+  return truncateSummary(s, max);
 }
 
 /** Devanagari, Telugu, Tamil, etc. — if dominant, do not run English-only distilbart. */

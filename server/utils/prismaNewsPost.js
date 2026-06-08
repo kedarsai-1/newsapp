@@ -1,5 +1,6 @@
 const { prisma } = require('../config/prisma');
 const { idOf } = require('./serializers');
+const { truncateSummary } = require('./summaryText');
 
 const newsPostInclude = {
   reporter: true,
@@ -74,7 +75,7 @@ function newsPostDataFromDoc(doc) {
   const data = {
     title: String(doc.title || '').slice(0, 200),
     body: doc.body || doc.title || '',
-    summary: doc.summary ? String(doc.summary).slice(0, 300) : null,
+    summary: doc.summary ? truncateSummary(doc.summary, 300) : null,
     reporterId: idOf(doc.reporter ?? doc.reporterId),
     categoryId: idOf(doc.category ?? doc.categoryId),
     status: doc.status || 'pending',

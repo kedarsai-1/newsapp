@@ -5,6 +5,7 @@
  */
 
 const { stripNewsWireTruncationMarkers } = require('../utils/stripNewsWireTruncation');
+const { truncateSummary } = require('../utils/summaryText');
 
 function stripHtml(input = '') {
   return String(input || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -13,7 +14,8 @@ function stripHtml(input = '') {
 function summarize(text) {
   if (!text) return null;
   const cleaned = stripNewsWireTruncationMarkers(text);
-  return cleaned.length > 280 ? `${cleaned.slice(0, 277)}...` : cleaned;
+  const out = truncateSummary(cleaned, 300);
+  return out || null;
 }
 
 /** Plain text from API fields: HTML stripped, wire truncation markers removed. */
@@ -510,4 +512,5 @@ module.exports = {
   isUnusableFeedImageUrl,
   parseOgImageFromHtml,
   parseFirstContentImageFromHtml,
+  summarize,
 };

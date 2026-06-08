@@ -257,6 +257,17 @@ function ollamaChatMaxTokens() {
   return Math.max(64, Number(process.env.OLLAMA_CHAT_MAX_TOKENS || 120));
 }
 
+/** Indic chat answers need more tokens (longer glyphs per sentence). */
+function ollamaChatMaxTokensForLang(lang) {
+  const l = String(lang || 'en').toLowerCase();
+  const base = ollamaChatMaxTokens();
+  if (l === 'hi' || l === 'te') {
+    const indic = Number(process.env.OLLAMA_CHAT_MAX_TOKENS_INDIC || 220);
+    return Math.max(base, Math.min(400, indic));
+  }
+  return base;
+}
+
 function ollamaKeepAlive() {
   return String(process.env.OLLAMA_KEEP_ALIVE || '15m').trim();
 }
@@ -286,7 +297,7 @@ function cleanModelOutput(text) {
 }
 
 /** Reject wrong script (e.g. Chinese in English, garbled Telugu). */
-function validateLanguageOutput(text, targetLang) {
+function validateLanguageOutput(text, targetLang, options = {}) {
   const t = cleanModelOutput(text);
   if (!t || t.length < 12) return '';
 
@@ -304,9 +315,12 @@ function validateLanguageOutput(text, targetLang) {
   if (lang === 'hi' && devanagari / total < 0.35 && latin / total < 0.35) return '';
   if (lang === 'te' && telugu / total < 0.35) return '';
 
-  if (t.length <= 320) return t;
-  // Truncate at last sentence boundary within 320 chars
-  const slice = t.slice(0, 320);
+  const maxChars = Math.max(
+    320,
+    Number(options.maxChars || process.env.CHAT_ANSWER_MAX_CHARS || 320),
+  );
+  if (t.length <= maxChars) return t;
+  const slice = t.slice(0, maxChars);
   const lastSentEnd = Math.max(
     slice.lastIndexOf('. '),
     slice.lastIndexOf('। '),
@@ -344,6 +358,7 @@ async function ollamaChatRequest({
   model,
   system,
   user,
+  lang = 'en',
   timeoutMs = null,
   forChat = false,
 }) {
@@ -370,7 +385,7 @@ async function ollamaChatRequest({
               : (process.env.OLLAMA_TEMPERATURE || 0.1),
           ),
           num_predict: forChat
-            ? ollamaChatMaxTokens()
+            ? ollamaChatMaxTokensForLang(lang)
             : Number(process.env.OLLAMA_MAX_TOKENS || 150),
           top_p: 0.9,
         },
@@ -395,6 +410,7 @@ async function ollamaChatForIngest(system, user, lang = 'en', timeoutMs = null) 
     model: ollamaModelForLanguage(lang),
     system,
     user,
+    lang,
     timeoutMs,
     forChat: false,
   });
@@ -406,6 +422,7 @@ async function ollamaChatForUser(system, user, lang = 'en', timeoutMs = null) {
     model: ollamaModelForChat(lang),
     system,
     user,
+    lang,
     timeoutMs,
     forChat: true,
   });
@@ -899,12 +916,19 @@ async function chatWithOllama(systemPrompt, userPrompt, lang = 'en') {
   return withOllamaChatQueue(async () => {
     ollamaChatInFlight += 1;
     try {
-      return await ollamaChatForUser(
+      const raw = await ollamaChatForUser(
         systemPrompt,
         userPrompt,
         lang,
         ollamaChatTimeoutMs(),
       );
+      const validated = validateLanguageOutput(raw, lang, {
+        maxChars: Number(process.env.CHAT_ANSWER_MAX_CHARS || 700),
+      });
+      if (validated) return validated;
+      const l = String(lang || 'en').toLowerCase();
+      if (l === 'hi' || l === 'te') return '';
+      return String(raw || '').trim();
     } finally {
       ollamaChatInFlight = Math.max(0, ollamaChatInFlight - 1);
     }

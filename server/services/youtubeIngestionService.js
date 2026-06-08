@@ -13,6 +13,7 @@ const {
 } = require('../config/ingestLanguages');
 const { emitFeedUpdated } = require('./feedSocket');
 const { isPoliticalShortContent } = require('../utils/shortsFeedFilter');
+const { truncateSummary } = require('../utils/summaryText');
 const {
   isYoutubeQuotaError,
   isYoutubeQuotaBlocked,
@@ -236,7 +237,7 @@ function normalizeFromVideoResource(
   return {
     title: title.slice(0, 200),
     body: desc.slice(0, 2000) || title,
-    summary: desc.slice(0, 280) || null,
+    summary: truncateSummary(desc, 280) || null,
     sourceUrl: youtube.watchUrl,
     sourcePublishedAt: publishedAt,
     sourceType: 'youtube',

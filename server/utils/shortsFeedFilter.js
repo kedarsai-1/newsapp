@@ -27,8 +27,8 @@ function isPoliticalShortContent(postLike) {
     description: postLike?.body || postLike?.summary,
     language: lang,
   });
-  // Strict: one political keyword signal is enough for Shorts exclusion.
-  if (kw.stage === 'accept' || kw.stage === 'uncertain') return true;
+  // Strict: confirmed political keyword signals exclude from Shorts tab.
+  if (kw.stage === 'accept') return true;
 
   return false;
 }

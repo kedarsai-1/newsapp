@@ -139,12 +139,19 @@ async function resolveCategoryFilter(categoryParam) {
 function languageWhere(langParam) {
   if (!langParam) return null;
   const lang = String(langParam).toLowerCase();
+  /** SQL NOT IN excludes NULL — keep untagged ingest rows (YouTube, legacy RSS). */
+  const allowOriginalLanguages = (codes) => ({
+    OR: [
+      { originalLanguage: null },
+      { NOT: { originalLanguage: { in: codes } } },
+    ],
+  });
   if (lang === 'en') {
     return {
       language: 'en',
       AND: [
         { NOT: { language: { in: ['hi', 'te'] } } },
-        { NOT: { originalLanguage: { in: ['hin', 'tel', 'hi', 'te'] } } },
+        allowOriginalLanguages(['hin', 'tel', 'hi', 'te']),
         {
           NOT: {
             OR: [

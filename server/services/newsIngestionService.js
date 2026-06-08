@@ -133,6 +133,14 @@ function interleaveFeedsByLanguageAndCategory(feeds) {
  * RSS-only runs with many feeds + og:image + body enrich + HF summarize can exceed 15–30+ minutes otherwise.
  * Set INGEST_MAX_RUNTIME_MS=0 for no limit (not recommended on PaaS).
  */
+function rssFeedMinRemainingMs() {
+  return Math.max(5000, Number(process.env.INGEST_RSS_FEED_MIN_REMAINING_MS || 20_000));
+}
+
+function rssItemMinRemainingMs() {
+  return Math.max(3000, Number(process.env.INGEST_RSS_ITEM_MIN_REMAINING_MS || 10_000));
+}
+
 function createIngestBudget({ language } = {}) {
   const ms = getIngestBudgetMs(language);
   if (ms == null) {
@@ -409,17 +417,8 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
 function summarizeForPost(text) {
   const t = decodeHtmlEntities(String(text || ''));
   if (!t) return null;
-  if (t.length <= 300) return t;
-  // Try to truncate at last sentence boundary within 300 chars
-  const slice = t.slice(0, 300);
-  const lastSentEnd = Math.max(
-    slice.lastIndexOf('. '),
-    slice.lastIndexOf('। '),
-    slice.lastIndexOf('? '),
-    slice.lastIndexOf('! '),
-  );
-  if (lastSentEnd > 80) return slice.slice(0, lastSentEnd + 1).trim();
-  return `${slice.slice(0, 297).trim()}…`;
+  const { truncateSummary } = require('../utils/summaryText');
+  return truncateSummary(t, 300) || null;
 }
 
 /** AI/extractive summary for ingest via production summary service. */
@@ -644,6 +643,19 @@ async function runIngestion({
                 apiSummary = String(apiAiSummary).trim();
               } else if (item.body || item.summary) {
                 stats.summaryExtractiveFallback += 1;
+                const fallback = summarizeForPost(
+                  decodeHtmlEntities(String(item.body || item.summary || '').trim()),
+                );
+                if (fallback) apiSummary = fallback;
+              }
+
+              if (apiSummary) {
+                apiSummary = summarizeForPost(decodeHtmlEntities(String(apiSummary).trim()))
+                  || apiSummary;
+              } else if (item.body) {
+                apiSummary = summarizeForPost(
+                  decodeHtmlEntities(String(item.body).trim()),
+                );
               }
 
               let postFields = { ...item, summary: apiSummary };
@@ -727,9 +739,12 @@ async function runIngestion({
       let feedIdx = 0;
       for (const feed of feeds) {
         feedIdx += 1;
-        if (budget.limitMs != null && budget.remainingMs() < 40000) {
+        const feedMinRemaining = rssFeedMinRemainingMs();
+        if (budget.limitMs != null && budget.remainingMs() < feedMinRemaining) {
           console.warn(
-            `[ingest] Time budget running low (${Math.round(budget.remainingMs() / 1000)}s remaining) at feed ${feedIdx}/${feeds.length} (${feed.name || 'feed'}). Gracefully ending RSS ingestion loop.`,
+            `[ingest] Time budget running low (${Math.round(budget.remainingMs() / 1000)}s remaining, `
+              + `min ${Math.round(feedMinRemaining / 1000)}s) at feed ${feedIdx}/${feeds.length} `
+              + `(${feed.name || 'feed'}). Gracefully ending RSS ingestion loop.`,
           );
           break;
         }
@@ -755,9 +770,12 @@ async function runIngestion({
 
           for (let ri = 0; ri < slice.length; ri++) {
             if (insertedThisFeed >= targetInsertsPerFeed) break;
-            if (budget.limitMs != null && budget.remainingMs() < 15000) {
+            const itemMinRemaining = rssItemMinRemainingMs();
+            if (budget.limitMs != null && budget.remainingMs() < itemMinRemaining) {
               console.warn(
-                `[ingest] Time budget running low inside feed items loop (${Math.round(budget.remainingMs() / 1000)}s remaining). Gracefully breaking items loop.`,
+                `[ingest] Time budget running low inside feed items loop `
+                  + `(${Math.round(budget.remainingMs() / 1000)}s remaining, `
+                  + `min ${Math.round(itemMinRemaining / 1000)}s). Gracefully breaking items loop.`,
               );
               break;
             }
@@ -823,7 +841,8 @@ async function runIngestion({
             const budgetTight = isSummaryBudgetTight(budget);
             let displayTitle = decodeHtmlEntities(String(item.title || '')).slice(0, 200);
             if (
-              ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
+              !budgetTight
+              && ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
               && originalLang === 'eng'
             ) {
               try {
@@ -860,7 +879,11 @@ async function runIngestion({
               originalLanguage: originalLang,
               politicsScope: resolvePoliticsScope(item, feed),
             };
-            if (feedLang === 'te' && (feedCat === 'local' || feedCat === 'politics')) {
+            if (
+              !budgetTight
+              && feedLang === 'te'
+              && (feedCat === 'local' || feedCat === 'politics')
+            ) {
               const constituencyResult = await classifyArticleConstituency(raw);
               postFields = {
                 ...postFields,

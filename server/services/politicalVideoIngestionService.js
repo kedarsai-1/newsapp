@@ -25,6 +25,7 @@ const { emitFeedUpdated } = require('./feedSocket');
 const { hashUrl, canonicalizeUrl, normalizeTitle } = require('../utils/storyDedupe');
 const { isYoutubeQuotaBlocked } = require('../utils/youtubeQuota');
 const { createNewsPost } = require('../utils/prismaNewsPost');
+const { truncateSummary } = require('../utils/summaryText');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
@@ -188,7 +189,7 @@ async function savePoliticalVideo(video, classification) {
   const newsDoc = {
     title: video.title,
     body: (video.description || video.title).slice(0, 2000),
-    summary: (video.description || '').slice(0, 280) || null,
+    summary: truncateSummary(video.description || '', 280) || null,
     reporterId: reporter.id,
     categoryId: category.id,
     media: [{

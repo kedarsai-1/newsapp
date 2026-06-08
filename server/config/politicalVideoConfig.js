@@ -94,8 +94,10 @@ const KEYWORD_LABEL_HINTS = [
 
 /** Fallback when no POLITICAL_YOUTUBE_CHANNEL_IDS_* env vars are set. */
 const defaultPoliticalChannels = [
-  { channelId: 'UCZ9m4KOh8Ei60428xeGYDCQ', language: 'te', name: 'Telugu Political 1' },
-  { channelId: 'UC_2irx_BQR7RsBKmUV9fePQ', language: 'te', name: 'Telugu Political 2' },
+  { channelId: 'UCumtYpCY26F6Jr3satUgMvA', language: 'te', name: 'NTV Telugu' },
+  { channelId: 'UC_2irx_BQR7RsBKmUV9fePQ', language: 'te', name: 'ABN Andhra Jyothy' },
+  { channelId: 'UCZ9m4KOh8Ei60428xeGYDCQ', language: 'te', name: 'Sakshi TV' },
+  { channelId: 'UCPXTXMecYqnRKNdqdVOGSFg', language: 'te', name: 'TV9 Telugu Live' },
   { channelId: 'UCwqusr8YDwM-3mEYTDeJHzw', language: 'en', name: 'English Political 1' },
   { channelId: 'UCZFMm1mMw0F81Z37aaEzTUA', language: 'en', name: 'English Political 2' },
   { channelId: 'UCt4t-jeY85JegMlZ-E5UWtA', language: 'hi', name: 'Hindi Political 1' },

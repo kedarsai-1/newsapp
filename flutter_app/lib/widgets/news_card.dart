@@ -4,6 +4,7 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../models/models.dart';
 import '../utils/feed_image_url.dart';
+import '../utils/text_truncation.dart';
 import 'feed/compact_news_row.dart';
 
 String _snippet(NewsPost post, {int maxLen = 140}) {
@@ -11,8 +12,7 @@ String _snippet(NewsPost post, {int maxLen = 140}) {
   final base = (summary != null && summary.isNotEmpty)
       ? summary
       : post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (base.length <= maxLen) return base;
-  return '${base.substring(0, maxLen).trim()}…';
+  return truncateAtWordBoundary(base, maxLen);
 }
 
 /// Compact list card for news feeds (no immersive / glass layout).

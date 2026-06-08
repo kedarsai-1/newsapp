@@ -6,9 +6,11 @@ abstract final class YoutubeIframeHtml {
     bool autoplay = true,
     bool mute = true,
     bool enableIntersectionObserver = false,
+    bool showControls = false,
   }) {
     final autoplayJs = autoplay ? '1' : '0';
     final muteJs = mute ? '1' : '0';
+    final controlsJs = showControls ? '1' : '0';
     final safeId = _escape(videoId);
     final ioBlock = enableIntersectionObserver
         ? '''
@@ -84,7 +86,7 @@ abstract final class YoutubeIframeHtml {
         autoplay: $autoplayJs,
         mute: $muteJs,
         playsinline: 1,
-        controls: 0,
+        controls: $controlsJs,
         rel: 0,
         modestbranding: 1,
         fs: 0,

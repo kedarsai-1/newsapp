@@ -3,6 +3,7 @@
 import '../models/models.dart';
 import '../utils/feed_image_url.dart';
 import '../utils/app_utils.dart';
+import '../utils/text_truncation.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 /// Returns the image URL for a news post (same as the original premiumImageUrl).
@@ -22,6 +23,5 @@ String premiumSnippet(NewsPost post, {int maxLength = 360}) {
       : _normalizeSnippetWhitespace(
           AppUtils.decodeHtmlEntities(post.body),
         );
-  if (base.length <= maxLength) return base;
-  return '${base.substring(0, maxLength).trim()}...';
+  return truncateAtWordBoundary(base, maxLength);
 }

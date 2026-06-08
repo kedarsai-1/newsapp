@@ -13,6 +13,7 @@ import '../../services/auth_provider.dart';
 import '../../constants.dart';
 import '../../users/media_widgets.dart';
 import '../../widgets/location_label.dart';
+import '../../utils/text_truncation.dart';
 import '../../widgets/shimmer_widgets.dart';
 
 /// Media shown below the byline: videos, multi-asset posts, or extra items after the app-bar hero image.
@@ -96,8 +97,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     final short = post.summary?.trim();
     if (short != null && short.isNotEmpty) return short;
     final body = post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (body.length <= 420) return body;
-    return '${body.substring(0, 420).trim()}...';
+    return truncateAtWordBoundary(body, 420);
   }
 
   bool _shouldTryExtract(NewsPost post) {
@@ -228,7 +228,10 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     buf.writeln();
     final preview =
         post.summary?.trim().isNotEmpty == true ? post.summary! : post.body;
-    final ex = preview.length > 600 ? '${preview.substring(0, 600)}…' : preview;
+    final ex = truncateAtWordBoundary(
+      preview.replaceAll(RegExp(r'\s+'), ' ').trim(),
+      600,
+    );
     buf.writeln(ex);
     if (post.sourceUrl?.trim().isNotEmpty == true) {
       buf.writeln();
@@ -562,7 +565,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           resizeToAvoidBottomInset: true,
           extendBody: true,
           bottomNavigationBar: _commentComposer(context, p),
-        body: CustomScrollView(
+          body: CustomScrollView(
           controller: _scrollCtrl,
           physics: const BouncingScrollPhysics(),
           slivers: [
@@ -940,7 +943,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child:
-                                MediaGallery(media: _bodyMediaForGallery(post)),
+                                MediaGallery(media: _bodyMediaForGallery(post), post: post),
                           ),
                         ],
 

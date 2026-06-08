@@ -137,7 +137,11 @@ const getMatch = async (req, res) => {
     }
 
     // If the poll is not resolved yet, and the match is ended, resolve the prediction points!
-    if (poll && !poll.isResolved && (match.status === 'ended' || match.matchWinner)) {
+    if (
+      poll &&
+      !poll.isResolved &&
+      (match.status === 'ended' || match.status === 'finished' || match.matchWinner)
+    ) {
       try {
         let winningOption = null;
         if (match.matchWinner) {
@@ -263,6 +267,9 @@ const getMatch = async (req, res) => {
     });
   } catch (e) {
     console.error('[sports] match', e.message);
+    if (e.code === 'CRICAPI_NOT_FOUND' || /match not found/i.test(e.message)) {
+      return res.status(404).json({ success: false, message: 'Match not found.' });
+    }
     return res.status(502).json({
       success: false,
       message: 'Could not load match details.',
@@ -306,6 +313,34 @@ const voteMatchPoll = async (req, res) => {
 
     if (!poll) {
       return res.status(404).json({ success: false, message: 'Poll not found for this match.' });
+    }
+
+    if (poll.isResolved) {
+      return res.status(400).json({
+        success: false,
+        message: 'Poll is closed. Voting has ended.',
+      });
+    }
+
+    let matchStatus = null;
+    try {
+      const match = await cricApi.fetchMatchById(id);
+      matchStatus = match?.status || null;
+      if (
+        matchStatus === 'finished'
+        || matchStatus === 'ended'
+        || match?.matchWinner
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Match has ended. Voting is closed.',
+        });
+      }
+    } catch (matchErr) {
+      if (matchErr.code === 'CRICAPI_NOT_FOUND') {
+        return res.status(404).json({ success: false, message: 'Match not found.' });
+      }
+      // Allow vote if live scores API is temporarily down but poll is still open.
     }
 
     const userId = req.user._id;

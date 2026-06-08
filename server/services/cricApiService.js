@@ -357,8 +357,8 @@ function normalizeScorecardInnings(raw) {
 /** Team totals when full scorecard API is unavailable or rate-limited. */
 function buildBasicScorecardFromRaw(raw) {
   const scores = Array.isArray(raw?.score) ? raw.score : [];
-  if (!scores.length) return [];
-  return scores.map((s) => {
+  if (scores.length) {
+    return scores.map((s) => {
     const runs = s.r ?? s.runs;
     const wkts = s.w ?? s.wickets;
     const overs = formatOvers(s.o ?? s.overs);
@@ -368,12 +368,27 @@ function buildBasicScorecardFromRaw(raw) {
         : null;
     return {
       label: String(s.inning || s.innings || 'Innings').trim(),
-      extras: null,
       totals,
+      extras: null,
       batting: [],
       bowling: [],
     };
-  });
+    });
+  }
+
+  const teams = parseTeams(raw);
+  const withScores = teams.filter((t) => t.score);
+  if (withScores.length) {
+    return withScores.map((t) => ({
+      label: t.name,
+      extras: null,
+      totals: t.overs != null ? `${t.score} (${t.overs} ov)` : String(t.score),
+      batting: [],
+      bowling: [],
+    }));
+  }
+
+  return [];
 }
 
 function mergeRawMatches(lists) {
@@ -457,10 +472,15 @@ async function cricGet(path, params = {}) {
   });
   const body = res.data;
   if (body?.status && body.status !== 'success') {
-    const err = new Error(body?.message || body?.reason || 'CricAPI request failed');
-    err.code = /blocked|limit|quota|exceeded/i.test(String(err.message))
-      ? 'CRICAPI_RATE_LIMIT'
-      : 'CRICAPI_ERROR';
+    const msg = body?.message || body?.reason || 'CricAPI request failed';
+    const err = new Error(msg);
+    if (/not found|invalid|no match|does not exist/i.test(String(msg))) {
+      err.code = 'CRICAPI_NOT_FOUND';
+    } else if (/blocked|limit|quota|exceeded/i.test(String(msg))) {
+      err.code = 'CRICAPI_RATE_LIMIT';
+    } else {
+      err.code = 'CRICAPI_ERROR';
+    }
     throw err;
   }
   return body;
@@ -648,18 +668,57 @@ async function fetchCurrentMatches() {
   }
 }
 
+const MATCH_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isCricApiNotFoundError(err) {
+  const msg = String(err?.message || '').toLowerCase();
+  return (
+    err?.code === 'CRICAPI_NOT_FOUND'
+    || /not found|invalid id|no match|does not exist|unknown match|invalid match/i.test(msg)
+  );
+}
+
+function throwMatchNotFound(id) {
+  const err = new Error(`Match not found: ${id}`);
+  err.code = 'CRICAPI_NOT_FOUND';
+  throw err;
+}
+
+function assertMatchRawFound(raw, id) {
+  const hasId = raw && (raw.id || raw.unique_id);
+  const hasTeams = Array.isArray(raw?.teams) && raw.teams.length >= 2;
+  if (hasId || hasTeams) return raw;
+  const err = new Error(`Match not found: ${id}`);
+  err.code = 'CRICAPI_NOT_FOUND';
+  throw err;
+}
+
 async function fetchMatchById(id) {
-  const cacheKey = `sports:match:${id}`;
+  const matchId = String(id || '').trim();
+  if (!matchId) return null;
+  if (!MATCH_ID_RE.test(matchId) && !findFallbackMatchById(matchId)) {
+    throwMatchNotFound(matchId);
+  }
+
+  const cacheKey = `sports:match:${matchId}`;
   const cached = await cacheService.get(cacheKey);
   if (cached) return cached;
 
   let raw = null;
   try {
-    const body = await cricGet('/match_info', { id });
-    raw = body.data || body;
+    const body = await cricGet('/match_info', { id: matchId });
+    raw = assertMatchRawFound(body.data || body, matchId);
   } catch (e) {
-    raw = findFallbackMatchById(id);
-    if (!raw) throw e;
+    raw = findFallbackMatchById(matchId);
+    if (!raw) {
+      if (isCricApiNotFoundError(e)) {
+        const err = new Error('Match not found');
+        err.code = 'CRICAPI_NOT_FOUND';
+        throw err;
+      }
+      throw e;
+    }
   }
 
   let scorecardInnings = buildBasicScorecardFromRaw(raw);

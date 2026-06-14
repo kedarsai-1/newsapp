@@ -109,4 +109,15 @@ class AppUtils {
     final p = name.trim().split(' ');
     return p.length >= 2 ? '${p[0][0]}${p[1][0]}'.toUpperCase() : (name.isNotEmpty ? name[0].toUpperCase() : '?');
   }
+
+  static String decodeHtmlEntities(String text) {
+    return text
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll('&apos;', "'")
+        .replaceAll('&nbsp;', ' ');
+  }
 }

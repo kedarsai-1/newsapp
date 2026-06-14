@@ -56,6 +56,46 @@ class _State extends State<AdminDashboardScreen> {
                     badge: p.dashboardStats?['pendingPosts']?.toString(), color: GlassColors.warning, onTap: () => context.go('/admin/pending')),
                 const SizedBox(height: 10),
                 _ActionTile(icon: Icons.people, label: 'Manage Users', color: GlassColors.info, onTap: () => context.go('/admin/users')),
+                const SizedBox(height: 10),
+                _ActionTile(
+                  icon: Icons.play_circle_outline,
+                  label: 'Run YouTube ingest',
+                  color: GlassColors.accentGreenLight,
+                  onTap: () async {
+                    final res = await p.runYoutubeIngestion();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          res['message']?.toString() ??
+                              (res['success'] == true
+                                  ? 'YouTube ingest started'
+                                  : 'YouTube ingest failed'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _ActionTile(
+                  icon: Icons.account_balance_outlined,
+                  label: 'Run political video ingest',
+                  color: GlassColors.info,
+                  onTap: () async {
+                    final res = await p.runPoliticalVideoIngestion();
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          res['message']?.toString() ??
+                              (res['success'] == true
+                                  ? 'Political ingest started'
+                                  : 'Political ingest failed'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
 
                 if (p.recentActivity.isNotEmpty) ...[
                   const SizedBox(height: 24),

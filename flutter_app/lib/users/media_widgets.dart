@@ -52,6 +52,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   late VideoPlayerController _controller;
   bool _initialized = false;
   bool _playing = false;
+  bool _failed = false;
 
   @override
   void initState() {
@@ -59,9 +60,14 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
     _controller = VideoPlayerController.networkUrl(Uri.parse(AppConstants.resolveMediaUrl(widget.videoUrl)))
       ..initialize().then((_) {
         if (mounted) setState(() => _initialized = true);
+      }).catchError((_) {
+        if (mounted) setState(() => _failed = true);
       });
     _controller.addListener(() {
       if (mounted) setState(() => _playing = _controller.value.isPlaying);
+    });
+    Future<void>.delayed(const Duration(seconds: 12), () {
+      if (mounted && !_initialized) setState(() => _failed = true);
     });
   }
 
@@ -74,11 +80,20 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    if (_failed) {
+      return Container(
+        height: 220,
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: Icon(Icons.videocam_off_outlined, color: p.textHint, size: 48),
+      );
+    }
     if (!_initialized) {
       return Container(
         height: 220,
         color: Colors.black,
-        child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+        alignment: Alignment.center,
+        child: Icon(Icons.play_circle_outline, color: p.textHint, size: 48),
       );
     }
 
@@ -137,8 +152,12 @@ class MediaGallery extends StatelessWidget {
       );
     }
 
-    // Single video
+    // Single video — skip YouTube URLs (handled by article YouTube player).
     if (media.length == 1 && media.first.isVideo) {
+      final url = AppConstants.resolveMediaUrl(media.first.url).toLowerCase();
+      if (url.contains('youtube.com') || url.contains('youtu.be')) {
+        return const SizedBox.shrink();
+      }
       return InlineVideoPlayer(videoUrl: AppConstants.resolveMediaUrl(media.first.url));
     }
 

@@ -210,26 +210,34 @@ class GlassBackground extends StatelessWidget {
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
   final double borderRadius;
   final Color? borderColor;
   final Color? backgroundColor;
+  final List<BoxShadow>? boxShadow;
   final VoidCallback? onTap;
 
   const GlassCard({
     super.key,
     required this.child,
     this.padding,
-    this.borderRadius = 16,
+    this.margin,
     this.borderColor,
-    this.backgroundColor,
     this.onTap,
-  });
+    this.boxShadow,
+    double borderRadius = 16,
+    double? radius,
+    Color? backgroundColor,
+    Color? color,
+  })  : borderRadius = radius ?? borderRadius,
+        backgroundColor = color ?? backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        margin: margin,
         padding: padding,
         decoration: BoxDecoration(
           color: backgroundColor ?? GlassColors.surfaceWhite,
@@ -238,6 +246,7 @@ class GlassCard extends StatelessWidget {
             color: borderColor ?? GlassColors.borderWhite,
             width: 0.8,
           ),
+          boxShadow: boxShadow,
         ),
         child: child,
       ),

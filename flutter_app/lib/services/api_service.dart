@@ -254,6 +254,17 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getMe() async => _get('/auth/me');
 
+  static Future<Map<String, dynamic>> updateProfile({
+    String? name,
+    String? phone,
+    String? bio,
+  }) async =>
+      _put('/auth/profile', {
+        if (name != null) 'name': name,
+        if (phone != null) 'phone': phone,
+        if (bio != null) 'bio': bio,
+      });
+
   static Future<void> updateFcmToken(String fcmToken) async {
     await _put('/auth/fcm-token', {'fcmToken': fcmToken});
   }
@@ -347,6 +358,35 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getLocalNews({
+    required double lat,
+    required double lng,
+    double radiusKm = 50,
+    String? city,
+    String? language,
+    int page = 1,
+  }) async {
+    final params = {
+      'lat': lat.toString(),
+      'lng': lng.toString(),
+      'radius': radiusKm.toString(),
+      'page': page.toString(),
+      'limit': AppConstants.pageSize.toString(),
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (language != null && language != 'all') 'language': language,
+    };
+    return _getQuery('/news/local', params);
+  }
+
+  static Future<Map<String, dynamic>> reverseGeocode({
+    required double lat,
+    required double lng,
+  }) async =>
+      _getQuery('/news/geocode', {
+        'lat': lat.toString(),
+        'lon': lng.toString(),
+      });
+
   static Future<Map<String, dynamic>> getPost(String id) async =>
       _get('/news/$id');
 
@@ -376,6 +416,80 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getBookmarks() async =>
       _get('/news/bookmarks');
+
+  static Future<Map<String, dynamic>> markPostSeen(String postId) async =>
+      _post('/news/$postId/seen', {});
+
+  static Future<Map<String, dynamic>> getWeather({
+    String? city,
+    String? state,
+    String? country,
+    double? lat,
+    double? lng,
+    bool refresh = false,
+  }) async {
+    final params = <String, String>{
+      if (city != null && city.trim().isNotEmpty) 'city': city.trim(),
+      if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
+      if (country != null && country.trim().isNotEmpty) 'country': country.trim(),
+      if (lat != null) 'lat': lat.toString(),
+      if (lng != null) 'lng': lng.toString(),
+      if (refresh) 'refresh': 'true',
+    };
+    return _getQuery(
+      '/weather',
+      params,
+      memoryCacheTtl: refresh ? null : const Duration(minutes: 10),
+    );
+  }
+
+  static Future<Map<String, dynamic>> chatWithAi({
+    required String message,
+    String? language,
+    String? city,
+    String? state,
+    String? country,
+    double? lat,
+    double? lng,
+    String? articleId,
+    List<Map<String, String>>? history,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${AppConstants.baseUrl}/news/chat'),
+            headers: _headers,
+            body: jsonEncode({
+              'message': message,
+              if (language != null && language.isNotEmpty) 'language': language,
+              if (city != null && city.isNotEmpty) 'city': city,
+              if (state != null && state.isNotEmpty) 'state': state,
+              if (country != null && country.isNotEmpty) 'country': country,
+              if (lat != null) 'latitude': lat,
+              if (lng != null) 'longitude': lng,
+              if (articleId != null && articleId.isNotEmpty) 'articleId': articleId,
+              if (history != null && history.isNotEmpty) 'history': history,
+            }),
+          )
+          .timeout(const Duration(seconds: 65));
+      final body = res.body.trim();
+      if (body.isEmpty) {
+        return {'success': false, 'message': 'Empty response from AI service.'};
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return {'statusCode': res.statusCode, ...decoded};
+      }
+      return {'success': false, 'message': 'Unexpected AI response format.'};
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'AI chat timed out. Try a shorter question.',
+      };
+    } catch (e) {
+      return {'success': false, 'message': _friendlyNetworkMessage(e)};
+    }
+  }
 
   static Future<Map<String, dynamic>> getComments(String postId) async =>
       _get('/news/$postId/comments');
@@ -789,6 +903,41 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getIngestionStatus() async =>
       _get('/admin/ingestion/status');
+
+  static Future<Map<String, dynamic>> runYoutubeIngestion() async =>
+      _post('/admin/youtube/ingest', {});
+
+  static Future<Map<String, dynamic>> runPoliticalVideoIngestion() async =>
+      _post('/admin/political-videos/ingest', {});
+
+  static Future<Map<String, dynamic>> backfillThumbnails() async =>
+      _post('/admin/media/backfill-thumbnails', {});
+
+  static Future<Map<String, dynamic>> featurePost(
+    String id, {
+    bool? isBreaking,
+    bool? isFeatured,
+  }) async =>
+      _put('/admin/posts/$id/feature', {
+        if (isBreaking != null) 'isBreaking': isBreaking,
+        if (isFeatured != null) 'isFeatured': isFeatured,
+      });
+
+  static Future<Map<String, dynamic>> getAllAdminPosts({int page = 1}) async {
+    final uri = Uri.parse('${AppConstants.baseUrl}/admin/posts')
+        .replace(queryParameters: {'page': '$page'});
+    final res = await http.get(uri, headers: _getHeaders).timeout(_httpTimeout);
+    return _decodeGetResponse(res);
+  }
+
+  static Future<Map<String, dynamic>> voteMatchPoll(
+    String matchId,
+    String option,
+  ) async =>
+      _post('/sports/match/$matchId/poll/vote', {'option': option});
+
+  static Future<Map<String, dynamic>> getSportsLeaderboard() async =>
+      _get('/sports/leaderboard');
 
   // ─── Political video reels (classified YouTube) ───────────────────────────
 

@@ -8,7 +8,7 @@ import '../../providers/onboarding_draft_provider.dart';
 import '../../services/auth_provider.dart';
 import 'onboarding_design.dart';
 
-/// Brief branded splash: white background, fade-in logo, tagline, subtle loader.
+/// Brief branded splash: theme background, fade-in logo, tagline, subtle loader.
 class DailyhuntSplashScreen extends StatefulWidget {
   const DailyhuntSplashScreen({super.key});
 

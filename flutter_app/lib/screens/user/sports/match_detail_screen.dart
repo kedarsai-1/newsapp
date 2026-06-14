@@ -23,7 +23,9 @@ class MatchDetailScreen extends StatefulWidget {
 class _MatchDetailScreenState extends State<MatchDetailScreen>
     with SingleTickerProviderStateMixin {
   SportsMatch? _match;
+  MatchPoll? _poll;
   bool _loading = true;
+  bool _voting = false;
   String? _error;
   TabController? _inningsTab;
 
@@ -59,10 +61,12 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
       _loading = _match == null;
       _error = null;
     });
-    final m = await context.read<SportsProvider>().fetchMatchDetail(widget.matchId);
+    final detail =
+        await context.read<SportsProvider>().fetchMatchDetail(widget.matchId);
     if (!mounted) return;
     setState(() {
-      _match = m ?? _match;
+      _match = detail?.match ?? _match;
+      _poll = detail?.poll ?? _poll;
       _loading = false;
       _error = _match == null ? 'Match not found or scores unavailable.' : null;
     });
@@ -113,6 +117,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 32),
         children: [
           _summaryCard(fx, m),
+          if (_poll != null) ...[
+            const SizedBox(height: 14),
+            _pollCard(context, fx, _poll!),
+          ],
           const SizedBox(height: 14),
           Text(
             'Scorecard',
@@ -461,6 +469,137 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _castVote(String option) async {
+    if (_voting || _poll == null) return;
+    setState(() => _voting = true);
+    final poll = await context.read<SportsProvider>().voteMatchPoll(
+          widget.matchId,
+          option,
+        );
+    if (!mounted) return;
+    setState(() {
+      _voting = false;
+      if (poll != null) _poll = poll;
+    });
+    if (poll == null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in to vote on match predictions.')),
+      );
+    }
+  }
+
+  Widget _pollCard(BuildContext context, FeedXpressoPalette fx, MatchPoll poll) {
+    final total = poll.totalVotes;
+    final pctA = total > 0 ? poll.votesA / total : 0.5;
+    final pctB = total > 0 ? poll.votesB / total : 0.5;
+    final voted = poll.userVote != null;
+    final closed = poll.isResolved;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: fx.iconSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: fx.divider.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.how_to_vote_outlined, color: fx.accent, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Who will win?',
+                style: TextStyle(
+                  color: fx.title,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+              ),
+              const Spacer(),
+              if (closed)
+                Text(
+                  'Closed',
+                  style: TextStyle(color: fx.actionMuted, fontSize: 12),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _pollOption(
+            fx: fx,
+            label: poll.optionATitle,
+            pct: pctA,
+            selected: poll.userVote == 'A',
+            enabled: !closed && !voted && !_voting,
+            onTap: () => _castVote('A'),
+          ),
+          const SizedBox(height: 8),
+          _pollOption(
+            fx: fx,
+            label: poll.optionBTitle,
+            pct: pctB,
+            selected: poll.userVote == 'B',
+            enabled: !closed && !voted && !_voting,
+            onTap: () => _castVote('B'),
+          ),
+          if (total > 0) ...[
+            const SizedBox(height: 8),
+            Text(
+              '$total votes',
+              style: TextStyle(color: fx.actionMuted, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _pollOption({
+    required FeedXpressoPalette fx,
+    required String label,
+    required double pct,
+    required bool selected,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? fx.accent : fx.divider.withValues(alpha: 0.7),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: fx.title,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              Text(
+                '${(pct * 100).round()}%',
+                style: TextStyle(color: fx.accent, fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

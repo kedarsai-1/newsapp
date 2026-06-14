@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show ChangeNotifier, kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
@@ -8,6 +10,12 @@ import '../constants.dart';
 import '../utils/feed_dedupe.dart';
 import '../utils/feed_language.dart';
 import '../utils/api_memory_cache.dart';
+
+enum AppLayoutMode {
+  dualDeck,
+  carouselWheel,
+  sidebarPanel,
+}
 
 class NewsProvider extends ChangeNotifier {
   List<NewsPost> _posts = [];
@@ -28,6 +36,10 @@ class NewsProvider extends ChangeNotifier {
   bool _refreshing = false;
   String? _error;
   String? _categoriesError;
+
+  AppLayoutMode _layoutMode = AppLayoutMode.sidebarPanel;
+  AppLayoutMode get layoutMode => _layoutMode;
+  static const String _layoutModePrefKey = 'app_layout_mode_v1';
 
   List<NewsPost> get posts => _posts;
   List<NewsPost> get searchResults => _searchResults;
@@ -85,10 +97,12 @@ class NewsProvider extends ChangeNotifier {
   static const String _onboardingInterestsKey = 'onboarding_interests';
   static const String _onboardingCityKey = 'onboarding_city';
   static const String _onboardingNotifKey = 'onboarding_notifications_enabled';
+  static const String _seenPostsKey = 'seen_post_ids_v1';
 
   bool _prefsLoaded = false;
   bool _languageOnboardingCompleted = false;
   bool _hasStoredFeedLanguagePreference = false;
+  final Set<String> _seenPostIds = {};
 
   /// Raw onboarding pick (en/te/hi/ta/…) — used when feed filter is "all".
   String? _onboardingUiLanguage;
@@ -127,6 +141,17 @@ class NewsProvider extends ChangeNotifier {
     _selectedLanguage = prefs.getString(_languagePrefKey) ?? 'all';
     _onboardingUiLanguage = prefs.getString(_onboardingUiLangKey);
     _preferredCity = prefs.getString(_onboardingCityKey);
+    _seenPostIds
+      ..clear()
+      ..addAll(prefs.getStringList(_seenPostsKey) ?? const []);
+
+    final layoutStr = prefs.getString(_layoutModePrefKey);
+    if (layoutStr != null) {
+      _layoutMode = AppLayoutMode.values.firstWhere(
+        (e) => e.name == layoutStr,
+        orElse: () => AppLayoutMode.sidebarPanel,
+      );
+    }
 
     final done = prefs.getBool(_languageOnboardingKey);
     if (done != null) {
@@ -144,6 +169,13 @@ class NewsProvider extends ChangeNotifier {
     // Prime category IDs for Browse / chips before the first full feed refresh.
     loadCategories();
     _wireRealtimeFeedRefresh();
+  }
+
+  Future<void> setLayoutMode(AppLayoutMode mode) async {
+    _layoutMode = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_layoutModePrefKey, mode.name);
+    notifyListeners();
   }
 
   /// Mobile: refresh when server cron inserts stories. Web polls on FeedScreen timer.
@@ -186,6 +218,14 @@ class NewsProvider extends ChangeNotifier {
     await prefs.setBool(_languageOnboardingKey, true);
     notifyListeners();
     await refresh();
+  }
+
+  /// Clears onboarding completion so the Dailyhunt flow can run again.
+  Future<void> resetOnboarding() async {
+    _languageOnboardingCompleted = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_languageOnboardingKey, false);
+    notifyListeners();
   }
 
   /// Persists the full Dailyhunt-style onboarding flow and applies feed language, interests, and city.
@@ -418,7 +458,7 @@ class NewsProvider extends ChangeNotifier {
         city: _cityForFeedQuery(),
         search: q,
         days: 30,
-        sourceTypes: const ['api', 'manual', 'rss', 'html'],
+        sourceTypes: const ['api', 'manual', 'rss', 'html', 'youtube'],
       );
       if (requestId != _searchRequestId) return;
       if (res['success'] == true) {
@@ -642,7 +682,7 @@ class NewsProvider extends ChangeNotifier {
         // RSS items in your DB are ~15 days old, so 7 days hides everything.
         // Once NewsAPI ingestion is confirmed working, you can tighten back to 7.
         days: 30,
-        sourceTypes: const ['api', 'manual', 'rss', 'html'],
+        sourceTypes: const ['api', 'manual', 'rss', 'html', 'youtube'],
       );
       if (res['success'] == true) {
         final rawPosts = (res['posts'] as List)
@@ -685,6 +725,47 @@ class NewsProvider extends ChangeNotifier {
     final index = _posts.indexWhere((p) => p.id == postId);
     if (index == -1) return;
     // Posts are immutable — rebuild with updated values via fromJson
+    notifyListeners();
+  }
+
+  bool isPostSeen(String postId) => _seenPostIds.contains(postId);
+
+  Future<void> markPostAsSeen(String postId) async {
+    if (postId.isEmpty || _seenPostIds.contains(postId)) return;
+    _seenPostIds.add(postId);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_seenPostsKey, _seenPostIds.toList());
+    if (ApiService.isAuthenticated) {
+      unawaited(ApiService.markPostSeen(postId));
+    }
+  }
+
+  /// Loads breaking headlines for Quick News mode.
+  Future<void> loadBreakingFeed() async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final res = await ApiService.getFeed(
+        page: 1,
+        language: selectedLanguage,
+        breaking: true,
+        days: 7,
+      );
+      if (res['success'] == true && res['posts'] is List) {
+        _posts = (res['posts'] as List)
+            .map((p) => NewsPost.fromJson(Map<String, dynamic>.from(p as Map)))
+            .toList();
+        _hasMore = false;
+        _error = null;
+      } else {
+        _error = res['message']?.toString() ?? 'Could not load breaking news.';
+      }
+    } catch (e) {
+      _error = _formatError(e);
+    }
+    _loading = false;
     notifyListeners();
   }
 }

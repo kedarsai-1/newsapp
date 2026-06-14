@@ -34,6 +34,9 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
   void initState() {
     super.initState();
     _pageController = PageController(viewportFraction: 0.92);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NewsProvider>().loadBreakingFeed();
+    });
   }
 
   @override

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../onboarding_design.dart';
 
-/// White scaffold + scroll area + sticky bottom primary action for onboarding steps.
+/// Theme-aware scaffold + scroll area + sticky bottom primary action for onboarding steps.
 class OnboardingStepShell extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -73,11 +73,15 @@ class OnboardingPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = isDark ? OnboardingDesign.titleColor(context) : Colors.white;
     return FilledButton(
       onPressed: onPressed,
       style: FilledButton.styleFrom(
-        backgroundColor: OnboardingDesign.accent(context),
-        foregroundColor: Colors.white,
+        backgroundColor: isDark
+            ? OnboardingDesign.surfaceElevated(context)
+            : OnboardingDesign.accent(context),
+        foregroundColor: fg,
         disabledBackgroundColor: OnboardingDesign.outline(context),
         disabledForegroundColor: OnboardingDesign.subtitleColor(context),
         padding: const EdgeInsets.symmetric(vertical: 16),

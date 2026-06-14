@@ -14,11 +14,15 @@ import '../../services/auth_provider.dart';
 import '../../constants.dart';
 import '../../users/media_widgets.dart';
 import '../../widgets/location_label.dart';
+import '../../utils/article_detail_text.dart';
 import '../../utils/text_truncation.dart';
+import '../../providers/news_provider.dart';
+import '../../widgets/feed/article_youtube_player.dart';
 import '../../widgets/shimmer_widgets.dart';
 
-/// Media shown below the byline: videos, multi-asset posts, or extra items after the app-bar hero image.
+/// Media shown below the byline — skip YouTube posts (handled by [ArticleYoutubePlayer]).
 List<MediaItem> _bodyMediaForGallery(NewsPost post) {
+  if (post.isYoutube) return const [];
   final list = post.media;
   if (list.isEmpty) return const [];
   if (list.length == 1) {
@@ -67,6 +71,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       setState(() {
         if (postRes['success'] == true) {
           _post = NewsPost.fromJson(postRes['post']);
+          context.read<NewsProvider>().markPostAsSeen(widget.postId);
         }
         if (commentRes['success'] == true) {
           _comments = (commentRes['comments'] as List)
@@ -84,11 +89,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   /// Article detail shows the stored AI summary — not the raw RSS body or scraped full article.
-  String _displayText(NewsPost post) {
-    final summary = post.summary?.trim() ?? '';
-    if (summary.isNotEmpty) return summary;
-    return post.body.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
+  String? _bodyText(NewsPost post) => articleDetailBodyText(post);
 
   Future<void> _openSourceArticle() async {
     final url = _post?.sourceUrl?.trim();
@@ -509,6 +510,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       );
     }
     final post = _post!;
+    final showHeroImage = !post.isYoutube &&
+        post.hasImages &&
+        !_looksLikeLogoUrl(post.firstImage!.url);
 
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(
@@ -526,19 +530,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           slivers: [
             SliverAppBar(
               stretch: true,
-              expandedHeight:
-                  (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url))
-                      ? 220
-                      : 0,
+              expandedHeight: showHeroImage ? 220 : 0,
               pinned: true,
               backgroundColor:
-                  (post.hasImages && !_looksLikeLogoUrl(post.firstImage!.url))
-                      ? p.surface.withValues(alpha: 0.62)
-                      : p.surface,
+                  showHeroImage ? p.surface.withValues(alpha: 0.62) : p.surface,
               foregroundColor: Colors.white,
               iconTheme: IconThemeData(color: actionIconColor),
-              flexibleSpace: (post.hasImages &&
-                      !_looksLikeLogoUrl(post.firstImage!.url))
+              flexibleSpace: showHeroImage
                   ? FlexibleSpaceBar(
                       stretchModes: const [
                         StretchMode.zoomBackground,
@@ -588,8 +586,6 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                   placeholder: (_, __) => Container(
                                     color: Colors.transparent,
                                     alignment: Alignment.center,
-                                    child: const CircularProgressIndicator(
-                                        strokeWidth: 2),
                                   ),
                                   errorWidget: (_, __, ___) => Container(
                                     color: Colors.transparent,
@@ -735,6 +731,10 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (post.isYoutube && (post.youtube?.videoId ?? '').isNotEmpty) ...[
+                          ArticleYoutubePlayer(post: post),
+                          const SizedBox(height: 16),
+                        ],
                         // Title Editorial Card
                         GlassCard(
                           margin: const EdgeInsets.only(bottom: 24),
@@ -897,21 +897,22 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                         Divider(height: 1, color: p.glassBorder),
                         const SizedBox(height: AppSpacing.s16),
 
-                        // AI summary (full stored summary — feed cards use shorter snippets)
-                        ..._paragraphs(
-                          _displayText(post),
-                          Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: p.textPrimary,
-                                    fontSize: 15,
-                                    height: 1.85,
-                                  ) ??
-                              TextStyle(
-                                fontSize: 15,
-                                height: 1.85,
-                                color: p.textPrimary,
-                              ),
-                          context,
-                        ),
+                        if (_bodyText(post) != null) ...[
+                          ..._paragraphs(
+                            _bodyText(post)!,
+                            Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      color: p.textPrimary,
+                                      fontSize: 15,
+                                      height: 1.85,
+                                    ) ??
+                                TextStyle(
+                                  fontSize: 15,
+                                  height: 1.85,
+                                  color: p.textPrimary,
+                                ),
+                            context,
+                          ),
+                        ],
 
                         // Tags
                         if (post.tags.isNotEmpty) ...[

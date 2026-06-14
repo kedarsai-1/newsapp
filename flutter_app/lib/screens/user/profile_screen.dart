@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../providers/news_provider.dart';
+import '../../providers/onboarding_draft_provider.dart';
 import '../../providers/reporter_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/auth_provider.dart';
@@ -64,6 +65,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     labelPadding: EdgeInsets.symmetric(horizontal: 2),
   );
 
+  Future<void> _editProfile(BuildContext context, String currentName) async {
+    final controller = TextEditingController(text: currentName);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit profile'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'Display name'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (updated == null || updated.isEmpty || !context.mounted) return;
+    final ok = await context.read<AuthProvider>().updateProfile(name: updated);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'Profile updated' : 'Could not update profile'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
@@ -119,6 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _UserIdentity(
                         userName: user.name,
                         userEmail: user.email,
+                        onEdit: () => _editProfile(context, user.name),
                       ),
                     DailyhuntSettingsSection(
                       title: I18n.t(context, 'section_language'),
@@ -180,6 +212,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onSelectionChanged: (modes) {
                           context.read<ThemeProvider>().setThemeMode(modes.first);
                         },
+                      ),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: 'Onboarding',
+                      child: XpressoSettingsRow(
+                        icon: Icons.tour_outlined,
+                        title: 'Replay setup',
+                        subtitle:
+                            'Language, interests, location, and notifications',
+                        onTap: () async {
+                          context.read<OnboardingDraftProvider>().reset();
+                          await context.read<NewsProvider>().resetOnboarding();
+                          if (!context.mounted) return;
+                          context.go('/onboarding/language');
+                        },
+                      ),
+                    ),
+                    DailyhuntSettingsSection(
+                      title: 'App Skeleton Layout',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SegmentedButton<AppLayoutMode>(
+                            segments: const [
+                              ButtonSegment(
+                                value: AppLayoutMode.dualDeck,
+                                label: Text('Dual-Deck'),
+                                icon: Icon(Icons.swap_horiz_rounded, size: 16),
+                              ),
+                              ButtonSegment(
+                                value: AppLayoutMode.carouselWheel,
+                                label: Text('Carousel'),
+                                icon: Icon(Icons.view_carousel_rounded, size: 16),
+                              ),
+                              ButtonSegment(
+                                value: AppLayoutMode.sidebarPanel,
+                                label: Text('Sidebar'),
+                                icon: Icon(Icons.view_sidebar_rounded, size: 16),
+                              ),
+                            ],
+                            selected: {news.layoutMode},
+                            onSelectionChanged: (modes) {
+                              news.setLayoutMode(modes.first);
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            news.layoutMode == AppLayoutMode.dualDeck
+                                ? 'Swipe horizontally to discover categories.'
+                                : news.layoutMode == AppLayoutMode.carouselWheel
+                                    ? 'Scroll categories in a 3D dial wheel at the top.'
+                                    : 'Categories slide out from the left sidebar panel.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: fx.summary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Theme(
@@ -348,10 +440,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 class _UserIdentity extends StatelessWidget {
   final String userName;
   final String userEmail;
+  final VoidCallback? onEdit;
 
   const _UserIdentity({
     required this.userName,
     required this.userEmail,
+    this.onEdit,
   });
 
   @override
@@ -359,7 +453,10 @@ class _UserIdentity extends StatelessWidget {
     final fx = FeedXpressoTheme.fx(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onEdit,
+        child: Row(
         children: [
           CircleAvatar(
             radius: 22,
@@ -404,6 +501,7 @@ class _UserIdentity extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

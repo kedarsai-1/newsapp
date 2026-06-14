@@ -155,7 +155,16 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
             parent: ClampingScrollPhysics(),
           ),
           slivers: [
-            const XpressoSliverAppBar(title: 'Cricket'),
+            XpressoSliverAppBar(
+              title: 'Cricket',
+              actions: [
+                IconButton(
+                  tooltip: 'Leaderboard',
+                  onPressed: () => context.push('/sports/leaderboard'),
+                  icon: const Icon(Icons.emoji_events_outlined),
+                ),
+              ],
+            ),
             SliverToBoxAdapter(child: _LiveSection(onMatchTap: _openMatch)),
             SliverToBoxAdapter(
               child: Padding(

@@ -294,3 +294,78 @@ class SportsHighlight {
     );
   }
 }
+
+class MatchPoll {
+  final String id;
+  final String optionATitle;
+  final String optionBTitle;
+  final int votesA;
+  final int votesB;
+  final String? userVote;
+  final bool? userVoteCorrect;
+  final bool isResolved;
+  final String? winnerOption;
+
+  const MatchPoll({
+    required this.id,
+    required this.optionATitle,
+    required this.optionBTitle,
+    this.votesA = 0,
+    this.votesB = 0,
+    this.userVote,
+    this.userVoteCorrect,
+    this.isResolved = false,
+    this.winnerOption,
+  });
+
+  int get totalVotes => votesA + votesB;
+
+  factory MatchPoll.fromJson(Map<String, dynamic> j) => MatchPoll(
+        id: j['id']?.toString() ?? '',
+        optionATitle: j['optionATitle']?.toString() ?? 'Team A',
+        optionBTitle: j['optionBTitle']?.toString() ?? 'Team B',
+        votesA: int.tryParse('${j['votesA']}') ?? 0,
+        votesB: int.tryParse('${j['votesB']}') ?? 0,
+        userVote: j['userVote']?.toString(),
+        userVoteCorrect: j['userVoteCorrect'] as bool?,
+        isResolved: j['isResolved'] == true,
+        winnerOption: j['winnerOption']?.toString(),
+      );
+}
+
+class SportsMatchDetail {
+  final SportsMatch match;
+  final MatchPoll? poll;
+
+  const SportsMatchDetail({required this.match, this.poll});
+}
+
+class LeaderboardEntry {
+  final String id;
+  final String name;
+  final String? avatar;
+  final int points;
+  final int predictionStreak;
+  final int maxPredictionStreak;
+  final int rank;
+
+  const LeaderboardEntry({
+    required this.id,
+    required this.name,
+    this.avatar,
+    this.points = 0,
+    this.predictionStreak = 0,
+    this.maxPredictionStreak = 0,
+    this.rank = 0,
+  });
+
+  factory LeaderboardEntry.fromJson(Map<String, dynamic> j) => LeaderboardEntry(
+        id: j['id']?.toString() ?? '',
+        name: j['name']?.toString() ?? 'User',
+        avatar: j['avatar']?.toString(),
+        points: int.tryParse('${j['points']}') ?? 0,
+        predictionStreak: int.tryParse('${j['predictionStreak']}') ?? 0,
+        maxPredictionStreak: int.tryParse('${j['maxPredictionStreak']}') ?? 0,
+        rank: int.tryParse('${j['rank']}') ?? 0,
+      );
+}

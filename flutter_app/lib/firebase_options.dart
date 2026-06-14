@@ -9,9 +9,13 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static const String _placeholder = 'REPLACE_ME';
 
-  /// True when real Firebase project values are present (not template placeholders).
-  static bool get isConfigured =>
-      android.apiKey != _placeholder && ios.apiKey != _placeholder;
+  /// True when real Firebase project values are present for the current platform.
+  static bool get isConfigured {
+    if (kIsWeb) {
+      return web.apiKey != _placeholder && web.appId != _placeholder;
+    }
+    return android.apiKey != _placeholder && ios.apiKey != _placeholder;
+  }
 
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {

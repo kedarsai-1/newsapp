@@ -125,7 +125,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                 color: OnboardingDesign.subtitleColor(context).withValues(alpha: 0.85),
               ),
               filled: true,
-              fillColor: const Color(0xFFF9FAFB),
+              fillColor: OnboardingDesign.tileBackground(context),
               border: OutlineInputBorder(
                 borderRadius:
                     BorderRadius.circular(OnboardingDesign.radiusCard),
@@ -159,7 +159,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                   borderRadius:
                       BorderRadius.circular(OnboardingDesign.radiusCard),
                   border: Border.all(color: OnboardingDesign.outline(context)),
-                  color: const Color(0xFFF9FAFB),
+                  color: OnboardingDesign.tileBackground(context),
                 ),
                 child: Row(
                   children: [
@@ -239,7 +239,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                       ),
                       color: picked
                           ? OnboardingDesign.accent(context).withValues(alpha: 0.06)
-                          : Colors.white,
+                          : OnboardingDesign.tileBackground(context),
                     ),
                     child: Row(
                       children: [

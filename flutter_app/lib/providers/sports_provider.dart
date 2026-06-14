@@ -187,14 +187,31 @@ class SportsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<SportsMatch?> fetchMatchDetail(String id) async {
+  Future<SportsMatchDetail?> fetchMatchDetail(String id) async {
     final res = await SportsApiService.getMatch(id);
     if (res['success'] == true && res['match'] is Map) {
-      return SportsMatch.fromJson(
+      final match = SportsMatch.fromJson(
         Map<String, dynamic>.from(res['match'] as Map),
       );
+      MatchPoll? poll;
+      if (res['poll'] is Map) {
+        poll = MatchPoll.fromJson(Map<String, dynamic>.from(res['poll'] as Map));
+      }
+      return SportsMatchDetail(match: match, poll: poll);
     }
     return null;
+  }
+
+  Future<MatchPoll?> voteMatchPoll(String matchId, String option) async {
+    final res = await SportsApiService.votePoll(matchId, option);
+    if (res['success'] == true && res['poll'] is Map) {
+      return MatchPoll.fromJson(Map<String, dynamic>.from(res['poll'] as Map));
+    }
+    return null;
+  }
+
+  Future<Map<String, dynamic>> fetchLeaderboard() async {
+    return SportsApiService.getLeaderboard();
   }
 
   @override

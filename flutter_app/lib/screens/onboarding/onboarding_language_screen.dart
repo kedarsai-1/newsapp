@@ -58,7 +58,7 @@ class OnboardingLanguageScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: selected
                             ? OnboardingDesign.accent(context).withValues(alpha: 0.1)
-                            : const Color(0xFFF9FAFB),
+                            : OnboardingDesign.tileBackground(context),
                         borderRadius:
                             BorderRadius.circular(OnboardingDesign.radiusCard),
                         border: Border.all(

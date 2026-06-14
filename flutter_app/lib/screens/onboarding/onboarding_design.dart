@@ -9,11 +9,15 @@ abstract final class OnboardingDesign {
   static const double radiusButton = 14;
 
   static Color background(BuildContext c) => FeedXpressoTheme.fx(c).background;
+  static Color surface(BuildContext c) => FeedXpressoTheme.fx(c).surface;
+  static Color surfaceElevated(BuildContext c) =>
+      FeedXpressoTheme.fx(c).surfaceElevated;
   static Color accent(BuildContext c) => FeedXpressoTheme.fx(c).accent;
   static Color accentDark(BuildContext c) => FeedXpressoTheme.fx(c).accent;
   static Color titleColor(BuildContext c) => FeedXpressoTheme.fx(c).title;
   static Color subtitleColor(BuildContext c) => FeedXpressoTheme.fx(c).summary;
   static Color outline(BuildContext c) => FeedXpressoTheme.fx(c).divider;
+  static Color tileBackground(BuildContext c) => FeedXpressoTheme.fx(c).chipInactiveBg;
 
   static TextStyle titleStyle(BuildContext c) => GoogleFonts.notoSans(
         fontSize: 26,

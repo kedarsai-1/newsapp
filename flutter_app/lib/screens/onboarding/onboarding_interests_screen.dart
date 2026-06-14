@@ -40,7 +40,7 @@ class OnboardingInterestsScreen extends StatelessWidget {
             selected: selected,
             showCheckmark: false,
             selectedColor: OnboardingDesign.accent(context).withValues(alpha: 0.14),
-            backgroundColor: const Color(0xFFF9FAFB),
+            backgroundColor: OnboardingDesign.tileBackground(context),
             side: BorderSide(
               color:
                   selected ? OnboardingDesign.accent(context) : OnboardingDesign.outline(context),

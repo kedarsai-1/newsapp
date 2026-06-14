@@ -22,6 +22,7 @@ class CompactNewsRow extends StatelessWidget {
   final int summaryMaxLines;
   final bool showDivider;
   final bool showSummary;
+  final bool showPlayOverlay;
   final VoidCallback? onImageUnavailable;
 
   const CompactNewsRow({
@@ -40,6 +41,7 @@ class CompactNewsRow extends StatelessWidget {
     this.summaryMaxLines = FeedXpressoTheme.summaryMaxLines,
     this.showDivider = true,
     this.showSummary = false,
+    this.showPlayOverlay = false,
     this.onImageUnavailable,
   });
 
@@ -75,6 +77,7 @@ class CompactNewsRow extends StatelessWidget {
                       fx: fx,
                       url: url,
                       memCacheWidth: memW,
+                      showPlayOverlay: showPlayOverlay,
                       onUnavailable: onImageUnavailable,
                     ),
                   if (url.isNotEmpty)
@@ -205,12 +208,14 @@ class _HeroImage extends StatefulWidget {
   final FeedXpressoPalette fx;
   final String url;
   final int memCacheWidth;
+  final bool showPlayOverlay;
   final VoidCallback? onUnavailable;
 
   const _HeroImage({
     required this.fx,
     required this.url,
     required this.memCacheWidth,
+    this.showPlayOverlay = false,
     this.onUnavailable,
   });
 
@@ -312,6 +317,14 @@ class _HeroImageState extends State<_HeroImage> {
                     ),
                   ),
                 ),
+                if (widget.showPlayOverlay)
+                  Center(
+                    child: Icon(
+                      Icons.play_circle_fill_rounded,
+                      size: 56,
+                      color: Colors.white.withValues(alpha: 0.92),
+                    ),
+                  ),
               ],
             ),
           );

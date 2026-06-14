@@ -11,6 +11,7 @@ class DailyhuntFeedArticleCard extends StatefulWidget {
   final NewsPost post;
   final bool liked;
   final bool saved;
+  final bool isRead;
   final VoidCallback onOpen;
   final Future<bool> Function() onLike;
   final VoidCallback onShare;
@@ -21,6 +22,7 @@ class DailyhuntFeedArticleCard extends StatefulWidget {
     required this.post,
     required this.liked,
     required this.saved,
+    this.isRead = false,
     required this.onOpen,
     required this.onLike,
     required this.onShare,
@@ -144,8 +146,10 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
     final fx = FeedXpressoTheme.fx(context);
     final shareCount = _countLabel(widget.post.views > 0 ? widget.post.views : widget.post.likes);
 
-    return RepaintBoundary(
-      child: CompactNewsRow(
+    return Opacity(
+      opacity: widget.isRead ? 0.72 : 1,
+      child: RepaintBoundary(
+        child: CompactNewsRow(
         title: widget.post.title,
         titleMaxLines: 3,
         showSummary: false,
@@ -153,6 +157,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
         sourceName: _sourceName,
         timeLabel: timeago.format(widget.post.displayTime),
         showVerified: true,
+        showPlayOverlay: widget.post.isYoutube,
         onTap: widget.onOpen,
         onImageUnavailable: _onImageUnavailable,
         footerActions: [
@@ -174,6 +179,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
           ),
         ],
       ),
+    ),
     );
   }
 }

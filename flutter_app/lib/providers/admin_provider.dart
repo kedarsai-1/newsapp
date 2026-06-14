@@ -181,4 +181,26 @@ class AdminProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<Map<String, dynamic>> runYoutubeIngestion() async =>
+      ApiService.runYoutubeIngestion();
+
+  Future<Map<String, dynamic>> runPoliticalVideoIngestion() async =>
+      ApiService.runPoliticalVideoIngestion();
+
+  Future<Map<String, dynamic>> backfillThumbnails() async =>
+      ApiService.backfillThumbnails();
+
+  Future<bool> featurePost(
+    String id, {
+    bool? isBreaking,
+    bool? isFeatured,
+  }) async {
+    final res = await ApiService.featurePost(
+      id,
+      isBreaking: isBreaking,
+      isFeatured: isFeatured,
+    );
+    return res['success'] == true;
+  }
 }

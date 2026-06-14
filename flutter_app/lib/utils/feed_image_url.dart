@@ -57,5 +57,9 @@ String feedImageUrlForPost(NewsPost post) {
     if (raw.isEmpty || isUnusableFeedImageUrl(raw)) continue;
     return AppConstants.imageUrlForDisplay(raw, articleReferer: post.sourceUrl);
   }
+  final ytThumb = post.youtubeThumbnailUrl.trim();
+  if (ytThumb.isNotEmpty) {
+    return AppConstants.imageUrlForDisplay(ytThumb, articleReferer: post.sourceUrl);
+  }
   return '';
 }

@@ -35,8 +35,10 @@ import 'screens/user/political_reels_screen.dart';
 import 'screens/user/quick_news_screen.dart';
 import 'screens/user/categories_screen.dart';
 import 'screens/user/sports/sports_home_screen.dart';
+import 'screens/user/sports/leaderboard_screen.dart';
 import 'screens/user/sports/match_detail_screen.dart';
 import 'screens/user/article_detail_screen.dart';
+import 'screens/user/ai_chat_screen.dart';
 import 'screens/user/bookmarks_screen.dart';
 import 'screens/user/profile_screen.dart';
 import 'screens/user/privacy_policy_screen.dart';
@@ -92,7 +94,11 @@ class _RouterRefreshListenable extends ChangeNotifier {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: 'assets/.env');
-  await PushNotifications.bootstrap();
+  try {
+    await PushNotifications.bootstrap();
+  } catch (e, st) {
+    debugPrint('[Push] bootstrap skipped: $e\n$st');
+  }
   final themeProvider = ThemeProvider();
   await themeProvider.load();
   runApp(NewsApp(themeProvider: themeProvider));
@@ -203,6 +209,8 @@ GoRouter createAppRouter(BuildContext context) {
           loc == '/settings' ||
           loc == '/profile' ||
           loc == '/privacy-policy' ||
+          loc == '/ai-chat' ||
+          loc == '/sports/leaderboard' ||
           loc.startsWith('/article/');
 
       if (!loggedIn && goingToUserRoute) return null;
@@ -363,10 +371,24 @@ GoRouter createAppRouter(BuildContext context) {
             ),
           ),
           GoRoute(
+            path: '/sports/leaderboard',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const LeaderboardScreen(),
+            ),
+          ),
+          GoRoute(
             path: '/article/:id',
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
               child: ArticleDetailScreen(postId: state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/ai-chat',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const AiChatScreen(),
             ),
           ),
           GoRoute(

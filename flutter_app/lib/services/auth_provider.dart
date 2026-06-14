@@ -130,6 +130,35 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> updateProfile({String? name, String? phone, String? bio}) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final res = await ApiService.updateProfile(
+        name: name,
+        phone: phone,
+        bio: bio,
+      );
+      if (res['success'] == true && res['user'] is Map) {
+        _user = User.fromJson(Map<String, dynamic>.from(res['user'] as Map));
+        await _saveUser(_user!);
+        _loading = false;
+        notifyListeners();
+        return true;
+      }
+      _error = res['message']?.toString() ?? 'Could not update profile.';
+      _loading = false;
+      notifyListeners();
+      return false;
+    } catch (_) {
+      _error = 'Connection error. Check your network.';
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // Used by OTP auth flows after backend verifies the code.
   Future<void> loginWithToken(String token, Map<String, dynamic> userJson) async {
     await ApiService.saveToken(token);

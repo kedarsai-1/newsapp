@@ -20,6 +20,8 @@ class FeedListView extends StatefulWidget {
   final Future<bool> Function(NewsPost) onBookmark;
   final void Function(NewsPost) onShare;
   final void Function(NewsPost) onOpen;
+  final bool Function(String postId) isPostSeen;
+  final Widget? listHeader;
 
   const FeedListView({
     super.key,
@@ -34,6 +36,8 @@ class FeedListView extends StatefulWidget {
     required this.onBookmark,
     required this.onShare,
     required this.onOpen,
+    required this.isPostSeen,
+    this.listHeader,
   });
 
   @override
@@ -48,7 +52,9 @@ class _FeedListViewState extends State<FeedListView>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final itemCount = widget.posts.length + (widget.loadingMore ? 1 : 0);
+    final header = widget.listHeader;
+    final itemCount =
+        widget.posts.length + (widget.loadingMore ? 1 : 0) + (header != null ? 1 : 0);
 
     final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
@@ -67,6 +73,10 @@ class _FeedListViewState extends State<FeedListView>
           padding: FeedListTuning.listPadding.copyWith(bottom: widget.bottomInset),
           itemCount: itemCount,
           itemBuilder: (context, index) {
+            if (header != null) {
+              if (index == 0) return header;
+              index -= 1;
+            }
             if (index >= widget.posts.length) {
               return const FeedListLoadingFooter();
             }
@@ -74,6 +84,7 @@ class _FeedListViewState extends State<FeedListView>
             return DailyhuntFeedArticleCard(
               key: ValueKey(post.id),
               post: post,
+              isRead: widget.isPostSeen(post.id),
               liked: widget.likedByPostId[post.id] ?? false,
               saved: widget.bookmarkedByPostId[post.id] ?? false,
               onOpen: () => widget.onOpen(post),

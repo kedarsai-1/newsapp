@@ -67,8 +67,11 @@ class AppConstants {
       int.tryParse(dotenv.env['PAGE_SIZE'] ?? '20') ?? 20;
   static int get maxMediaFiles =>
       int.tryParse(dotenv.env['MAX_MEDIA_FILES'] ?? '10') ?? 10;
-  static bool get isDevelopment =>
-      (dotenv.env['APP_ENV'] ?? 'development') == 'development';
+  /// Must exceed server chat budget (context + Ollama + buffer); default 120s.
+  static Duration get chatRequestTimeout {
+    final sec = int.tryParse(dotenv.env['CHAT_CLIENT_TIMEOUT_SEC'] ?? '') ?? 120;
+    return Duration(seconds: sec.clamp(60, 300));
+  }
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
   static const String guestLikesKey = 'guest_likes';

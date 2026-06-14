@@ -889,7 +889,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child:
-                                MediaGallery(media: _bodyMediaForGallery(post), post: post),
+                                MediaGallery(media: _bodyMediaForGallery(post)),
                           ),
                         ],
 

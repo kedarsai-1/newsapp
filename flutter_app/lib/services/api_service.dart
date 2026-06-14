@@ -471,7 +471,7 @@ class ApiService {
               if (history != null && history.isNotEmpty) 'history': history,
             }),
           )
-          .timeout(const Duration(seconds: 65));
+          .timeout(AppConstants.chatRequestTimeout);
       final body = res.body.trim();
       if (body.isEmpty) {
         return {'success': false, 'message': 'Empty response from AI service.'};

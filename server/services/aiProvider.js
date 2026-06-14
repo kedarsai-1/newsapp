@@ -798,13 +798,48 @@ function modelIsInstalled(name, installed) {
   return installed.some((n) => n === name || n.startsWith(`${name}:`));
 }
 
+function ollamaTagsTimeoutMs() {
+  return Math.min(
+    30_000,
+    Math.max(5000, Number(process.env.OLLAMA_TAGS_TIMEOUT_MS || 15_000)),
+  );
+}
+
+function ollamaTagsRetries() {
+  return Math.max(0, Math.min(3, Number(process.env.OLLAMA_TAGS_RETRIES || 2)));
+}
+
+function isTransientOllamaError(err) {
+  const msg = String(err?.message || err || '');
+  return err?.name === 'TimeoutError'
+    || err?.name === 'AbortError'
+    || /timeout|timed out|ECONNREFUSED|ECONNRESET|fetch failed|network/i.test(msg);
+}
+
 async function fetchOllamaInstalledModels(baseUrl) {
-  const res = await fetch(`${baseUrl}/api/tags`, {
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return (data?.models || []).map((m) => m.name);
+  const timeoutMs = ollamaTagsTimeoutMs();
+  const retries = ollamaTagsRetries();
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const res = await fetch(`${baseUrl}/api/tags`, {
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return (data?.models || []).map((m) => m.name);
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => {
+          setTimeout(resolve, 400 * (attempt + 1));
+        });
+      }
+    }
+  }
+  throw lastErr;
 }
 
 function buildOllamaPingResult({ installed, required, modelsByLang, baseUrl }) {
@@ -824,6 +859,17 @@ async function pingOllamaAt(baseUrl, required, modelsByLang) {
     const installed = await fetchOllamaInstalledModels(baseUrl);
     return buildOllamaPingResult({ installed, required, modelsByLang, baseUrl });
   } catch (e) {
+    if (isTransientOllamaError(e)) {
+      return {
+        ok: false,
+        transient: true,
+        baseUrl,
+        error: e.message,
+        required,
+        missing: [],
+        modelsByLang,
+      };
+    }
     return {
       ok: false,
       baseUrl,
@@ -889,11 +935,21 @@ async function pingOllama() {
   };
 }
 
-const OLLAMA_CHAT_STATUS_TTL_MS = Math.max(
+const OLLAMA_CHAT_STATUS_OK_TTL_MS = Math.max(
   10_000,
   Number(process.env.OLLAMA_HEALTH_TTL_MS || 60_000),
 );
-let ollamaChatStatusCache = { at: 0, payload: null };
+const OLLAMA_CHAT_STATUS_FAIL_TTL_MS = Math.max(
+  3000,
+  Number(process.env.OLLAMA_HEALTH_FAIL_TTL_MS || 5000),
+);
+
+function ollamaChatStatusCacheTtl(payload) {
+  if (payload?.ok) return OLLAMA_CHAT_STATUS_OK_TTL_MS;
+  return OLLAMA_CHAT_STATUS_FAIL_TTL_MS;
+}
+
+let ollamaChatStatusCache = { at: 0, ttl: 0, payload: null };
 
 async function getOllamaChatStatus(forceRefresh = false) {
   if (!isOllamaProvider()) return { ok: false, skipped: true };
@@ -902,7 +958,7 @@ async function getOllamaChatStatus(forceRefresh = false) {
   if (
     !forceRefresh
     && ollamaChatStatusCache.payload
-    && now - ollamaChatStatusCache.at < OLLAMA_CHAT_STATUS_TTL_MS
+    && now - ollamaChatStatusCache.at < ollamaChatStatusCache.ttl
   ) {
     return ollamaChatStatusCache.payload;
   }
@@ -938,8 +994,16 @@ async function getOllamaChatStatus(forceRefresh = false) {
     };
   }
 
-  ollamaChatStatusCache = { at: now, payload };
+  ollamaChatStatusCache = { at: now, ttl: ollamaChatStatusCacheTtl(payload), payload };
   return payload;
+}
+
+/** True when chat models are confirmed absent (not a busy/timeout ping). */
+function ollamaChatModelsConfirmedMissing(status) {
+  return status?.ok !== true
+    && !status?.transient
+    && Array.isArray(status?.missing)
+    && status.missing.length > 0;
 }
 
 function isOllamaAbortError(err) {
@@ -1049,6 +1113,7 @@ module.exports = {
   translateToFeedLanguage,
   pingOllama,
   getOllamaChatStatus,
+  ollamaChatModelsConfirmedMissing,
   ollamaChatBaseUrl,
   ollamaInstancesSeparate,
   ollamaModelForLanguage,

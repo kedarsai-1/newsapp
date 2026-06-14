@@ -36,6 +36,11 @@
 	<string>We need photo library access to select images and videos from your device.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>We need permission to save media to your photo library (if required).</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

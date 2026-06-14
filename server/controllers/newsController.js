@@ -1299,12 +1299,17 @@ async function chatWithNews(req, res) {
     try {
       const ollamaStatus = await aiProvider.getOllamaChatStatus();
       if (res.headersSent) return;
-      if (!ollamaStatus.ok) {
+      if (aiProvider.ollamaChatModelsConfirmedMissing(ollamaStatus)) {
         return res.status(503).json({
           success: false,
           message: 'Ollama chat is not ready. Pull the configured chat models and try again.',
           ai: ollamaStatus,
         });
+      }
+      if (!ollamaStatus.ok && ollamaStatus.transient) {
+        console.warn(
+          `[ai-chat] Ollama tags check transient (${ollamaStatus.error}); proceeding with chat`,
+        );
       }
 
       const { runNewsChat } = require('../services/newsChatService');

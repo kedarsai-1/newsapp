@@ -57,8 +57,15 @@ String feedImageUrlForPost(NewsPost post) {
     if (raw.isEmpty || isUnusableFeedImageUrl(raw)) continue;
     return AppConstants.imageUrlForDisplay(raw, articleReferer: post.sourceUrl);
   }
+  for (final m in post.media) {
+    if (!m.isVideo) continue;
+    final thumb = (m.thumbnail ?? '').trim();
+    if (thumb.isNotEmpty && !isUnusableFeedImageUrl(thumb)) {
+      return AppConstants.imageUrlForDisplay(thumb, articleReferer: post.sourceUrl);
+    }
+  }
   final ytThumb = post.youtubeThumbnailUrl.trim();
-  if (ytThumb.isNotEmpty) {
+  if (ytThumb.isNotEmpty && !isUnusableFeedImageUrl(ytThumb)) {
     return AppConstants.imageUrlForDisplay(ytThumb, articleReferer: post.sourceUrl);
   }
   return '';

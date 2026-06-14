@@ -147,6 +147,19 @@ describe('aiProvider', () => {
     assert.equal(hasPendingChatWork(), false);
   });
 
+  it('ollamaChatModelsConfirmedMissing ignores transient ping failures', () => {
+    const { ollamaChatModelsConfirmedMissing } = require('../../services/aiProvider');
+    assert.equal(ollamaChatModelsConfirmedMissing({ ok: true }), false);
+    assert.equal(
+      ollamaChatModelsConfirmedMissing({ ok: false, transient: true, missing: [] }),
+      false,
+    );
+    assert.equal(
+      ollamaChatModelsConfirmedMissing({ ok: false, missing: ['gemma2:2b'] }),
+      true,
+    );
+  });
+
   it('chatHandlerTimeoutMs scales with queue depth', () => {
     const {
       chatHandlerTimeoutMs,

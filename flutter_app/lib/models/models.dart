@@ -364,6 +364,80 @@ class NewsPost {
         createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
       );
 
+  Map<String, dynamic> toJsonMap() => {
+        '_id': id,
+        'id': id,
+        'title': title,
+        'body': body,
+        'summary': summary,
+        'reporter': reporter != null
+            ? {
+                '_id': reporter!.id,
+                'id': reporter!.id,
+                'name': reporter!.name,
+                'avatar': reporter!.avatar,
+              }
+            : null,
+        'category': category != null
+            ? {
+                '_id': category!.id,
+                'id': category!.id,
+                'name': category!.name,
+                'slug': category!.slug,
+                'icon': category!.icon,
+                'color': category!.color,
+              }
+            : null,
+        'media': media
+            .map((m) => {
+                  '_id': m.id,
+                  'id': m.id,
+                  'type': m.type,
+                  'url': m.url,
+                  'thumbnail': m.thumbnail,
+                  'size': m.size,
+                })
+            .toList(),
+        'location': location != null
+            ? {
+                'latitude': location!.latitude,
+                'longitude': location!.longitude,
+                'address': location!.address,
+                'city': location!.city,
+                'state': location!.state,
+                'district': location!.district,
+                'mandal': location!.mandal,
+              }
+            : null,
+        'status': status,
+        'rejectionReason': rejectionReason,
+        'views': views,
+        'likes': likes,
+        'isBreaking': isBreaking,
+        'isFeatured': isFeatured,
+        'tags': tags,
+        'language': language,
+        'originalLanguage': originalLanguage,
+        'politicsScope': politicsScope,
+        'constituency': constituency,
+        'locationDistrict': locationDistrict,
+        'locationMandal': locationMandal,
+        'sourceUrl': sourceUrl,
+        'sourceName': sourceName,
+        'publisherName': publisherName,
+        'sourceType': sourceType,
+        'youtube': youtube != null
+            ? {
+                'videoId': youtube!.videoId,
+                'watchUrl': youtube!.watchUrl,
+                'channelTitle': youtube!.channelTitle,
+                'channelUrl': youtube!.channelUrl,
+              }
+            : null,
+        'sourcePublishedAt': sourcePublishedAt?.toIso8601String(),
+        'createdAt': createdAt.toIso8601String(),
+      };
+
   bool get hasImages => media.any((m) => m.isImage && m.url.trim().isNotEmpty);
   bool get hasVideos => media.any((m) => m.isVideo);
   MediaItem? get firstImage {

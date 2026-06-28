@@ -167,3 +167,4 @@ class HomeScreen extends StatelessWidget {
 Note that in `lib/screens/home_screen.dart`, the `itemCount` parameter of `ListView.builder()` is hardcoded to `4`. This means it will always show 4 cards regardless of whether the actual number of articles returned by the API is more or less than 4.
 
 In a real-world application, you should replace this with the actual length of the news list, and also remove the commented line mentioned above.
+

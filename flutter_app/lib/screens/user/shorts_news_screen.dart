@@ -9,6 +9,7 @@ import '../../providers/shorts_provider.dart';
 import '../../providers/shorts_playback_controller.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../services/video_playlist.dart';
 import '../../utils/i18n.dart';
 import '../../utils/post_share.dart';
 import '../../widgets/shorts/shorts_card_shimmer.dart';

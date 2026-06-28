@@ -22,7 +22,7 @@ class ArticleCache {
     final prefs = await SharedPreferences.getInstance();
     final payload = {
       'savedAt': DateTime.now().toIso8601String(),
-      'post': post.toJson(),
+      'post': post.toJsonMap(),
     };
     await prefs.setString(_key(post.id), jsonEncode(payload));
 

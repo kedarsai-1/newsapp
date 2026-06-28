@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
-import '../constants.dart';
-import '../models/models.dart';
-import '../services/video_playlist.dart';
-import '../utils/i18n.dart';
-import '../utils/theme_utils.dart';
-import '../widgets/feed/feed_xpresso_theme.dart';
-import '../widgets/feed/breaking_banner.dart';
-import '../widgets/shimmer_widgets.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/feed/article_youtube_player.dart';
+import 'package:go_router/go_router.dart';
 
-/// Video playlist screen showing all saved/watch later videos
+import '../../models/models.dart';
+import '../../services/video_playlist.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
+
+/// Video playlist screen showing saved watch-later videos.
 class VideoPlaylistScreen extends StatefulWidget {
   const VideoPlaylistScreen({super.key});
 
@@ -38,37 +34,25 @@ class _VideoPlaylistScreenState extends State<VideoPlaylistScreen> {
           _loading = false;
         });
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _removeVideo(String postId) async {
-    await VideoPlaylistService.remove(postId);
-    await _loadPlaylist();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Removed from playlist')),
-      );
-    }
-  }
-
-  void _clearAll() async {
+  Future<void> _clearAll() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Clear playlist?'),
-        content: Text('Remove all videos from your playlist?'),
+        title: const Text('Clear playlist?'),
+        content: const Text('Remove all videos from your playlist?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Clear'),
+            child: const Text('Clear'),
           ),
         ],
       ),
@@ -82,15 +66,15 @@ class _VideoPlaylistScreenState extends State<VideoPlaylistScreen> {
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    final isDark = ThemeUtils.isDarkMode(context);
+    final isDark = FeedXpressoTheme.isDark(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Watch Later'),
+        title: const Text('Watch Later'),
         actions: [
           if (_videos.isNotEmpty)
             IconButton(
-              icon: Icon(Icons.delete_sweep_outlined),
+              icon: const Icon(Icons.delete_sweep_outlined),
               tooltip: 'Clear all',
               onPressed: _clearAll,
             ),
@@ -115,17 +99,16 @@ class _VideoPlaylistScreenState extends State<VideoPlaylistScreen> {
                     itemBuilder: (context, index) {
                       final post = _videos[index];
                       return Card(
-                        margin: EdgeInsets.only(bottom: 12),
+                        margin: const EdgeInsets.only(bottom: 12),
                         child: InkWell(
-                          onTap: () => _openVideo(post),
+                          onTap: () => context.go('/article/${post.id}'),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Video thumbnail/player preview
                               AspectRatio(
                                 aspectRatio: 16 / 9,
                                 child: Container(
-                                  color: fx.surfaceDim,
+                                  color: fx.surfaceElevated,
                                   child: Center(
                                     child: Icon(
                                       Icons.play_circle_outline,
@@ -172,10 +155,5 @@ class _VideoPlaylistScreenState extends State<VideoPlaylistScreen> {
                   ),
                 ),
     );
-  }
-
-  void _openVideo(NewsPost post) {
-    // Could open in a video player or navigate to article detail
-    context.go('/article/${post.id}');
   }
 }

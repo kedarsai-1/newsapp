@@ -328,6 +328,11 @@ class NewsProvider extends ChangeNotifier {
       _activeLocationSlot = 0;
     }
     _applyActiveSavedLocation(notify: false);
+
+    // Sync saved locations from server if logged in
+    if (ApiService.isAuthenticated) {
+      _syncLocationsFromServer();
+    }
     _seenPostIds
       ..clear()
       ..addAll(prefs.getStringList(_seenPostsKey) ?? const []);
@@ -720,6 +725,45 @@ class NewsProvider extends ChangeNotifier {
     }
     _clearSearchState();
     notifyListeners();
+  }
+
+  /// Sync saved locations from server when logged in.
+  Future<void> _syncLocationsFromServer() async {
+    try {
+      final res = await ApiService.getSavedLocations();
+      if (res['success'] != true) return;
+
+      final locations = res['locations'] as List? ?? [];
+      final prefs = await SharedPreferences.getInstance();
+
+      // Merge server locations with local ones
+      for (final loc in locations) {
+        if (loc is! Map) continue;
+        final slot = loc['slot'] as int?;
+        if (slot == null || slot < 0 || slot >= maxSavedLocations) continue;
+
+        final placeData = loc['place'];
+        if (placeData is! Map) continue;
+
+        try {
+          final place = SavedLocalPlace.fromJson(Map<String, dynamic>.from(placeData));
+          if (slot == 0) {
+            _savedLocation0 = place;
+            await prefs.setString(_savedLocation0Key, SavedLocalPlace.encode(place));
+          } else {
+            _savedLocation1 = place;
+            await prefs.setString(_savedLocation1Key, SavedLocalPlace.encode(place));
+          }
+        } catch (_) {
+          // Skip invalid location data
+        }
+      }
+
+      _applyActiveSavedLocation(notify: false);
+      notifyListeners();
+    } catch (_) {
+      // Silently fail - local locations are still available
+    }
   }
 
   Future<void> selectCategory(String? categoryId) async {

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/publisher_follow_service.dart';
+import '../services/bookmark_migration_service.dart';
 import '../services/push_notifications.dart';
 import '../constants.dart';
 
@@ -70,6 +71,7 @@ class AuthProvider extends ChangeNotifier {
         _user = User.fromJson(res['user']);
         await _saveUser(_user!);
         await PublisherFollowService.migrateGuestFollowsToServer();
+        await BookmarkMigrationService.migrateGuestBookmarksToServer();
         await PushNotifications.syncAfterLogin();
         _loading = false;
         notifyListeners();
@@ -108,6 +110,7 @@ class AuthProvider extends ChangeNotifier {
         _user = User.fromJson(res['user']);
         await _saveUser(_user!);
         await PublisherFollowService.migrateGuestFollowsToServer();
+        await BookmarkMigrationService.migrateGuestBookmarksToServer();
         await PushNotifications.syncAfterLogin();
         _loading = false;
         notifyListeners();
@@ -170,6 +173,7 @@ class AuthProvider extends ChangeNotifier {
     _loading = false;
     await _saveUser(_user!);
     await PublisherFollowService.migrateGuestFollowsToServer();
+    await BookmarkMigrationService.migrateGuestBookmarksToServer();
     await PushNotifications.syncAfterLogin();
     notifyListeners();
   }

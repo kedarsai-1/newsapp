@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../models/models.dart';
-import '../utils/i18n.dart';
-import '../theme/app_palette.dart';
+import '../../models/models.dart';
+import '../../utils/i18n.dart';
+import '../../theme/app_palette.dart';
 import 'feed_xpresso_theme.dart';
 
 /// Persistent breaking news banner at the top of the feed

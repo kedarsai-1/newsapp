@@ -3,8 +3,10 @@ import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/models.dart';
 import '../../theme/app_palette.dart';
+import '../../utils/feed_image_url.dart';
 import '../premium_news_ui.dart';
 import 'compact_news_row.dart';
+import 'feed_xpresso_theme.dart';
 
 /// API feed row — Dailyhunt layout with comment, share, and more actions.
 class DailyhuntFeedArticleCard extends StatefulWidget {
@@ -36,6 +38,8 @@ class DailyhuntFeedArticleCard extends StatefulWidget {
 class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   late bool _liked;
   late bool _saved;
+  late List<String> _imageCandidates;
+  late int _imageCandidateIndex;
   late String _imageUrl;
 
   @override
@@ -47,7 +51,9 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   void _syncFromPost() {
     _liked = widget.liked;
     _saved = widget.saved;
-    _imageUrl = premiumImageUrl(widget.post);
+    _imageCandidates = feedImageUrlCandidatesForPost(widget.post);
+    _imageCandidateIndex = 0;
+    _imageUrl = _imageCandidates.isNotEmpty ? _imageCandidates.first : '';
   }
 
   @override
@@ -61,11 +67,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
     }
   }
 
-  String get _sourceName {
-    final src = widget.post.sourceName?.trim();
-    if (src != null && src.isNotEmpty) return src;
-    return widget.post.category?.name ?? 'News';
-  }
+  String get _sourceName => widget.post.displaySourceName;
 
   static String? _countLabel(int n) {
     if (n <= 0) return null;
@@ -74,7 +76,16 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   }
 
   void _onImageUnavailable() {
-    if (_imageUrl.trim().isEmpty || !mounted) return;
+    if (!mounted) return;
+    final next = _imageCandidateIndex + 1;
+    if (next < _imageCandidates.length) {
+      setState(() {
+        _imageCandidateIndex = next;
+        _imageUrl = _imageCandidates[next];
+      });
+      return;
+    }
+    if (_imageUrl.trim().isEmpty) return;
     setState(() => _imageUrl = '');
   }
 
@@ -108,7 +119,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
             ListTile(
               leading: Icon(
                 _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                color: _liked ? Colors.red : fx.actionMuted,
+                color: _liked ? fx.liked : fx.actionMuted,
               ),
               title: Text(_liked ? 'Unlike' : 'Like', style: TextStyle(color: p.textPrimary)),
               onTap: () {

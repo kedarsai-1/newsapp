@@ -91,7 +91,7 @@ class DailyhuntFeedSkeleton extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           physics: const ClampingScrollPhysics(),
           itemCount: 7,
-          separatorBuilder: (_, __) => const SizedBox(width: 4),
+          separatorBuilder: (_, __) => SizedBox(width: 4),
           itemBuilder: (_, i) {
             final w = 44.0 + (i % 3) * 14.0;
             return Center(

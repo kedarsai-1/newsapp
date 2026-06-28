@@ -35,7 +35,7 @@ class FeedScopeChipBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 physics: const BouncingScrollPhysics(),
                 itemCount: options.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, __) => SizedBox(width: 8),
                 itemBuilder: (context, i) {
                   final opt = options[i];
                   final selected = selectedScope == opt.$2;
@@ -74,6 +74,7 @@ class _ScopePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Material(
       color: Colors.transparent,
       child: InkWell(

@@ -1,13 +1,15 @@
 const express = require('express');
+const helmet = require('helmet');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
 const cacheService = require('./utils/cacheService');
 const { prisma } = require('./config/prisma');
+const { assertProductionSecrets } = require('./utils/productionGuards');
 const { setIngestionSocket } = require('./services/feedSocket');
 const { startCronScheduler } = require('./services/cronScheduler');
-const { ensureDefaultCategories, ensureDefaultAdmin } = require('./utils/ensureDefaultData');
+const { ensureDefaultCategories, ensureDefaultAdmin, ensureGeoMandals } = require('./utils/ensureDefaultData');
 const aiProvider = require('./services/aiProvider');
 const { getPushHealth } = require('./utils/notifications');
 const { buildCorsOptions, socketCorsOrigins } = require('./middleware/corsConfig');
@@ -22,8 +24,32 @@ const sportsRoutes = require('./routes/sports');
 const politicalVideoRoutes = require('./routes/politicalVideos');
 const weatherRoutes = require('./routes/weather');
 const cronRoutes = require('./routes/cron');
+const geoRoutes = require('./routes/geo');
+const cricApi = require('./services/cricApiService');
+const { getCloudinaryHealth } = require('./utils/cloudinaryHealth');
+const {
+  isYoutubeQuotaBlocked,
+  isYoutubeSearchQuotaBlocked,
+} = require('./utils/youtubeQuota');
+const { redirectShareLink } = require('./controllers/newsController');
 
 const app = express();
+assertProductionSecrets();
+
+// Security headers — applied before other middleware
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // API server — no inline HTML to protect
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false,
+    xFrameOptions: { action: 'DENY' },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  }),
+);
 if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
   app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 }
@@ -49,6 +75,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Short share links — http://host/n/{code} → /article/{id}
+app.get('/n/:code', redirectShareLink);
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/news', newsRoutes);
@@ -58,6 +87,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/sports', sportsRoutes);
 app.use('/api/political-videos', politicalVideoRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/geo', geoRoutes);
 app.use('/api/cron', cronRoutes);
 
 let dbReady = false;
@@ -113,11 +143,27 @@ app.get('/api/health', async (req, res) => {
   try {
     const forceAi = req.query.refresh === '1' || req.query.refresh === 'true';
     const ai = await buildAiHealthPayload(forceAi);
+    const cloudinary = await getCloudinaryHealth();
     res.json({
       status: 'OK',
       postgres: dbReady ? 'connected' : 'disconnected',
       ai,
       push: getPushHealth(),
+      integrations: {
+        cricapi: { configured: cricApi.hasKey() },
+        cloudinary: {
+          configured: cloudinary.configured !== false,
+          ok: cloudinary.ok === true,
+          reason: cloudinary.ok ? null : cloudinary.reason,
+          fallback: 'local_media',
+        },
+        youtube: {
+          configured: Boolean(process.env.YOUTUBE_API_KEY?.trim()),
+          searchEnabled: process.env.YOUTUBE_SEARCH_ENABLED === 'true',
+          quotaCooldown: isYoutubeQuotaBlocked(),
+          searchQuotaCooldown: isYoutubeSearchQuotaBlocked(),
+        },
+      },
       timestamp: new Date(),
     });
   } catch (err) {
@@ -191,6 +237,7 @@ async function runBackgroundJobs() {
   console.log('PostgreSQL connected');
   await ensureDefaultCategories();
   await ensureDefaultAdmin();
+  await ensureGeoMandals();
   if (aiProvider.isOllamaProvider()) {
     const ollama = await aiProvider.pingOllama();
     if (ollama.ok) {
@@ -241,6 +288,11 @@ async function schedulePostgresConnect() {
 }
 
 cacheService.init();
+getCloudinaryHealth().then((h) => {
+  if (!h.ok && h.configured !== false) {
+    console.warn(`[cloudinary] unavailable (${h.reason}) — ingest will use local /media/ingest/ fallback`);
+  }
+}).catch(() => {});
 schedulePostgresConnect();
 
 module.exports = { app, io };

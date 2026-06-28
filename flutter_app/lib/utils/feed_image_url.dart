@@ -1,5 +1,6 @@
 import '../constants.dart';
 import '../models/models.dart';
+import 'feed_failed_image_cache.dart';
 
 /// Logos, favicons, and site placeholders — not valid feed hero images.
 bool isUnusableFeedImageUrl(String? url) {
@@ -49,24 +50,40 @@ bool isUnusableFeedImageUrl(String? url) {
   return false;
 }
 
-/// First article photo suitable for the feed, or empty when only logos exist.
-String feedImageUrlForPost(NewsPost post) {
+void _collectFeedImageCandidate(
+  NewsPost post,
+  String? raw,
+  Set<String> seen,
+  List<String> out,
+) {
+  final trimmed = (raw ?? '').trim();
+  if (trimmed.isEmpty || isUnusableFeedImageUrl(trimmed)) return;
+  final display = AppConstants.imageUrlForDisplay(
+    trimmed,
+    articleReferer: post.sourceUrl,
+  );
+  if (display.isEmpty || FeedFailedImageCache.isFailed(display)) return;
+  if (seen.add(display)) out.add(display);
+}
+
+/// All article photos suitable for the feed hero, in priority order.
+List<String> feedImageUrlCandidatesForPost(NewsPost post) {
+  final out = <String>[];
+  final seen = <String>{};
   for (final m in post.media) {
     if (!m.isImage) continue;
-    final raw = m.url.trim();
-    if (raw.isEmpty || isUnusableFeedImageUrl(raw)) continue;
-    return AppConstants.imageUrlForDisplay(raw, articleReferer: post.sourceUrl);
+    _collectFeedImageCandidate(post, m.url, seen, out);
   }
   for (final m in post.media) {
     if (!m.isVideo) continue;
-    final thumb = (m.thumbnail ?? '').trim();
-    if (thumb.isNotEmpty && !isUnusableFeedImageUrl(thumb)) {
-      return AppConstants.imageUrlForDisplay(thumb, articleReferer: post.sourceUrl);
-    }
+    _collectFeedImageCandidate(post, m.thumbnail, seen, out);
   }
-  final ytThumb = post.youtubeThumbnailUrl.trim();
-  if (ytThumb.isNotEmpty && !isUnusableFeedImageUrl(ytThumb)) {
-    return AppConstants.imageUrlForDisplay(ytThumb, articleReferer: post.sourceUrl);
-  }
-  return '';
+  _collectFeedImageCandidate(post, post.youtubeThumbnailUrl, seen, out);
+  return out;
+}
+
+/// First article photo suitable for the feed, or empty when only logos exist.
+String feedImageUrlForPost(NewsPost post) {
+  final candidates = feedImageUrlCandidatesForPost(post);
+  return candidates.isNotEmpty ? candidates.first : '';
 }

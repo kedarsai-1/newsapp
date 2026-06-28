@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'theme/app_palette.dart';
-import 'theme/app_gradients.dart';
+import 'widgets/feed/feed_xpresso_theme.dart';
 
 export 'theme/app_palette.dart';
 export 'theme/app_theme.dart';
@@ -63,6 +62,25 @@ class AppConstants {
   }
 
   static String get appName => dotenv.env['APP_NAME'] ?? 'NewsNow';
+
+  /// Public web origin for short share links (e.g. http://147.93.169.3).
+  static String get shareWebBaseUrl {
+    final v = dotenv.env['SHARE_WEB_BASE_URL']?.trim();
+    if (v != null && v.isNotEmpty) {
+      return v.replaceAll(RegExp(r'/+$'), '');
+    }
+    if (kDebugMode && !kIsWeb) {
+      debugPrint(
+        '[config] SHARE_WEB_BASE_URL is unset — shared links may use the dev API origin.',
+      );
+    }
+    try {
+      return Uri.parse(baseUrl).origin;
+    } catch (_) {
+      return '';
+    }
+  }
+
   static int get pageSize =>
       int.tryParse(dotenv.env['PAGE_SIZE'] ?? '20') ?? 20;
   static int get maxMediaFiles =>
@@ -118,13 +136,28 @@ class AppConstants {
     return h;
   }
 
+  /// Hosts that load reliably in the app without a proxy (CDN / our media).
+  static bool shouldBypassImageProxy(String resolved) {
+    if (resolved.isEmpty) return false;
+    if (resolved.contains('/media/ingest/')) return true;
+    final host = Uri.tryParse(resolved)?.host.toLowerCase() ?? '';
+    if (host.isEmpty) return false;
+    if (host == 'res.cloudinary.com' || host.endsWith('.cloudinary.com')) {
+      return true;
+    }
+    if (host == 'i.ytimg.com' || host == 'img.youtube.com') return true;
+    try {
+      final apiHost = Uri.parse(baseUrl).host.toLowerCase();
+      if (host == apiHost && resolved.contains('/media/')) return true;
+    } catch (_) {}
+    return false;
+  }
+
   /// Hotlinked news images often 403 from the app; load via API proxy instead (see GET /api/news/proxy-image).
-  /// Skips proxy for Cloudinary (your uploads).
   static String imageUrlForDisplay(String? rawUrl, {String? articleReferer}) {
     final resolved = resolveMediaUrl(rawUrl);
     if (resolved.isEmpty) return '';
-    final host = Uri.tryParse(resolved)?.host.toLowerCase() ?? '';
-    if (host.contains('cloudinary.com')) return resolved;
+    if (shouldBypassImageProxy(resolved)) return resolved;
 
     final api = Uri.parse(baseUrl);
     var path = api.path;
@@ -139,57 +172,6 @@ class AppConstants {
   }
 }
 
-// ─── Glass Design System ──────────────────────────────────────────────────────
-
-class GlassColors {
-  // Background gradients (aligned with AppPalette editorial dark)
-  static const Color gradientStart = Color(0xFF070A0F);
-  static const Color gradientMid = Color(0xFF0D1522);
-  static const Color gradientEnd = Color(0xFF121528);
-
-  // Blob accent colors
-  static const Color blobGreen = Color(0xFF34D399);
-  static const Color blobPurple = Color(0xFFC084FC);
-  static const Color blobOrange = Color(0xFFF97316);
-
-  // Glass surface tints
-  static const Color surfaceWhite = Color(0x12FFFFFF); // rgba(255,255,255,0.07)
-  static const Color surfaceBright =
-      Color(0x18FFFFFF); // rgba(255,255,255,0.10)
-  static const Color borderWhite = Color(0x21FFFFFF); // rgba(255,255,255,0.13)
-  static const Color borderBright = Color(0x2FFFFFFF); // rgba(255,255,255,0.18)
-
-  // Text
-  static const Color textPrimary = Color(0xFFFFFFFF);
-  static const Color textSecondary = Color(0x99FFFFFF); // 60% white
-  static const Color textTertiary = Color(0x66FFFFFF); // 40% white
-  static const Color textHint = Color(0x40FFFFFF); // 25% white
-
-  // Accent — mint (primary action)
-  static const Color accentGreen = Color(0xFF34D399);
-  static const Color accentGreenLight = Color(0xFF6EE7B7);
-  static const Color accentGreenSurface = Color(0x1E34D399);
-  static const Color accentGreenBorder = Color(0x4D34D399);
-
-  // Accent — orange (breaking / admin)
-  static const Color accentOrange = Color(0xFFF97316);
-  static const Color accentOrangeLight = Color(0xFFFDBA74);
-  static const Color accentOrangeSurface = Color(0x26F97316);
-  static const Color accentOrangeBorder = Color(0x59F97316);
-
-  // Accent — purple (reporter badge, categories)
-  static const Color accentPurple = Color(0xFFC084FC);
-  static const Color accentPurpleLight = Color(0xFFE9D5FF);
-  static const Color accentPurpleSurface = Color(0x33C084FC);
-  static const Color accentPurpleBorder = Color(0x4DC084FC);
-
-  // Semantic
-  static const Color success = Color(0xFF34D399);
-  static const Color warning = Color(0xFFFBBF24);
-  static const Color error = Color(0xFFF87171);
-  static const Color info = Color(0xFF38BDF8);
-}
-
 // ─── Gradient Background Widget ───────────────────────────────────────────────
 
 class GlassBackground extends StatelessWidget {
@@ -198,9 +180,9 @@ class GlassBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
+    final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
-      color: isLight ? Colors.white : Theme.of(context).scaffoldBackgroundColor,
+      color: fx.background,
       child: child,
     );
   }
@@ -237,16 +219,17 @@ class GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: margin,
         padding: padding,
         decoration: BoxDecoration(
-          color: backgroundColor ?? GlassColors.surfaceWhite,
+          color: backgroundColor ?? fx.glassSurface,
           borderRadius: BorderRadius.circular(borderRadius),
           border: Border.all(
-            color: borderColor ?? GlassColors.borderWhite,
+            color: borderColor ?? fx.glassBorder,
             width: 0.8,
           ),
           boxShadow: boxShadow,
@@ -279,14 +262,15 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Container(
       padding: padding,
       margin: margin,
       decoration: BoxDecoration(
-        color: color ?? GlassColors.surfaceWhite,
+        color: color ?? fx.glassSurface,
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-            color: borderColor ?? GlassColors.borderWhite, width: 0.8),
+            color: borderColor ?? fx.glassBorder, width: 0.8),
       ),
       child: child,
     );
@@ -313,7 +297,8 @@ class GlassButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = accentColor ?? GlassColors.accentGreen;
+    final fx = FeedXpressoTheme.fx(context);
+    final color = accentColor ?? fx.accent;
     return GestureDetector(
       onTap: loading ? null : onPressed,
       child: Container(
@@ -329,20 +314,20 @@ class GlassButton extends StatelessWidget {
           border: Border.all(color: color.withOpacity(0.5), width: 0.8),
         ),
         child: loading
-            ? const Center(
+            ? Center(
                 child: SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2)))
+                        color: fx.onAccent, strokeWidth: 2)))
             : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 if (icon != null) ...[
-                  Icon(icon, color: Colors.white, size: 18),
-                  const SizedBox(width: 8)
+                  Icon(icon, color: fx.onAccent, size: 18),
+                  SizedBox(width: 8)
                 ],
                 Text(label,
-                    style: const TextStyle(
-                        color: Colors.white,
+                    style: TextStyle(
+                        color: fx.onAccent,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.3)),
@@ -396,6 +381,7 @@ class GlassTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return TextFormField(
       controller: controller,
       focusNode: focusNode,
@@ -410,49 +396,43 @@ class GlassTextField extends StatelessWidget {
       readOnly: readOnly,
       onChanged: onChanged,
       onFieldSubmitted: onFieldSubmitted,
-      style: const TextStyle(color: GlassColors.textPrimary, fontSize: 14),
+      style: TextStyle(color: fx.title, fontSize: 14),
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
-        labelStyle:
-            const TextStyle(color: GlassColors.textTertiary, fontSize: 13),
-        hintStyle: const TextStyle(color: GlassColors.textHint, fontSize: 13),
+        labelStyle: TextStyle(color: fx.meta, fontSize: 13),
+        hintStyle: TextStyle(color: fx.textHint, fontSize: 13),
         prefixIcon: prefixIcon != null
             ? IconTheme(
-                data: const IconThemeData(
-                    color: GlassColors.textTertiary, size: 18),
+                data: IconThemeData(color: fx.meta, size: 18),
                 child: prefixIcon!)
             : null,
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: GlassColors.surfaceWhite,
+        fillColor: fx.glassSurface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: GlassColors.borderWhite, width: 0.8),
+          borderSide: BorderSide(color: fx.glassBorder, width: 0.8),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: GlassColors.borderWhite, width: 0.8),
+          borderSide: BorderSide(color: fx.glassBorder, width: 0.8),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: GlassColors.accentGreen, width: 1.5),
+          borderSide: BorderSide(color: fx.accent, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: GlassColors.error, width: 0.8),
+          borderSide: BorderSide(color: fx.error, width: 0.8),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: GlassColors.error, width: 1.5),
+          borderSide: BorderSide(color: fx.error, width: 1.5),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        counterStyle:
-            const TextStyle(color: GlassColors.textHint, fontSize: 11),
+        counterStyle: TextStyle(color: fx.textHint, fontSize: 11),
       ),
     );
   }
@@ -480,7 +460,7 @@ class GlassBadge extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         if (icon != null) ...[
           Icon(icon, size: 12, color: accentColor),
-          const SizedBox(width: 4)
+          SizedBox(width: 4)
         ],
         Text(label,
             style: TextStyle(
@@ -507,20 +487,17 @@ class GlassCategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected
-              ? GlassColors.accentGreenSurface
-              : GlassColors.surfaceWhite,
+          color: selected ? fx.accentSurface : fx.glassSurface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? GlassColors.accentGreenBorder
-                : GlassColors.borderWhite,
+            color: selected ? fx.accentBorder : fx.glassBorder,
             width: 0.8,
           ),
         ),
@@ -529,9 +506,7 @@ class GlassCategoryChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected
-                ? GlassColors.accentGreenLight
-                : GlassColors.textSecondary,
+            color: selected ? fx.accentLight : fx.textSecondary,
           ),
         ),
       ),
@@ -554,11 +529,11 @@ class GlassBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return Container(
       decoration: BoxDecoration(
-        color: GlassColors.surfaceWhite,
-        border:
-            Border(top: BorderSide(color: GlassColors.borderWhite, width: 0.8)),
+        color: fx.glassSurface,
+        border: Border(top: BorderSide(color: fx.glassBorder, width: 0.8)),
       ),
       child: SafeArea(
         top: false,
@@ -581,7 +556,7 @@ class GlassBottomNav extends StatelessWidget {
                             horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
                           color: selected
-                              ? GlassColors.accentGreenSurface
+                              ? fx.accentSurface
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -591,20 +566,16 @@ class GlassBottomNav extends StatelessWidget {
                                   ? (item.activeIcon as Icon).icon
                                   : (item.icon as Icon).icon)
                               : (item.icon as Icon).icon,
-                          color: selected
-                              ? GlassColors.accentGreenLight
-                              : GlassColors.textHint,
+                          color: selected ? fx.accentLight : fx.textHint,
                           size: 20,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         item.label ?? '',
                         style: TextStyle(
                           fontSize: 10,
-                          color: selected
-                              ? GlassColors.accentGreenLight
-                              : GlassColors.textHint,
+                          color: selected ? fx.accentLight : fx.textHint,
                           fontWeight:
                               selected ? FontWeight.w600 : FontWeight.w400,
                         ),
@@ -644,16 +615,17 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return AppBar(
-      backgroundColor: GlassColors.surfaceWhite,
-      foregroundColor: GlassColors.textPrimary,
+      backgroundColor: fx.glassSurface,
+      foregroundColor: fx.title,
       elevation: 0,
       scrolledUnderElevation: 0,
       automaticallyImplyLeading: showBack,
       leading: showBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 18, color: GlassColors.textSecondary),
+              icon: Icon(Icons.arrow_back_ios_new_rounded,
+                  size: 18, color: fx.textSecondary),
               onPressed: () => Navigator.of(context).maybePop(),
             )
           : null,
@@ -662,9 +634,9 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
       bottom: bottom,
       flexibleSpace: Container(
         decoration: BoxDecoration(
-          color: GlassColors.surfaceWhite,
+          color: fx.glassSurface,
           border: Border(
-              bottom: BorderSide(color: GlassColors.borderWhite, width: 0.8)),
+              bottom: BorderSide(color: fx.glassBorder, width: 0.8)),
         ),
       ),
     );
@@ -688,6 +660,7 @@ class GlassStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return GlassContainer(
       padding: const EdgeInsets.all(14),
       borderColor: accentColor.withOpacity(0.2),
@@ -697,10 +670,8 @@ class GlassStatCard extends StatelessWidget {
         Text(value,
             style: TextStyle(
                 fontSize: 22, fontWeight: FontWeight.bold, color: accentColor)),
-        const SizedBox(height: 2),
-        Text(label,
-            style:
-                const TextStyle(fontSize: 11, color: GlassColors.textTertiary)),
+        SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 11, color: fx.textTertiary)),
       ]),
     );
   }
@@ -716,6 +687,7 @@ class GlassBreakingBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -724,30 +696,30 @@ class GlassBreakingBanner extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              GlassColors.accentOrangeSurface,
-              GlassColors.accentOrange.withOpacity(0.08)
+              fx.accentSecondarySurface,
+              fx.accentSecondary.withOpacity(0.08)
             ],
           ),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: GlassColors.accentOrangeBorder, width: 0.8),
+          border: Border.all(color: fx.accentSecondaryBorder, width: 0.8),
         ),
         child: Row(children: [
           Container(
               width: 7,
               height: 7,
-              decoration: const BoxDecoration(
-                  color: GlassColors.accentOrange, shape: BoxShape.circle)),
-          const SizedBox(width: 8),
+              decoration: BoxDecoration(
+                  color: fx.accentSecondary, shape: BoxShape.circle)),
+          SizedBox(width: 8),
           Expanded(
               child: Text(text,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: GlassColors.accentOrangeLight),
+                      color: fx.accentSecondaryLight),
                   overflow: TextOverflow.ellipsis)),
           if (onTap != null)
-            const Icon(Icons.refresh,
-                size: 14, color: GlassColors.accentOrangeLight),
+            Icon(Icons.refresh,
+                size: 14, color: fx.accentSecondaryLight),
         ]),
       ),
     );
@@ -769,19 +741,18 @@ class GlassLocationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
     final hasLocation = locationText != null;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: hasLocation
-            ? GlassColors.accentGreen.withOpacity(0.1)
-            : GlassColors.accentOrange.withOpacity(0.1),
+            ? fx.accent.withOpacity(0.1)
+            : fx.accentSecondary.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: hasLocation
-              ? GlassColors.accentGreenBorder
-              : GlassColors.accentOrangeBorder,
+          color: hasLocation ? fx.accentBorder : fx.accentSecondaryBorder,
           width: 0.8,
         ),
       ),
@@ -791,30 +762,26 @@ class GlassLocationBar extends StatelessWidget {
               ? Icons.gps_not_fixed
               : (hasLocation ? Icons.gps_fixed : Icons.location_off),
           size: 16,
-          color: hasLocation
-              ? GlassColors.accentGreenLight
-              : GlassColors.accentOrangeLight,
+          color: hasLocation ? fx.accentLight : fx.accentSecondaryLight,
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Expanded(
           child: loading
-              ? const Text('Capturing GPS location...',
-                  style:
-                      TextStyle(fontSize: 13, color: GlassColors.textSecondary))
+              ? Text('Capturing GPS location...',
+                  style: TextStyle(fontSize: 13, color: fx.textSecondary))
               : hasLocation
                   ? Text('📍 $locationText',
-                      style: const TextStyle(
-                          fontSize: 13, color: GlassColors.accentGreenLight))
-                  : const Text(
+                      style: TextStyle(
+                          fontSize: 13, color: fx.accentLight))
+                  : Text(
                       'Location unavailable — story posted without GPS',
                       style: TextStyle(
-                          fontSize: 12, color: GlassColors.accentOrangeLight)),
+                          fontSize: 12, color: fx.accentSecondaryLight)),
         ),
         if (!loading)
           GestureDetector(
             onTap: onRefresh,
-            child: const Icon(Icons.refresh,
-                size: 16, color: GlassColors.textTertiary),
+            child: Icon(Icons.refresh, size: 16, color: fx.textTertiary),
           ),
       ]),
     );

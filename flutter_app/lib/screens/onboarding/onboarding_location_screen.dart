@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/onboarding_draft_provider.dart';
 import 'onboarding_design.dart';
 import 'widgets/onboarding_shell.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 class OnboardingLocationScreen extends StatefulWidget {
   const OnboardingLocationScreen({super.key});
@@ -85,7 +86,9 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
           : null;
       if (!mounted) return;
       if (name != null && name.isNotEmpty) {
-        context.read<OnboardingDraftProvider>().setCity(name);
+        context.read<OnboardingDraftProvider>()
+          ..setCity(name)
+          ..setCoordinates(pos.latitude, pos.longitude);
       } else {
         setState(() => _geoError = 'Could not resolve city name.');
       }
@@ -104,6 +107,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final draft = context.watch<OnboardingDraftProvider>();
 
     return OnboardingStepShell(
@@ -146,7 +150,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Material(
             color: Colors.transparent,
             child: InkWell(
@@ -168,7 +172,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                       color: OnboardingDesign.accent(context),
                       size: 22,
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         _locLoading
@@ -193,14 +197,14 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
             ),
           ),
           if (_geoError != null) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               _geoError!,
               style: OnboardingDesign.languageEn(context)
-                  .copyWith(color: Colors.red.shade700),
+                  .copyWith(color: fx.onErrorSurface),
             ),
           ],
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           if (draft.cityLabel.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -216,7 +220,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
             'Popular cities',
             style: OnboardingDesign.languageNative(context).copyWith(fontSize: 14),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           ..._filtered().map((city) {
             final picked = draft.cityLabel == city;
             return Padding(
@@ -250,7 +254,7 @@ class _OnboardingLocationScreenState extends State<OnboardingLocationScreen> {
                               ? OnboardingDesign.accent(context)
                               : OnboardingDesign.subtitleColor(context),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             city,

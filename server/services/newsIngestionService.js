@@ -9,9 +9,11 @@ const {
   summariesAreNearDuplicates,
 } = require('../utils/storyDedupe');
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
-const { clipSummaryForStorage } = require('../utils/summaryText');
+const { clipSummaryForStorage, cleanArticlePlainText } = require('../utils/summaryText');
 const { acceptPoliticsRssItem } = require('../utils/politicalStoryFilter');
 const { passesIngestCategoryGate } = require('../utils/categoryRelevance');
+const { isHyperlocalFeedSource, isNonGeoFeedSource } = require('../utils/feedSourceLocation');
+const { inferPoliticsScope } = require('./politicalVideoIngestionService');
 const { createNewsPost } = require('../utils/prismaNewsPost');
 const {
   fetchNewsApiItems,
@@ -20,7 +22,7 @@ const {
   isUnusableFeedImageUrl,
 } = require('./newsApiService');
 const { newsApiIngestPlan } = require('../config/newsApiIngestPlan');
-const { rehostExternalImageToCloudinary } = require('../utils/rehostExternalImage');
+const { rehostExternalImageForIngest } = require('../utils/rehostExternalImage');
 const { getRssFeeds } = require('../config/rssFeeds');
 const {
   resolveIngestLanguages,
@@ -38,11 +40,28 @@ const {
   prepareForSummaryFromIngestItem,
   prepareForSummarization,
   summarizeForRssIngest,
+  extractiveSummaryNative,
   translateEnglishToFeedLanguage,
 } = require('./rssService');
-const { isOllamaProvider } = require('./aiProvider');
+const {
+  summarizeForIngest,
+  isSummaryBudgetTight,
+} = require('./ingestSummaryService');
 const { extractReadableArticle } = require('./articleExtractionService');
-const { classifyArticleConstituency } = require('./constituencyClassifierService');
+const { classifyArticleLocalGeo, resolveFeedLocation, articleMentionsDistrict } = require('./districtClassifierService');
+
+const STATE_LEVEL_DISTRICT_NAMES = new Set([
+  'Andhra Pradesh',
+  'Telangana',
+  'Uttar Pradesh',
+  'Bihar',
+  'Rajasthan',
+  'Punjab',
+  'Haryana',
+  'Delhi',
+]);
+const { forwardGeocode } = require('../utils/geocode');
+const cacheService = require('../utils/cacheService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
 
 let ingestState = {
@@ -71,6 +90,56 @@ function getIngestLockState(lockKey) {
 
 const { setIngestionSocket, emitFeedUpdated } = require('./feedSocket');
 
+/** Hyperlocal city feeds must run before state-wide AP/TG local buckets (dedupe keeps first insert). */
+function localFeedSpecificity(feed) {
+  const cat = String(feed?.categorySlug || '').toLowerCase();
+  if (cat !== 'local') return 0;
+  const loc = resolveFeedLocation(feed);
+  if (loc.locationCity && loc.locationDistrict) return 4;
+  if (loc.locationDistrict || loc.locationCity) return 3;
+  const ps = String(feed?.politicsScope || '').toLowerCase();
+  if (ps === 'andhra' || ps === 'telangana') return 1;
+  if (['up', 'bihar', 'rajasthan', 'punjab', 'haryana', 'delhi', 'north', 'states'].includes(ps)) {
+    return 1;
+  }
+  return 2;
+}
+
+function sortLocalFeedsBySpecificity(feeds) {
+  return [...feeds].sort((a, b) => localFeedSpecificity(b) - localFeedSpecificity(a));
+}
+
+/** District-tagged NTV / Amar Ujala / TV9 feeds — skip expensive geocode + AI summarization. */
+function isHyperlocalDistrictRssFeed(feed, feedLoc) {
+  const url = String(feed?.url || '');
+  const hasDistrict = Boolean(feedLoc?.locationDistrict);
+  return hasDistrict && (
+    url.includes('ntvtelugu.com/')
+    || url.includes('amarujala.com/rss/')
+    || url.includes('tv9telugu.com/category/')
+  );
+}
+
+/** Round-robin RSS feed cursor so large Hindi district lists complete across cron cycles. */
+async function rotateFeedsForIngest(feeds, language) {
+  const lang = String(language || '').toLowerCase();
+  if (!lang || feeds.length <= 1) {
+    return { feeds, commitRotation: async () => {} };
+  }
+  const key = `ingest:rssOffset:${lang}`;
+  let offset = Number(await cacheService.get(key)) || 0;
+  offset = ((offset % feeds.length) + feeds.length) % feeds.length;
+  return {
+    feeds: [...feeds.slice(offset), ...feeds.slice(0, offset)],
+    async commitRotation(processedCount) {
+      const n = Number(processedCount) || 0;
+      if (n <= 0) return;
+      const next = (offset + n) % feeds.length;
+      await cacheService.set(key, next, 7 * 24 * 60 * 60 * 1000);
+    },
+  };
+}
+
 /** Round-robin across categorySlug so politics/sports/business all get processed each run. */
 function interleaveFeedsByCategory(feeds) {
   const buckets = new Map();
@@ -79,6 +148,9 @@ function interleaveFeedsByCategory(feeds) {
     const key = String(f.categorySlug || 'general').toLowerCase();
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(f);
+  }
+  if (buckets.has('local')) {
+    buckets.set('local', sortLocalFeedsBySpecificity(buckets.get('local')));
   }
   const keys = [...buckets.keys()];
   const out = [];
@@ -163,6 +235,14 @@ function createIngestBudget({ language } = {}) {
   };
 }
 
+function rssFeedMinRemainingMs() {
+  return Math.max(5000, Number(process.env.INGEST_RSS_FEED_MIN_REMAINING_MS || 20_000));
+}
+
+function rssItemMinRemainingMs() {
+  return Math.max(3000, Number(process.env.INGEST_RSS_ITEM_MIN_REMAINING_MS || 10_000));
+}
+
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
 const DEFAULT_CATEGORY_SLUG = process.env.SCRAPER_DEFAULT_CATEGORY || 'general';
@@ -226,7 +306,7 @@ function resolvePoliticsScope(item, feed) {
   const feedLang = String(feed.language || '').toLowerCase();
   const feedCat = String(feed.categorySlug || '').toLowerCase();
   const s = String(feed.politicsScope || '').toLowerCase();
-  const valid = ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi'].includes(s)
+  const valid = ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi', 'up', 'bihar', 'rajasthan', 'punjab', 'haryana'].includes(s)
     ? s
     : null;
 
@@ -236,7 +316,7 @@ function resolvePoliticsScope(item, feed) {
 
   if (feedCat === 'politics') {
     if (valid && valid !== 'all') {
-      if (inferred && ['andhra', 'telangana', 'north', 'international'].includes(inferred)) {
+      if (inferred && ['andhra', 'telangana', 'north', 'international', 'up', 'bihar', 'rajasthan', 'punjab', 'haryana', 'delhi'].includes(inferred)) {
         return inferred;
       }
       if (valid === 'international' && inferred !== 'international') return inferred;
@@ -246,7 +326,7 @@ function resolvePoliticsScope(item, feed) {
     return inferred || 'india';
   }
 
-  if (feedCat === 'local' && ['andhra', 'telangana', 'north', 'states', 'delhi'].includes(s)) return s;
+  if (feedCat === 'local' && ['andhra', 'telangana', 'north', 'states', 'delhi', 'up', 'bihar', 'rajasthan', 'punjab', 'haryana'].includes(s)) return s;
   if (feedCat === 'local' && (feedLang === 'te' || feedLang === 'hi')) {
     return inferPoliticsScopeFromStory(item, s);
   }
@@ -256,37 +336,14 @@ function resolvePoliticsScope(item, feed) {
 /** Infer india vs international vs AP/TG from story text when feed scope is broad. */
 function inferPoliticsScopeFromStory(postLike, feedScope) {
   const fromFeed = String(feedScope || '').toLowerCase();
-  if (['andhra', 'telangana', 'north', 'states', 'delhi'].includes(fromFeed)) {
+  if (['andhra', 'telangana', 'north', 'states', 'delhi', 'up', 'bihar', 'rajasthan', 'punjab', 'haryana'].includes(fromFeed)) {
     return fromFeed;
   }
-  const text = stripMarkup(
-    `${postLike?.title || ''} ${postLike?.summary || ''} ${postLike?.body || ''}`,
+  const title = stripMarkup(postLike?.title || '');
+  const description = stripMarkup(
+    `${postLike?.summary || ''} ${postLike?.body || ''}`,
   );
-  if (/(ఆంధ్ర|andhra\s*pradesh|amaravati|vijayawada|visakhapatnam|guntur|nellore)/i.test(text)) {
-    return 'andhra';
-  }
-  if (/(తెలంగాణ|telangana|hyderabad|warangal|karimnagar|secunderabad)/i.test(text)) {
-    return 'telangana';
-  }
-  if (
-    /(उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी)/.test(text)
-    || /\b(uttar pradesh|punjab|haryana|rajasthan|bihar|lucknow|chandigarh|noida|ghaziabad)\b/i.test(text)
-  ) {
-    return 'north';
-  }
-  if (/\b(trump|biden|putin|ukraine|gaza|united nations|white house|nato|european union)\b/i.test(text)
-    || /(ट्रंप|बाइडेन|अमेरिका|पाकिस्तान|चीन|यूक्रेन|गाजा|विदेश|अंतर्राष्ट्रीय)/.test(text)
-    || /(అమెరికా|అమెరిక|బైడెన్|ట్రంప్|పాకిస్తాన్|చైనా|రష్యా|యుద్ధం|విదేశ)/i.test(text)) {
-    return 'international';
-  }
-  if (
-    /\b(modi|rahul|parliament|lok sabha|rajya sabha|bjp|congress|delhi|centre|central government)\b/i.test(text)
-    || /(మోదీ|రాహుల్|కేంద్ర|లోక్‌సభ|రాజ్యసభ|ఢిల్లీ|జాతీయ)/i.test(text)
-    || /(मोदी|राहुल|संसद|लोकसभा|राज्यसभा|केंद्र|दिल्ली|जातीय)/.test(text)
-  ) {
-    return 'india';
-  }
-  return 'india';
+  return inferPoliticsScope(title, description);
 }
 
 async function ensureSystemReporter() {
@@ -322,28 +379,36 @@ async function getCategoryBySlug(slug) {
   return category;
 }
 
-async function isDuplicate(item) {
-  const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const lang = String(item.language || 'en').toLowerCase();
-  const langClause = lang && lang !== 'all' ? { language: lang } : {};
+function ingestLocationScore(fields = {}) {
+  let score = 0;
+  if (fields.locationMandal) score += 8;
+  if (fields.locationDistrict) score += 4;
+  if (fields.locationCity) score += 2;
+  if (fields.locationLatitude != null && fields.locationLongitude != null) score += 1;
+  if (fields.locationState) score += 0.5;
+  if (fields.locationDistrict && STATE_LEVEL_DISTRICT_NAMES.has(fields.locationDistrict)) {
+    score -= 4;
+  }
+  if (fields.locationCity && STATE_LEVEL_DISTRICT_NAMES.has(fields.locationCity)) {
+    score -= 2;
+  }
+  return score;
+}
 
+function buildDuplicateOrClauses(item) {
+  const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const orClauses = [];
 
   const canonical = canonicalizeUrl(item.sourceUrl);
   if (canonical) {
-    const sourceUrlHash = hashUrl(canonical);
-    orClauses.push({ sourceUrlHash });
+    orClauses.push({ sourceUrlHash: hashUrl(canonical) });
   }
 
   const fp = titleFingerprint(item.title);
-  if (fp) {
-    orClauses.push({ titleFingerprint: fp });
-  }
+  if (fp) orClauses.push({ titleFingerprint: fp });
 
   const sumFp = summaryFingerprint(item.summary);
-  if (sumFp) {
-    orClauses.push({ summaryFingerprint: sumFp });
-  }
+  if (sumFp) orClauses.push({ summaryFingerprint: sumFp });
 
   const titleNorm = normalizeTitle(item.title);
   if (titleNorm.length >= 8) {
@@ -353,17 +418,113 @@ async function isDuplicate(item) {
     });
   }
 
-  if (orClauses.length === 0) return false;
+  return orClauses;
+}
 
-  const duplicate = await prisma.newsPost.findFirst({
+async function findDuplicateForIngest(item) {
+  const lang = String(item.language || 'en').toLowerCase();
+  const langClause = lang && lang !== 'all' ? { language: lang } : {};
+  const orClauses = buildDuplicateOrClauses(item);
+  if (orClauses.length === 0) return null;
+
+  return prisma.newsPost.findFirst({
     where: {
       ...langClause,
       OR: orClauses,
     },
-    select: { id: true },
+    select: {
+      id: true,
+      categoryId: true,
+      category: { select: { slug: true } },
+      locationCity: true,
+      locationDistrict: true,
+      locationMandal: true,
+      locationState: true,
+      locationLatitude: true,
+      locationLongitude: true,
+      sourceName: true,
+    },
   });
+}
 
-  return !!duplicate;
+async function isDuplicate(item) {
+  return Boolean(await findDuplicateForIngest(item));
+}
+
+async function maybeEnrichDuplicateLocation(existing, postFields, sourceName, { categoryId, categorySlug } = {}) {
+  if (!existing?.id) return false;
+  const oldScore = ingestLocationScore(existing);
+  const newScore = ingestLocationScore(postFields);
+  const moreSpecificSource = sourceName && String(sourceName).includes(' - ')
+    && !String(existing.sourceName || '').includes(' - ');
+  const promoteToLocal = String(categorySlug || '').toLowerCase() === 'local'
+    && categoryId
+    && postFields.locationDistrict
+    && existing.categoryId !== categoryId;
+  const existingSlug = String(existing.category?.slug || '').toLowerCase();
+  const incomingSlug = String(categorySlug || '').toLowerCase();
+  const promoteToSection = Boolean(
+    categoryId
+    && incomingSlug
+    && incomingSlug !== 'general'
+    && existingSlug === 'general'
+    && sourceName
+    && String(sourceName).includes(' - '),
+  );
+  if (newScore <= oldScore && !moreSpecificSource && !promoteToLocal && !promoteToSection) {
+    return false;
+  }
+
+  const data = {};
+  if (postFields.locationMandal && !existing.locationMandal) {
+    data.locationMandal = postFields.locationMandal;
+  }
+  if (postFields.locationDistrict
+    && (!existing.locationDistrict
+      || STATE_LEVEL_DISTRICT_NAMES.has(existing.locationDistrict))) {
+    data.locationDistrict = postFields.locationDistrict;
+  }
+  if (postFields.locationCity
+    && (!existing.locationCity
+      || STATE_LEVEL_DISTRICT_NAMES.has(existing.locationCity))) {
+    data.locationCity = postFields.locationCity;
+  }
+  if (postFields.locationState && !existing.locationState) {
+    data.locationState = postFields.locationState;
+  }
+  if (
+    postFields.locationLatitude != null
+    && postFields.locationLongitude != null
+    && (existing.locationLatitude == null || existing.locationLongitude == null)
+  ) {
+    data.locationLatitude = postFields.locationLatitude;
+    data.locationLongitude = postFields.locationLongitude;
+    data.locationCountry = postFields.locationCountry || 'India';
+    data.locationCapturedAt = postFields.locationCapturedAt || new Date();
+  }
+  if (sourceName && String(sourceName).includes(' - ')) {
+    const preferHyperlocalSource = isHyperlocalFeedSource(sourceName)
+      && isNonGeoFeedSource(existing.sourceName);
+    if (preferHyperlocalSource || !String(existing.sourceName || '').includes(' - ')) {
+      data.sourceName = sourceName;
+    }
+  }
+  if (promoteToLocal || promoteToSection) {
+    data.categoryId = categoryId;
+  }
+  if (Object.keys(data).length === 0) return false;
+
+  await prisma.newsPost.update({
+    where: { id: existing.id },
+    data,
+  });
+  return true;
+}
+
+function recordInsertedArticle(stats, post) {
+  if (!post?.title) return;
+  if (!Array.isArray(stats.insertedArticles)) stats.insertedArticles = [];
+  stats.insertedArticles.push({ id: post.id, title: post.title });
 }
 
 function toPostDoc(item, reporterId, categoryId, sourceName) {
@@ -373,7 +534,13 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     summary: item.summary,
     reporterId,
     categoryId,
-    media: item.mediaUrl ? [{ type: 'image', url: item.mediaUrl }] : [],
+    media: item.mediaUrl
+      ? [{
+        type: 'image',
+        url: item.mediaUrl,
+        ...(item.mediaPublicId ? { publicId: item.mediaPublicId } : {}),
+      }]
+      : [],
     status: SCRAPER_AUTO_APPROVE ? 'approved' : 'pending',
     approvedAt: SCRAPER_AUTO_APPROVE ? new Date() : null,
     tags: item.tags || [],
@@ -390,10 +557,18 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
     summaryFingerprint: summaryFingerprint(item.summary) || null,
     sourcePublishedAt: item.sourcePublishedAt ? new Date(item.sourcePublishedAt) : null,
     sourceType: item.sourceType,
-    politicsScope: ['all', 'andhra', 'telangana', 'india', 'international'].includes(String(item.politicsScope || '').toLowerCase())
+    politicsScope: ['all', 'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi', 'up', 'bihar', 'rajasthan', 'punjab', 'haryana'].includes(String(item.politicsScope || '').toLowerCase())
       ? String(item.politicsScope).toLowerCase()
       : null,
     constituency: item.constituency || 'Unknown',
+    locationCity: item.locationCity || null,
+    locationDistrict: item.locationDistrict || null,
+    locationMandal: item.locationMandal || null,
+    locationState: item.locationState || null,
+    locationLatitude: item.locationLatitude ?? null,
+    locationLongitude: item.locationLongitude ?? null,
+    locationCountry: item.locationCountry || (item.locationCity ? 'India' : null),
+    locationCapturedAt: item.locationCapturedAt || null,
     entities: Array.isArray(item.entities) ? item.entities : [],
     scrapedAt: new Date(),
     scrapeConfidence: item.scrapeConfidence,
@@ -401,12 +576,14 @@ function toPostDoc(item, reporterId, categoryId, sourceName) {
 }
 
 function summarizeForPost(text) {
-  const t = decodeHtmlEntities(String(text || ''));
-  if (!t) return null;
-  return clipSummaryForStorage(t);
+  const cleaned = cleanArticlePlainText(String(text || ''), { stripHtml: true });
+  if (!cleaned) return null;
+  const extractive = extractiveSummaryNative(cleaned);
+  if (extractive) return clipSummaryForStorage(extractive);
+  return clipSummaryForStorage(cleaned);
 }
 
-/** AI/extractive summary for ingest; respects budget and RSS_SKIP_AI_SUMMARY only. */
+/** AI/extractive summary for ingest; respects budget and chat-priority yield. */
 async function summarizeIngestItem({
   item,
   rawRssItem = null,
@@ -414,18 +591,15 @@ async function summarizeIngestItem({
   budget = null,
 }) {
   if (process.env.RSS_SKIP_AI_SUMMARY === 'true') return '';
-  if (budget?.limitMs != null && budget.remainingMs() < 45_000) return '';
   const prep = prepareForSummaryFromIngestItem(item, rawRssItem);
   if (!prep.textForSummary) return '';
-  try {
-    return await summarizeForRssIngest(
-      prep.textForSummary,
-      prep.originalLang,
-      feedLang,
-    );
-  } catch {
-    return '';
-  }
+  const result = await summarizeForIngest({
+    text: prep.textForSummary,
+    originalLang: prep.originalLang,
+    feedLang,
+    budget,
+  });
+  return result.summary || '';
 }
 
 function getIngestPlans() {
@@ -453,6 +627,7 @@ function getIngestLanguages(options = {}) {
 async function runIngestion({
   triggeredBy = 'scheduler',
   languages,
+  categorySlugs,
   includeYoutube,
   includePolitical,
 } = {}) {
@@ -628,11 +803,20 @@ async function runIngestion({
               if (mediaUrl && !isUnusableFeedImageUrl(mediaUrl)) {
                 postFields = { ...item, summary: apiSummary, mediaUrl };
                 if (INGEST_REHOST_IMAGES) {
-                  const reh = await rehostExternalImageToCloudinary(mediaUrl, {
+                  const reh = await rehostExternalImageForIngest(mediaUrl, {
                     referer: item.sourceUrl || null,
                   });
                   if (reh.ok && reh.url) {
-                    postFields = { ...postFields, mediaUrl: reh.url };
+                    postFields = {
+                      ...postFields,
+                      mediaUrl: reh.url,
+                      mediaPublicId: reh.publicId || null,
+                    };
+                    stats.rehostOk = (stats.rehostOk || 0) + 1;
+                    if (reh.backend === 'local') stats.rehostLocal = (stats.rehostLocal || 0) + 1;
+                    if (reh.backend === 'cloudinary') stats.rehostCloudinary = (stats.rehostCloudinary || 0) + 1;
+                  } else if (reh.reason) {
+                    stats.rehostFailed = (stats.rehostFailed || 0) + 1;
                   }
                 }
               } else {
@@ -642,8 +826,9 @@ async function runIngestion({
               const label = `${providerLabel} · ${item.apiSourceName || 'headlines'}`;
               const { apiSourceName, ...postDocFields } = postFields;
               try {
-                await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
+                const created = await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
                 stats.inserted += 1;
+                recordInsertedArticle(stats, created);
               } catch (error) {
                 if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                   stats.duplicates += 1;
@@ -677,10 +862,14 @@ async function runIngestion({
 
     // RSS ingestion (second source): reliable thumbnails + extra coverage.
     if (rssEnabled) {
-      const rssSource = getRssFeeds({ languages: activeLanguages });
-      const feeds = activeLanguages.length === 1
+      const rssSource = getRssFeeds({ languages: activeLanguages, categorySlugs });
+      const baseFeeds = activeLanguages.length === 1
         ? interleaveFeedsByCategory(rssSource)
         : interleaveFeedsByLanguageAndCategory(rssSource);
+      const rotation = activeLanguages.length === 1
+        ? await rotateFeedsForIngest(baseFeeds, activeLanguages[0])
+        : { feeds: baseFeeds, commitRotation: async () => {} };
+      const feeds = rotation.feeds;
       budget.throwIfExpired('rss:before-loop');
       const maxPerFeed = Math.min(
         50,
@@ -706,9 +895,18 @@ async function runIngestion({
       );
 
       let feedIdx = 0;
+      let feedsProcessed = 0;
       for (const feed of feeds) {
         feedIdx += 1;
+        feedsProcessed += 1;
         budget.throwIfExpired(`rss:feed-start:${feedIdx}/${feeds.length}`);
+        if (budget.limitMs != null && budget.remainingMs() < rssFeedMinRemainingMs()) {
+          console.warn(
+            `[ingest] RSS stopping early at feed ${feedIdx}/${feeds.length} `
+              + `(${Math.round(budget.remainingMs())}ms budget left)`,
+          );
+          break;
+        }
         if (!feed?.url) continue;
         let category;
         try {
@@ -724,12 +922,37 @@ async function runIngestion({
 
         try {
           const items = await fetchRssItems(feed.url);
-          const slice = items.slice(0, maxScanPerFeed);
+          const feedCatSlug = String(feed.categorySlug || '').toLowerCase();
+          const feedLoc = resolveFeedLocation(feed);
+          const hyperlocalDistrictFeed = isHyperlocalDistrictRssFeed(feed, feedLoc);
+          const scanLimit = hyperlocalDistrictFeed
+            ? Math.min(12, maxScanPerFeed)
+            : maxScanPerFeed;
+          const slice = items.slice(0, scanLimit);
           stats.fetched += slice.length;
           let insertedThisFeed = 0;
+          let feedGeoCoords = null;
+          if (
+            feedCatSlug === 'local'
+            && (feedLoc.locationCity || feedLoc.locationDistrict)
+            && !hyperlocalDistrictFeed
+          ) {
+            try {
+              feedGeoCoords = await forwardGeocode(
+                feedLoc.locationCity || feedLoc.locationDistrict,
+                { state: feedLoc.locationState },
+              );
+            } catch {
+              feedGeoCoords = null;
+            }
+          }
+
+          const insertsTarget = hyperlocalDistrictFeed
+            ? Math.min(2, targetInsertsPerFeed)
+            : targetInsertsPerFeed;
 
           for (let ri = 0; ri < slice.length; ri++) {
-            if (insertedThisFeed >= targetInsertsPerFeed) break;
+            if (insertedThisFeed >= insertsTarget) break;
             if (ri % 10 === 0) {
               budget.throwIfExpired(`rss:${feedIdx}/${feeds.length}:${feed.name || 'feed'}`);
             }
@@ -743,9 +966,12 @@ async function runIngestion({
               ? new Date(item.sourcePublishedAt)
               : null;
             if (publishedAt && !Number.isNaN(publishedAt.getTime())) {
-              const maxAgeDays = String(feed.categorySlug || '').toLowerCase() === 'politics'
+              const feedCatLower = String(feed.categorySlug || '').toLowerCase();
+              const maxAgeDays = feedCatLower === 'politics'
                 ? (String(feed.language || '').toLowerCase() === 'te' ? 21 : 12)
-                : 28;
+                : feedCatLower === 'local'
+                  ? 90
+                  : 28;
               if (Date.now() - publishedAt.getTime() > maxAgeDays * 24 * 60 * 60 * 1000) {
                 stats.staleFiltered = (stats.staleFiltered || 0) + 1;
                 continue;
@@ -779,22 +1005,62 @@ async function runIngestion({
               stats.categoryFiltered += 1;
               continue;
             }
+
+            const decodedBody = cleanArticlePlainText(
+              collectPlainTextForSummary(item.body, summarizeInputFromItem(raw), item.title),
+            );
+            let displayTitle = decodeHtmlEntities(String(item.title || '')).slice(0, 200);
+
+            const feedUrl = String(feed.url || '');
+            const isHyperlocalDistrictFeed =
+              !!feedLoc.locationDistrict
+              && (
+                feedUrl.includes('ntvtelugu.com/')
+                || feedUrl.includes('amarujala.com/rss/')
+                || feedUrl.includes('tv9telugu.com/category/')
+              );
+
+            if (
+              feedCat === 'local'
+              && feedLoc.locationDistrict
+              && !isHyperlocalDistrictFeed
+              && !articleMentionsDistrict(`${displayTitle} ${decodedBody}`, feedLoc)
+            ) {
+              stats.districtFiltered = (stats.districtFiltered || 0) + 1;
+              continue;
+            }
+
+            // Resolve publisher URL before dedupe (Google News links differ per feed).
+            let sourceUrl = item.sourceUrl || null;
+            if (
+              feed.resolvePublisherUrl
+              && sourceUrl
+              && String(sourceUrl).includes('news.google.com')
+            ) {
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                const resolved = await resolveGoogleNewsPublisherUrl(sourceUrl, {
+                  preferredHost: feed.preferredHost || null,
+                });
+                if (resolved) sourceUrl = resolved;
+              } catch { /* ignore */ }
+            }
+
+            if (budget.limitMs != null && budget.remainingMs() < rssItemMinRemainingMs()) {
+              break;
+            }
+
             const prep = prepareForSummaryFromIngestItem(item, raw);
             const summaryInput = prep.textForSummary;
             const originalLang = prep.originalLang;
-            const decodedBody = decodeHtmlEntities(
-              collectPlainTextForSummary(item.body, summarizeInputFromItem(raw), item.title),
-            );
             const fallbackSummary = summarizeForPost(decodedBody)
               || summarizeForPost(decodeHtmlEntities(String(item.summary || '').trim()));
 
             let summaryPrimary = '';
-            const ollamaSummary = isOllamaProvider();
-            const budgetTight = budget.limitMs != null
-              && budget.remainingMs() < (ollamaSummary ? 90_000 : 45_000);
-            let displayTitle = decodeHtmlEntities(String(item.title || '')).slice(0, 200);
+            const budgetTight = isSummaryBudgetTight(budget) || hyperlocalDistrictFeed;
             if (
-              ['hi', 'te'].includes(String(feed.language || '').toLowerCase())
+              !hyperlocalDistrictFeed
+              && ['hi', 'te'].includes(feedLang)
               && originalLang === 'eng'
             ) {
               try {
@@ -807,26 +1073,23 @@ async function runIngestion({
               } catch { /* keep RSS title */ }
             }
 
-            if (summaryInput && process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
-              try {
-                // eslint-disable-next-line no-await-in-loop
-                summaryPrimary = await summarizeForRssIngest(
-                  summaryInput,
-                  originalLang,
-                  feed.language || '',
-                );
-              } catch (e) {
-                summaryPrimary = '';
+            if (summaryInput && !budgetTight) {
+              const sumResult = await summarizeForIngest({
+                text: summaryInput,
+                originalLang,
+                feedLang,
+                budget,
+              });
+              summaryPrimary = sumResult.summary || '';
+              if (sumResult.source === 'ai_failed' || sumResult.source === 'chat_priority') {
                 stats.fallbacks += 1;
-                console.warn(
-                  `[rss] summary fallback (${feed.name || 'RSS'}): ${e?.message || e}`,
-                );
               }
             }
 
             let postFields = {
               ...item,
               title: displayTitle,
+              sourceUrl,
               body: decodedBody.slice(0, 10000) || displayTitle,
               summary: decodeHtmlEntities(summaryPrimary || fallbackSummary || item.summary || '')
                 || fallbackSummary
@@ -834,42 +1097,54 @@ async function runIngestion({
               originalLanguage: originalLang,
               politicsScope: resolvePoliticsScope(item, feed),
             };
-            if (feedLang === 'te' && (feedCat === 'local' || feedCat === 'politics')) {
-              const constituencyResult = await classifyArticleConstituency(raw);
+            if (feedCat === 'local' || feedCat === 'politics') {
+              const geo = await classifyArticleLocalGeo(raw, feed, {
+                language: feedLang,
+                categorySlug: feedCat,
+              });
               postFields = {
                 ...postFields,
-                constituency: constituencyResult.constituency || 'Unknown',
-                entities: Array.isArray(constituencyResult.entities)
-                  ? constituencyResult.entities
-                  : [],
+                locationCity: geo.locationCity || feedLoc.locationCity,
+                locationDistrict: geo.locationDistrict || feedLoc.locationDistrict,
+                locationMandal: geo.locationMandal || feed.locationMandal || null,
+                locationState: geo.locationState || feedLoc.locationState,
+                constituency: geo.constituency || postFields.constituency || 'Unknown',
+                entities: Array.isArray(geo.entities) ? geo.entities : [],
               };
             }
 
-            // Google News RSS items often point to news.google.com redirect pages.
-            // Resolve to the real publisher URL so:
-            // - thumbnails come from the publisher (not Google News logo)
-            // - full-article extraction works reliably
-            if (
-              feed.resolvePublisherUrl
-              && postFields.sourceUrl
-              && String(postFields.sourceUrl).includes('news.google.com')
-            ) {
-              try {
-                // eslint-disable-next-line no-await-in-loop
-                const resolved = await resolveGoogleNewsPublisherUrl(postFields.sourceUrl, {
-                  preferredHost: feed.preferredHost || null,
-                });
-                if (resolved) {
-                  postFields = { ...postFields, sourceUrl: resolved };
-                }
-              } catch { /* ignore */ }
-            }
-
-            // Dedupe after publisher URL resolution (Google News links differ per feed).
+            // Dedupe after geo tags so city feeds can upgrade state-wide duplicates.
             // eslint-disable-next-line no-await-in-loop
-            if (await isDuplicate(postFields)) {
-              stats.duplicates += 1;
+            const duplicate = await findDuplicateForIngest({
+              ...postFields,
+              title: displayTitle,
+              sourceUrl,
+              language: feedLang || item.language || 'en',
+            });
+            if (duplicate) {
+              const label = `RSS · ${feed.name || 'RSS'}`;
+              // eslint-disable-next-line no-await-in-loop
+              const upgraded = await maybeEnrichDuplicateLocation(duplicate, postFields, label, {
+                categoryId: category.id,
+                categorySlug: feedCat,
+              });
+              if (upgraded) {
+                stats.locationUpgraded = (stats.locationUpgraded || 0) + 1;
+              } else {
+                stats.duplicates += 1;
+              }
               continue;
+            }
+            if (feedGeoCoords && feedCat === 'local') {
+              postFields = {
+                ...postFields,
+                locationLatitude: feedGeoCoords.latitude,
+                locationLongitude: feedGeoCoords.longitude,
+                locationCity: postFields.locationCity || feedGeoCoords.city,
+                locationState: postFields.locationState || feedGeoCoords.state,
+                locationCountry: 'India',
+                locationCapturedAt: feedGeoCoords.capturedAt || new Date(),
+              };
             }
 
             // Some RSS (notably Google News RSS, but also several publisher feeds) ship without
@@ -911,37 +1186,38 @@ async function runIngestion({
                   maxBytes: Number(process.env.RSS_ENRICH_MAX_BYTES || 900000),
                   cacheTtlMs: Number(process.env.RSS_ENRICH_CACHE_TTL_MS || 30 * 60 * 1000),
                 });
-                const full = String(ext?.text || '').replace(/\s+/g, ' ').trim();
+                const full = cleanArticlePlainText(String(ext?.text || ''));
                 if (ext?.success && full.length >= 80) {
                   let summaryAfterEnrich = '';
-                  if (process.env.RSS_SKIP_AI_SUMMARY !== 'true' && !budgetTight) {
-                    try {
-                      const prepFull = prepareForSummarization(full);
-                      if (prepFull.textForSummary) {
-                        // eslint-disable-next-line no-await-in-loop
-                        summaryAfterEnrich = await summarizeForRssIngest(
-                          prepFull.textForSummary,
-                          prepFull.originalLang,
-                          feed.language || '',
-                        );
-                      }
+                  if (!budgetTight) {
+                    const prepFull = prepareForSummarization(full);
+                    if (prepFull.textForSummary) {
+                      const enrichResult = await summarizeForIngest({
+                        text: prepFull.textForSummary,
+                        originalLang: prepFull.originalLang,
+                        feedLang,
+                        budget,
+                      });
+                      summaryAfterEnrich = enrichResult.summary || '';
                       if (
-                        (!postFields.originalLanguage || postFields.originalLanguage === 'und')
-                        && prepFull.originalLang
-                        && prepFull.originalLang !== 'und'
+                        enrichResult.source === 'ai_failed'
+                        || enrichResult.source === 'chat_priority'
                       ) {
-                        postFields = { ...postFields, originalLanguage: prepFull.originalLang };
+                        stats.fallbacks += 1;
                       }
-                    } catch (e) {
-                      stats.fallbacks += 1;
-                      console.warn(
-                        `[rss] summary after enrich (${feed.name || 'RSS'}): ${e?.message || e}`,
-                      );
+                    }
+                    if (
+                      (!postFields.originalLanguage || postFields.originalLanguage === 'und')
+                      && prepFull.originalLang
+                      && prepFull.originalLang !== 'und'
+                    ) {
+                      postFields = { ...postFields, originalLanguage: prepFull.originalLang };
                     }
                   }
                   if (!summaryAfterEnrich || !String(summaryAfterEnrich).trim()) {
                     summaryAfterEnrich =
                       (summaryPrimary && String(summaryPrimary).trim())
+                      || extractiveSummaryNative(full)
                       || summarizeForPost(full)
                       || fallbackSummary;
                   }
@@ -975,11 +1251,20 @@ async function runIngestion({
             }
 
             if (postFields.mediaUrl && INGEST_REHOST_IMAGES) {
-              const reh = await rehostExternalImageToCloudinary(postFields.mediaUrl, {
+              const reh = await rehostExternalImageForIngest(postFields.mediaUrl, {
                 referer: postFields.sourceUrl || feed.url || null,
               });
               if (reh.ok && reh.url) {
-                postFields = { ...postFields, mediaUrl: reh.url };
+                postFields = {
+                  ...postFields,
+                  mediaUrl: reh.url,
+                  mediaPublicId: reh.publicId || null,
+                };
+                stats.rehostOk = (stats.rehostOk || 0) + 1;
+                if (reh.backend === 'local') stats.rehostLocal = (stats.rehostLocal || 0) + 1;
+                if (reh.backend === 'cloudinary') stats.rehostCloudinary = (stats.rehostCloudinary || 0) + 1;
+              } else if (reh.reason) {
+                stats.rehostFailed = (stats.rehostFailed || 0) + 1;
               }
             }
 
@@ -995,9 +1280,10 @@ async function runIngestion({
             const label = `RSS · ${feed.name || 'RSS'}`;
             const { apiSourceName, ...postDocFields } = postFields;
             try {
-              await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
+              const created = await createNewsPost(toPostDoc(postDocFields, reporter.id, category.id, label));
               stats.inserted += 1;
               insertedThisFeed += 1;
+              recordInsertedArticle(stats, created);
             } catch (error) {
               if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
                 stats.duplicates += 1;
@@ -1027,6 +1313,11 @@ async function runIngestion({
             error: error.message,
           });
         }
+      }
+      try {
+        await rotation.commitRotation(feedsProcessed);
+      } catch (e) {
+        console.warn('[ingest] RSS rotation cursor save failed:', e.message);
       }
     }
 
@@ -1069,6 +1360,20 @@ async function runIngestion({
           + 'or all items duplicates vs DB.',
       );
     }
+    if (stats.rehostOk || stats.rehostFailed) {
+      console.log(
+        `[ingest] image rehost: ok=${stats.rehostOk || 0} `
+          + `local=${stats.rehostLocal || 0} cloudinary=${stats.rehostCloudinary || 0} `
+          + `failed=${stats.rehostFailed || 0}`,
+      );
+    }
+    if (stats.rehostOk || stats.rehostFailed) {
+      console.log(
+        `[ingest] image rehost: ok=${stats.rehostOk || 0} `
+          + `local=${stats.rehostLocal || 0} cloudinary=${stats.rehostCloudinary || 0} `
+          + `failed=${stats.rehostFailed || 0}`,
+      );
+    }
     ingestState.lastSuccessAt = stats.endedAt;
     ingestState.lastSummary = stats;
     lockState.lastSuccessAt = stats.endedAt;
@@ -1077,6 +1382,7 @@ async function runIngestion({
       emitFeedUpdated({
         inserted: stats.inserted,
         at: stats.endedAt,
+        articles: stats.insertedArticles,
       });
     }
     return { success: true, stats };
@@ -1116,4 +1422,9 @@ module.exports = {
   emitFeedUpdated,
   interleaveFeedsByCategory,
   interleaveFeedsByLanguageAndCategory,
+  localFeedSpecificity,
+  sortLocalFeedsBySpecificity,
+  ingestLocationScore,
+  findDuplicateForIngest,
+  maybeEnrichDuplicateLocation,
 };

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants.dart';
 import '../models/models.dart';
+import '../models/saved_local_place.dart';
 import '../utils/api_memory_cache.dart';
 
 class ApiService {
@@ -63,12 +64,25 @@ class ApiService {
 
   static Future<Map<String, dynamic>> _decodeGetResponse(http.Response res) async {
     if (res.statusCode < 200 || res.statusCode >= 300) {
+      Map<String, dynamic>? serverBody;
+      final raw = res.body.trim();
+      if (raw.isNotEmpty && raw.startsWith('{')) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map<String, dynamic>) serverBody = decoded;
+        } catch (_) {}
+      }
+      final serverMsg = serverBody?['message']?.toString().trim();
+      final message = (serverMsg != null && serverMsg.isNotEmpty)
+          ? serverMsg
+          : (res.statusCode == 404
+              ? 'Not found.'
+              : 'Server error ${res.statusCode}. Check API is running.');
       return {
         'success': false,
         'statusCode': res.statusCode,
-        'message': res.statusCode == 404
-            ? 'Endpoint not found on server (deploy latest API or use local API_BASE_URL).'
-            : 'Server error ${res.statusCode}. Check API is running.',
+        'message': message,
+        if (serverBody != null) ...serverBody,
       };
     }
     final body = res.body.trim();
@@ -179,11 +193,34 @@ class ApiService {
             body: jsonEncode(body),
           )
           .timeout(_httpTimeout);
-      return jsonDecode(res.body);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        Map<String, dynamic>? serverBody;
+        final raw = res.body.trim();
+        if (raw.isNotEmpty && raw.startsWith('{')) {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is Map<String, dynamic>) serverBody = decoded;
+          } catch (_) {}
+        }
+        return {
+          'success': false,
+          'statusCode': res.statusCode,
+          'message': serverBody?['message']?.toString() ??
+              'Request failed (${res.statusCode}).',
+        };
+      }
+      final decoded = jsonDecode(res.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return {'success': false, 'message': 'Invalid server response.'};
     } on TimeoutException {
       return {
         'success': false,
         'message': 'Request timed out. Try again in a few seconds.',
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': _friendlyNetworkMessage(e),
       };
     }
   }
@@ -312,21 +349,29 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getFeed({
     int page = 1,
+    int? limit,
     String? categoryId,
     String? language,
     String? constituency,
     String? politicsScope,
     String? city,
+    String? district,
     String? search,
     bool breaking = false,
+    String? sort,
+    bool following = false,
+    String? publisher,
+    List<String>? publishers,
     int? days,
     List<String>? sourceTypes,
     bool hasVideo = false,
     bool politicalOnly = false,
+    Duration? memoryCacheTtl,
   }) async {
+    final pageLimit = limit ?? AppConstants.pageSize;
     final params = {
       'page': page.toString(),
-      'limit': AppConstants.pageSize.toString(),
+      'limit': pageLimit.toString(),
       if (categoryId != null) 'category': categoryId,
       if (language != null && language != 'all') 'language': language,
       if (constituency != null &&
@@ -338,8 +383,21 @@ class ApiService {
           politicsScope.trim().isNotEmpty)
         'politicsScope': politicsScope.trim().toLowerCase(),
       if (city != null) 'city': city,
+      if (district != null &&
+          district != 'all' &&
+          district.trim().isNotEmpty)
+        'district': district.trim(),
       if (search != null) 'search': search,
       if (breaking) 'breaking': 'true',
+      if (sort != null && sort.trim().isNotEmpty) 'sort': sort.trim(),
+      if (following) 'following': 'true',
+      if (publisher != null && publisher.trim().isNotEmpty)
+        'publisher': publisher.trim(),
+      if (publishers != null && publishers.isNotEmpty)
+        'publishers': publishers
+            .map((p) => p.trim())
+            .where((p) => p.isNotEmpty)
+            .join(','),
       if (days != null) 'days': days.toString(),
       if (sourceTypes != null && sourceTypes.isNotEmpty)
         'sourceTypes': sourceTypes
@@ -354,29 +412,63 @@ class ApiService {
     return _getQuery(
       '/news/feed',
       params,
-      memoryCacheTtl: useClientCache ? const Duration(seconds: 30) : null,
+      memoryCacheTtl: memoryCacheTtl ??
+          (useClientCache ? const Duration(seconds: 30) : null),
     );
   }
 
   static Future<Map<String, dynamic>> getLocalNews({
-    required double lat,
-    required double lng,
-    double radiusKm = 50,
+    double? lat,
+    double? lng,
+    double radiusKm = 75,
     String? city,
+    String? district,
+    String? mandal,
+    String? state,
+    String? constituency,
+    String? politicsScope,
     String? language,
     int page = 1,
   }) async {
     final params = {
-      'lat': lat.toString(),
-      'lng': lng.toString(),
-      'radius': radiusKm.toString(),
       'page': page.toString(),
       'limit': AppConstants.pageSize.toString(),
+      if (lat != null && lng != null) ...{
+        'lat': lat.toString(),
+        'lng': lng.toString(),
+        'radius': radiusKm.toString(),
+      },
       if (city != null && city.isNotEmpty) 'city': city,
+      if (district != null &&
+          district != 'all' &&
+          district.trim().isNotEmpty)
+        'district': district.trim(),
+      if (mandal != null &&
+          mandal != 'all' &&
+          mandal.trim().isNotEmpty)
+        'mandal': mandal.trim(),
+      if (state != null && state.isNotEmpty) 'state': state,
+      if (constituency != null &&
+          constituency != 'all' &&
+          constituency.trim().isNotEmpty)
+        'constituency': constituency.trim(),
+      if (politicsScope != null &&
+          politicsScope != 'all' &&
+          politicsScope.trim().isNotEmpty)
+        'politicsScope': politicsScope.trim().toLowerCase(),
       if (language != null && language != 'all') 'language': language,
     };
     return _getQuery('/news/local', params);
   }
+
+  static Future<Map<String, dynamic>> forwardGeocode({
+    required String city,
+    String? state,
+  }) async =>
+      _getQuery('/news/geocode/forward', {
+        'city': city,
+        if (state != null && state.isNotEmpty) 'state': state,
+      });
 
   static Future<Map<String, dynamic>> reverseGeocode({
     required double lat,
@@ -387,8 +479,51 @@ class ApiService {
         'lon': lng.toString(),
       });
 
+  static Future<Map<String, dynamic>> searchGeoMandals({
+    String? query,
+    String? district,
+    String? state,
+    int limit = 30,
+  }) async =>
+      _getQuery('/geo/mandals', {
+        if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+        if (district != null && district.trim().isNotEmpty) 'district': district.trim(),
+        if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
+        'limit': limit.toString(),
+      });
+
+  static Future<Map<String, dynamic>> getGeoDistricts({String? state}) async =>
+      _getQuery('/geo/districts', {
+        if (state != null && state.trim().isNotEmpty) 'state': state.trim(),
+      });
+
+  static Future<Map<String, dynamic>> upsertSavedLocation({
+    required int slot,
+    required SavedLocalPlace place,
+  }) async =>
+      _put('/auth/locations/$slot', place.toJson());
+
+  static Future<Map<String, dynamic>> getSavedLocations() async =>
+      _get('/auth/locations');
+
+  static Future<Map<String, dynamic>> deleteSavedLocation({required int slot}) async =>
+      _delete('/auth/locations/$slot');
+
+  static Future<Map<String, dynamic>> reportPost({
+    required String postId,
+    required String reason,
+    String? details,
+  }) async =>
+      _post('/news/$postId/report', {
+        'reason': reason,
+        if (details != null && details.trim().isNotEmpty) 'details': details.trim(),
+      });
+
   static Future<Map<String, dynamic>> getPost(String id) async =>
       _get('/news/$id');
+
+  static Future<Map<String, dynamic>> getPostShareLink(String id) async =>
+      _get('/news/$id/share');
 
   /// Extract full article text from the publisher URL (best-effort).
   static Future<Map<String, dynamic>> extractArticle(String url) async {
@@ -413,6 +548,18 @@ class ApiService {
 
   static Future<Map<String, dynamic>> toggleBookmark(String postId) async =>
       _post('/news/$postId/bookmark', {});
+
+  static Future<Map<String, dynamic>> getFollowingPublishers() async =>
+      _get('/news/publishers/following');
+
+  static Future<Map<String, dynamic>> togglePublisherFollow({
+    required String publisherKey,
+    required String publisherName,
+  }) async =>
+      _post('/news/publishers/follow', {
+        'publisherKey': publisherKey,
+        'publisherName': publisherName,
+      });
 
   static Future<Map<String, dynamic>> getBookmarks() async =>
       _get('/news/bookmarks');

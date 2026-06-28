@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:news_app/constants.dart';
 import 'package:news_app/utils/app_utils.dart';
+import 'package:news_app/widgets/feed/feed_xpresso_palette.dart';
 
 void main() {
   group('AppUtils', () {
@@ -30,13 +31,13 @@ void main() {
     });
 
     test('statusColor and statusIcon map known statuses', () {
-      expect(AppUtils.statusColor('approved'), GlassColors.success);
-      expect(AppUtils.statusColor('rejected'), GlassColors.error);
+      expect(AppUtils.statusColor('approved'), FeedXpressoPalette.dark.success);
+      expect(AppUtils.statusColor('rejected'), FeedXpressoPalette.dark.error);
       expect(AppUtils.statusIcon('pending'), Icons.pending);
     });
 
     test('roleColor and roleIcon map roles', () {
-      expect(AppUtils.roleColor('admin'), GlassColors.accentOrangeLight);
+      expect(AppUtils.roleColor('admin'), FeedXpressoPalette.dark.accentSecondaryLight);
       expect(AppUtils.roleIcon('reporter'), Icons.mic);
     });
 

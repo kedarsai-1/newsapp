@@ -4,6 +4,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../models/models.dart';
 import '../../utils/youtube_iframe_html.dart';
+import '../feed/feed_xpresso_palette.dart';
+import '../feed/feed_xpresso_theme.dart';
 import '../shorts/youtube_shorts_player_shared.dart';
 
 /// Mobile: WebView embed with visible controls for article reading.
@@ -25,12 +27,11 @@ class ArticleYoutubePlayerBody extends StatefulWidget {
 class _ArticleYoutubePlayerBodyState extends State<ArticleYoutubePlayerBody> {
   WebViewController? _controller;
   bool _failed = false;
+  bool _revealed = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.post.youtube?.embeddable == false) return;
-    _mountPlayer();
   }
 
   void _mountPlayer() {
@@ -38,14 +39,14 @@ class _ArticleYoutubePlayerBodyState extends State<ArticleYoutubePlayerBody> {
     final html = YoutubeIframeHtml.playerPage(
       videoId: widget.videoId,
       elementId: elementId,
-      autoplay: false,
+      autoplay: true,
       mute: false,
       showControls: true,
     );
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
+      ..setBackgroundColor(FeedXpressoPalette.dark.mediaViewerBackground)
       ..addJavaScriptChannel(
         'FlutterChannel',
         onMessageReceived: (msg) {
@@ -66,10 +67,35 @@ class _ArticleYoutubePlayerBodyState extends State<ArticleYoutubePlayerBody> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  void _revealPlayer() {
+    if (_revealed || widget.post.youtube?.embeddable == false) return;
+    _mountPlayer();
+    setState(() => _revealed = true);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (widget.post.youtube?.embeddable == false || _failed) {
       return _Fallback(post: widget.post, onOpen: _openYouTube);
+    }
+
+    if (!_revealed) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: GestureDetector(
+            onTap: _revealPlayer,
+            child: YoutubeThumbnailLayer(
+              post: widget.post,
+              immersive: false,
+              showPlay: true,
+              onPlay: _revealPlayer,
+            ),
+          ),
+        ),
+      );
     }
 
     return ClipRRect(
@@ -78,10 +104,10 @@ class _ArticleYoutubePlayerBodyState extends State<ArticleYoutubePlayerBody> {
         aspectRatio: 16 / 9,
         child: _controller != null
             ? ColoredBox(
-                color: Colors.black,
+                color: fx.mediaViewerBackground,
                 child: WebViewWidget(controller: _controller!),
               )
-            : const ColoredBox(color: Colors.black),
+            : ColoredBox(color: fx.mediaViewerBackground),
       ),
     );
   }
@@ -113,17 +139,11 @@ class _Fallback extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: AspectRatio(
         aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            YoutubeThumbnailLayer(
-              post: post,
-              immersive: false,
-              showPlay: true,
-              onPlay: onOpen,
-            ),
-            YoutubeFallbackCard(post: post),
-          ],
+        child: YoutubeThumbnailLayer(
+          post: post,
+          immersive: false,
+          showPlay: true,
+          onPlay: onOpen,
         ),
       ),
     );

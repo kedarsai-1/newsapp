@@ -5,6 +5,8 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../models/models.dart';
 import '../../providers/shorts_playback_controller.dart';
 import '../../utils/youtube_iframe_html.dart';
+import '../feed/feed_xpresso_palette.dart';
+import '../feed/feed_xpresso_theme.dart';
 import 'youtube_shorts_player_shared.dart';
 
 /// Mobile: lazy YouTube Iframe API in WebView — one active player at a time.
@@ -106,7 +108,7 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
+      ..setBackgroundColor(FeedXpressoPalette.dark.mediaViewerBackground)
       ..addJavaScriptChannel(
         'FlutterChannel',
         onMessageReceived: (msg) {
@@ -157,8 +159,10 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (widget.post.youtube?.embeddable == false || _embedFailed) {
       return _wrap(
+        context,
         Stack(
           fit: StackFit.expand,
           children: [
@@ -174,18 +178,33 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
 
     if (_embedMounted && _controller != null && widget.isActive) {
       return _wrap(
+        context,
         GestureDetector(
           onTap: _onTapVideo,
           behavior: HitTestBehavior.opaque,
-          child: ColoredBox(
-            color: Colors.black,
-            child: WebViewWidget(controller: _controller!),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              YoutubeThumbnailLayer(
+                post: widget.post,
+                immersive: widget.immersive,
+              ),
+              AnimatedOpacity(
+                opacity: _playerReady ? 1 : 0,
+                duration: const Duration(milliseconds: 220),
+                child: ColoredBox(
+                  color: fx.mediaViewerBackground,
+                  child: WebViewWidget(controller: _controller!),
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
     return _wrap(
+      context,
       GestureDetector(
         onTap: _onTapVideo,
         behavior: HitTestBehavior.opaque,
@@ -197,10 +216,11 @@ class _YoutubeShortsPlayerBodyState extends State<YoutubeShortsPlayerBody> {
     );
   }
 
-  Widget _wrap(Widget child) {
+  Widget _wrap(BuildContext context, Widget child) {
+    final fx = context.fx;
     if (!widget.immersive) {
       return ColoredBox(
-        color: Colors.black,
+        color: fx.mediaViewerBackground,
         child: SizedBox.expand(child: child),
       );
     }

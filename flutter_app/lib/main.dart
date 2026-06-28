@@ -34,9 +34,12 @@ import 'screens/user/shorts_news_screen.dart';
 import 'screens/user/political_reels_screen.dart';
 import 'screens/user/quick_news_screen.dart';
 import 'screens/user/categories_screen.dart';
+import 'screens/user/trending_screen.dart';
+import 'screens/user/video_playlist_screen.dart';
 import 'screens/user/sports/sports_home_screen.dart';
 import 'screens/user/sports/leaderboard_screen.dart';
 import 'screens/user/sports/match_detail_screen.dart';
+import 'screens/user/weather_screen.dart';
 import 'screens/user/article_detail_screen.dart';
 import 'screens/user/ai_chat_screen.dart';
 import 'screens/user/bookmarks_screen.dart';
@@ -51,6 +54,7 @@ import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/pending_posts_screen.dart';
 import 'screens/admin/manage_users_screen.dart';
 import 'services/push_notifications.dart';
+import 'theme/indic_fonts.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -101,6 +105,7 @@ void main() async {
   }
   final themeProvider = ThemeProvider();
   await themeProvider.load();
+  await IndicFonts.preload();
   runApp(NewsApp(themeProvider: themeProvider));
 }
 
@@ -205,11 +210,13 @@ GoRouter createAppRouter(BuildContext context) {
           loc == '/categories' ||
           loc == '/sports' ||
           loc.startsWith('/sports/') ||
+          loc == '/weather' ||
           loc == '/bookmarks' ||
           loc == '/settings' ||
           loc == '/profile' ||
           loc == '/privacy-policy' ||
           loc == '/ai-chat' ||
+          loc == '/weather' ||
           loc == '/sports/leaderboard' ||
           loc.startsWith('/article/');
 
@@ -356,6 +363,16 @@ GoRouter createAppRouter(BuildContext context) {
                 _smoothAppPage(state: state, child: const CategoriesScreen()),
           ),
           GoRoute(
+            path: '/trending',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const TrendingScreen()),
+          ),
+          GoRoute(
+            path: '/weather',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const WeatherScreen()),
+          ),
+          GoRoute(
             path: '/sports',
             pageBuilder: (context, state) =>
                 _smoothAppPage(state: state, child: const SportsHomeScreen()),
@@ -395,6 +412,11 @@ GoRouter createAppRouter(BuildContext context) {
             path: '/bookmarks',
             pageBuilder: (context, state) =>
                 _smoothAppPage(state: state, child: const BookmarksScreen()),
+          ),
+          GoRoute(
+            path: '/watch-later',
+            pageBuilder: (context, state) =>
+                _smoothAppPage(state: state, child: const VideoPlaylistScreen()),
           ),
           GoRoute(
             path: '/settings',
@@ -613,7 +635,7 @@ class _AuthenticatedAppShellState extends State<_AuthenticatedAppShell> {
 // ─── Bottom Nav Shells ────────────────────────────────────────────────────────
 
 /// Horizontal fling switches between [tabRoutes] (only when [matchedLocation] equals one of them).
-class _HorizontalShellSwipe extends StatelessWidget {
+class _HorizontalShellSwipe extends StatefulWidget {
   final Widget child;
   final List<String> tabRoutes;
 
@@ -622,11 +644,22 @@ class _HorizontalShellSwipe extends StatelessWidget {
     required this.tabRoutes,
   });
 
+  @override
+  State<_HorizontalShellSwipe> createState() => _HorizontalShellSwipeState();
+}
+
+class _HorizontalShellSwipeState extends State<_HorizontalShellSwipe> {
   int? _tabIndex(String loc) {
-    for (var i = 0; i < tabRoutes.length; i++) {
-      if (loc == tabRoutes[i]) return i;
+    for (var i = 0; i < widget.tabRoutes.length; i++) {
+      if (loc == widget.tabRoutes[i]) return i;
     }
     return null;
+  }
+
+  bool _shellSwipeEnabled(BuildContext context, String loc) {
+    if (loc != '/feed') return true;
+    final mode = context.read<NewsProvider>().layoutMode;
+    return mode != AppLayoutMode.carouselWheel && mode != AppLayoutMode.dualDeck;
   }
 
   @override
@@ -634,18 +667,19 @@ class _HorizontalShellSwipe extends StatelessWidget {
     return GestureDetector(
       onHorizontalDragEnd: (details) {
         final loc = GoRouterState.of(context).matchedLocation;
+        if (!_shellSwipeEnabled(context, loc)) return;
         final i = _tabIndex(loc);
         if (i == null) return;
         final v = details.primaryVelocity ?? 0;
         if (v.abs() < 320) return;
         if (v > 0 && i > 0) {
-          context.go(tabRoutes[i - 1]);
-        } else if (v < 0 && i < tabRoutes.length - 1) {
-          context.go(tabRoutes[i + 1]);
+          context.go(widget.tabRoutes[i - 1]);
+        } else if (v < 0 && i < widget.tabRoutes.length - 1) {
+          context.go(widget.tabRoutes[i + 1]);
         }
       },
       behavior: HitTestBehavior.translucent,
-      child: child,
+      child: widget.child,
     );
   }
 }
@@ -660,6 +694,36 @@ class UserShell extends StatefulWidget {
 
 class _UserShellState extends State<UserShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _shortsPrefetched = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prefetchShorts());
+  }
+
+  void _prefetchShorts() {
+    if (!mounted || _shortsPrefetched) return;
+    final news = context.read<NewsProvider>();
+    if (!news.prefsLoaded) {
+      news.addListener(_prefetchShorts);
+      return;
+    }
+    news.removeListener(_prefetchShorts);
+    _shortsPrefetched = true;
+    final lang = news.shortsFeedLanguage;
+    final shorts = context.read<ShortsProvider>();
+    shorts.warmFromDisk(lang);
+    shorts.ensureForLanguage(lang);
+  }
+
+  @override
+  void dispose() {
+    try {
+      context.read<NewsProvider>().removeListener(_prefetchShorts);
+    } catch (_) {}
+    super.dispose();
+  }
 
   void _goIfNeeded(BuildContext context, String current, String target) {
     if (current == target) return;
@@ -671,6 +735,11 @@ class _UserShellState extends State<UserShell> {
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
+    final hideBottomNav = loc == '/ai-chat' ||
+        loc == '/quick-news' ||
+        loc == '/political-reels' ||
+        loc == '/weather' ||
+        loc.startsWith('/sports');
     int idx = 0;
     if (loc == '/shorts') idx = 1;
     if (loc == '/categories') idx = 2;
@@ -695,7 +764,9 @@ class _UserShellState extends State<UserShell> {
             ],
             child: widget.child,
           ),
-          bottomNavigationBar: XpressoBottomNavBar(
+          bottomNavigationBar: hideBottomNav
+              ? null
+              : XpressoBottomNavBar(
         selectedIndex: idx,
         onSelected: (i) {
           switch (i) {
@@ -838,22 +909,22 @@ class AdminShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loc = GoRouterState.of(context).matchedLocation;
-    final p = context.palette;
+    final fx = context.fx;
     int idx = 0;
     if (loc == '/admin/pending') idx = 1;
     if (loc == '/admin/users') idx = 2;
     if (loc == '/admin/settings') idx = 3;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: fx.background,
       body: child,
       bottomNavigationBar: Material(
-        color: p.surface,
+        color: fx.navBackground,
         elevation: 0,
         child: DecoratedBox(
           decoration: BoxDecoration(
             border: Border(
-              top: BorderSide(color: p.cardBorder.withValues(alpha: 0.35)),
+              top: BorderSide(color: fx.divider),
             ),
           ),
           child: SafeArea(
@@ -863,7 +934,7 @@ class AdminShell extends StatelessWidget {
                   height: 66,
                   labelBehavior:
                       NavigationDestinationLabelBehavior.onlyShowSelected,
-                  indicatorColor: p.primary.withValues(alpha: 0.20),
+                  indicatorColor: fx.accentSurface,
                   indicatorShape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -871,7 +942,7 @@ class AdminShell extends StatelessWidget {
                     final selected = states.contains(WidgetState.selected);
                     return IconThemeData(
                       size: 26,
-                      color: selected ? p.primary : p.textHint,
+                      color: selected ? fx.navActiveIcon : fx.navInactiveIcon,
                     );
                   }),
                   labelTextStyle: WidgetStateProperty.resolveWith((states) {
@@ -879,7 +950,7 @@ class AdminShell extends StatelessWidget {
                     return TextStyle(
                       fontSize: 11.5,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                      color: selected ? p.primary : p.textHint,
+                      color: selected ? fx.navActiveLabel : fx.navInactiveLabel,
                     );
                   }),
                 ),

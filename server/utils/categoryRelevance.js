@@ -3,6 +3,11 @@
  */
 
 const { isPoliticalNoise } = require('./politicalStoryFilter');
+const {
+  HINDI_REGIONAL_SCOPES,
+  HINDI_SCOPE_KEYS,
+  HINDI_POLITICS_SCOPE_VALUES,
+} = require('../config/hindiRegionalScopes');
 
 const EXCLUDE_BY_CATEGORY = {
   business: [
@@ -41,6 +46,22 @@ const EXCLUDE_BY_CATEGORY = {
   education: [
     /\b(cricket|ipl\b|box office|sensex|election rally)\b/i,
   ],
+  crime: [
+    /\b(sensex|nifty|stock market|gdp|inflation|recipe|horoscope|box office|movie review)\b/i,
+    /\b(cricket|ipl\b|football score|election rally|parliament session)\b/i,
+  ],
+  weather: [
+    /\b(cricket|ipl\b|election|parliament|stock market|sensex|movie release)\b/i,
+    /\b(murder|arrest|police|robbery|theft)\b/i,
+  ],
+  agriculture: [
+    /\b(cricket|ipl\b|box office|movie review|bollywood|election rally)\b/i,
+    /\b(iphone|android|ai model|startup funding)\b/i,
+  ],
+  jobs: [
+    /\b(cricket|ipl\b|box office|movie review|recipe|horoscope)\b/i,
+    /\b(murder|robbery|weather alert|cyclone)\b/i,
+  ],
 };
 
 /** Feed/article URL looks like a dedicated section feed (trust after exclusions). */
@@ -51,8 +72,12 @@ const SECTION_URL_HINTS = {
   technology: /\/(technology|tech|sci-tech\/technology)\/|gadgets360/i,
   entertainment: /\/(entertainment|movies|cinema|lifestyle\/entertainment)\/|ndtvmovies|123telugu/i,
   health: /\/(health|wellness|lifestyle)\/|bbc\.co\.uk\/news\/health/i,
-  education: /\/(education|career|learning)\//i,
+  education: /\/(education|career|learning|school|college|university)\/|rss\/education|category-1051/i,
+  crime: /\/(crime|criminal|law-and-order|law_order)\/|rss\/crime/i,
+  weather: /\/(weather|climate|environment|cyclone|storm|monsoon)\//i,
   local: /\/(cities|local|hyderabad|delhi|andhra-pradesh|telangana)\//i,
+  agriculture: /\/(agriculture|agri-business|agri|farming|kisan|crop|krishi|rythu|कृषि|వ్యవసాయ)(\/|\.|$)/i,
+  jobs: /\/(jobs|career|recruitment|sarkari|exam|vacancy|नौकरी|రోజువారీ|ఉద్యోగ)(\/|\.|$)/i,
 };
 
 /** Telugu / Hindi publisher paths (article URLs) — section feeds already set category at ingest. */
@@ -64,7 +89,11 @@ const INDIC_SECTION_URL_HINTS = {
   entertainment: /\/(entertainment|movies|cinema|సినిమా|मनोरंजन|फिल्म)\//i,
   health: /\/(health|wellness|lifestyle|ఆరోగ్య|स्वास्थ्य)\//i,
   education: /\/(education|career|విద్య|शिक्षा)\//i,
+  crime: /\/(crime|criminal|అపరాధ|నేర|अपराध|क्राइम)\//i,
+  weather: /\/(weather|climate|వాతావరణ|मौसम)\//i,
   local: /\/(hyderabad|delhi|cities|local|amaravati|warangal|హైదరాబాద్)\//i,
+  agriculture: /\/(agriculture|agri|farming|kisan|krishi|rythu|कृषि|వ్యవసాయ|किसान|पशु)\//i,
+  jobs: /\/(jobs|career|recruitment|sarkari|exam|vacancy|नौकरी|ఉద్యోగ|रोजगार)\//i,
 };
 
 function storyText(item) {
@@ -121,7 +150,15 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
 
   if (!passesCategoryExclusions(item, slug)) return false;
 
-  if (isSectionSpecificSource(slug, feedUrl, articleUrl)) return true;
+  if (isSectionSpecificSource(slug, feedUrl, articleUrl)) {
+    const STRICT_ARTICLE_SECTION = new Set(['agriculture', 'education', 'crime', 'jobs']);
+    if (!STRICT_ARTICLE_SECTION.has(slug)) return true;
+    const enHint = SECTION_URL_HINTS[slug];
+    const indicHint = INDIC_SECTION_URL_HINTS[slug];
+    if ((enHint && enHint.test(articleUrl)) || (indicHint && indicHint.test(articleUrl))) {
+      return true;
+    }
+  }
 
   // Broad/top-story feeds mapped to a category: require a positive keyword signal.
   const INCLUDE_BY_CATEGORY = {
@@ -141,6 +178,14 @@ function matchesFeedCategory(item, categorySlug, { feedUrl } = {}) {
       /\b(education|school|college|university|exam|student|teacher|admission|scholarship|degree|campus|neet|jee|upsc)\b|(విద్య|పరీక్ష|शिक्षा|परीक्षा|विद्यार्थी)/i,
     local:
       /\b(city|local|traffic|metro|municipal|hyderabad|delhi|mumbai|chennai|bangalore|amaravati|vijayawada|warangal|andhra|telangana|guntur|visakhapatnam|lucknow|chandigarh|noida|patna|jaipur)\b|(హైదరాబాద్|అమరావతి|విజయవాడ|ఆంధ్ర|తెలంగాణ|वाराणसी|लखनऊ|पंजाब|हरियाणा|राजस्थान|बिहार|उत्तर प्रदेश|दिल्ली|हैदराबाद)/i,
+    crime:
+      /\b(crime|criminal|murder|robbery|theft|arrest|police|court|convict|rape|fraud|scam|kidnap|encounter|cid\b|cbi\b|narcotics|shootout|stabbing|assault|homicide|gang)\b|(అపరాధ|హత్య|దొంగతనం|అరెస్ట్|పోలీస్|కోర్టు|నేరం|चोरी|हत्या|गिरफ्तार|पुलिस|अपराध|अपराधी)/i,
+    weather:
+      /\b(weather|forecast|temperature|rain|rainfall|humidity|cyclone|storm|monsoon|heatwave|cold wave|thunderstorm|meteorolog|imd\b|climate|drought|flood warning|cloudy|sunny)\b|(వాతావరణ|వర్షం|ఉష్ణోగ్రత|తుఫాను|మాన్సూన్|मौसम|बारिश|तापमान|चक्रवात|आंधी)/i,
+    agriculture:
+      /\b(agriculture|agri|farmer|farming|crop|crops|harvest|msp\b|mandi|kisan|irrigation|fertilizer|pesticide|livestock|dairy|paddy|wheat|rice|cotton|sugarcane|horticulture|krishi)\b|(కృషి|రైతు|పంట|వ్యవసాయ|कृषि|किसान|फसल|खेती|पशु)/i,
+    jobs:
+      /\b(jobs?|vacancy|vacancies|recruitment|hiring|career|sarkari|government job|exam|upsc|ssc|railway recruitment|ibps|neet|jee|admit card|result|notification|apply online)\b|(నోకరీ|ఉద్యోగ|రిక్రూట్|పరీక్ష|नौकरी|भर्ती|परीक्षा|रिजल्ट|सरकारी)/i,
   };
 
   const inc = INCLUDE_BY_CATEGORY[slug];
@@ -173,6 +218,13 @@ function isLegacyMiscategorized(post, categorySlug) {
   return false;
 }
 
+function textMatchesHindiScope(text, scope) {
+  const meta = HINDI_REGIONAL_SCOPES[scope];
+  if (!meta) return false;
+  const hay = String(text || '').toLowerCase();
+  return meta.keywords.some((kw) => hay.includes(kw.toLowerCase()));
+}
+
 function postMatchesRegionalPoliticsScope(p, politicsScope) {
   const ps = String(politicsScope || '').toLowerCase();
   const rowScope = String(p?.politicsScope || '').toLowerCase();
@@ -188,10 +240,14 @@ function postMatchesRegionalPoliticsScope(p, politicsScope) {
       || TELANGANA_REGIONAL_RE.test(text)
       || titleContainsTelangana(p);
   }
+  if (HINDI_SCOPE_KEYS.includes(ps)) {
+    return rowScope === ps
+      || textMatchesHindiScope(text, ps)
+      || String(p?.locationState || '').toLowerCase() === String(HINDI_REGIONAL_SCOPES[ps]?.state || '').toLowerCase();
+  }
   if (ps === 'north') {
-    return ['north', 'states', 'delhi'].includes(rowScope)
-      || /(उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|lucknow|chandigarh|noida|patna|jaipur)/.test(text)
-      || /\b(uttar pradesh|punjab|haryana|rajasthan|bihar|delhi)\b/i.test(text);
+    return [...HINDI_POLITICS_SCOPE_VALUES].includes(rowScope)
+      || HINDI_SCOPE_KEYS.some((scope) => textMatchesHindiScope(text, scope));
   }
   return false;
 }
@@ -225,15 +281,14 @@ function postMatchesPoliticsScopeFilter(p, politicsScope) {
     /(ఆంధ్ర|తెలంగాణ|amaravati|vijayawada|visakhapatnam|guntur|warangal|hyderabad|karimnagar|kurnool|nellore|హైదరాబాద్|అమరావతి|విజయవాడ)/i.test(text)
     || /\b(andhra pradesh|telangana|amaravati)\b/i.test(text);
   const northRegional =
-    /(उत्तर प्रदेश|पंजाब|हरियाणा|राजस्थान|बिहार|दिल्ली|यूपी|lucknow|chandigarh|noida)/.test(text)
-    || /\b(uttar pradesh|punjab|haryana|rajasthan|bihar)\b/i.test(text);
+    HINDI_SCOPE_KEYS.some((scope) => textMatchesHindiScope(text, scope));
   const worldMarkers =
     /\b(trump|biden|putin|ukraine|gaza|nato|white house|united nations|britain|uk\b|europe|china|pakistan)\b/i.test(text)
     || /(विदेश|अंतर्राष्ट्रीय|ब्रिटेन|अमेरिका|यूक्रेन|ट्रंप|बाइडेन|पाकिस्तान|चीन)/.test(text)
     || /(విదేశ|అంతర్జాతీయ|అమెరికా|ట్రంప్|బైడెన్|పాకిస్తాన్|చైనా|బ్రిటన్|యూక్రేన్)/i.test(text);
 
   if (ps === 'international') {
-    if (['andhra', 'telangana', 'north', 'states', 'delhi'].includes(rowScope)) return false;
+    if (['andhra', 'telangana', ...HINDI_POLITICS_SCOPE_VALUES].includes(rowScope)) return false;
     if (apTgRegional && !worldMarkers) return false;
     if (northRegional && !worldMarkers) return false;
     if (lang === 'te' && rowScope === 'india' && !worldMarkers) return false;
@@ -245,11 +300,11 @@ function postMatchesPoliticsScopeFilter(p, politicsScope) {
     if (worldMarkers && !/(మోదీ|राहुल|modi|rahul|parliament|lok sabha|ఎన్నిక|चुनाव|bjp|congress)/i.test(text)) {
       return false;
     }
-    if (['andhra', 'telangana', 'north', 'states', 'delhi'].includes(rowScope)) return false;
+    if ([...HINDI_POLITICS_SCOPE_VALUES, 'andhra', 'telangana'].includes(rowScope)) return false;
     return true;
   }
 
-  if (ps === 'andhra' || ps === 'telangana' || ps === 'north') {
+  if (ps === 'andhra' || ps === 'telangana' || ps === 'north' || HINDI_SCOPE_KEYS.includes(ps)) {
     return postMatchesRegionalPoliticsScope(p, ps);
   }
 
@@ -277,7 +332,7 @@ function filterPostsForCategory(posts, categorySlug, { politicsScope } = {}) {
     // Politics tab + AP/TG/North chip: keep Local-category rows merged from the API query.
     if (
       slug === 'politics'
-      && ['andhra', 'telangana', 'north'].includes(scope)
+      && (['andhra', 'telangana', 'north', ...HINDI_SCOPE_KEYS].includes(scope))
       && postSlug === 'local'
       && postMatchesRegionalPoliticsScope(p, scope)
     ) {

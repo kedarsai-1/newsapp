@@ -161,7 +161,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                                 onTap: () =>
                                     setState(() => _selectedCategoryId = null),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: 8),
                               ..._distinctCategories.map((cat) {
                                 final selected =
                                     _selectedCategoryId == cat.id;

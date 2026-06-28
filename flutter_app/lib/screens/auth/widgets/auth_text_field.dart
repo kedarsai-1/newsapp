@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../onboarding/onboarding_design.dart';
+import '../../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Rounded, lightweight Material 3 input matching the Dailyhunt-style auth flow.
 class AuthTextField extends StatelessWidget {
@@ -39,6 +40,7 @@ class AuthTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(OnboardingDesign.radiusCard),
       borderSide: BorderSide(color: OnboardingDesign.outline(context)),
@@ -71,7 +73,7 @@ class AuthTextField extends StatelessWidget {
         prefixIcon: prefix,
         suffixIcon: suffix,
         filled: true,
-        fillColor: const Color(0xFFF9FAFB),
+        fillColor: OnboardingDesign.surface(context),
         counterText: '',
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -84,14 +86,14 @@ class AuthTextField extends StatelessWidget {
           ),
         ),
         errorBorder: inputBorder.copyWith(
-          borderSide: BorderSide(color: Colors.red.shade400, width: 1.4),
+          borderSide: BorderSide(color: fx.error, width: 1.4),
         ),
         focusedErrorBorder: inputBorder.copyWith(
-          borderSide: BorderSide(color: Colors.red.shade600, width: 1.6),
+          borderSide: BorderSide(color: fx.error, width: 1.6),
         ),
         errorStyle: GoogleFonts.notoSans(
           fontSize: 12,
-          color: Colors.red.shade700,
+          color: fx.onErrorSurface,
           fontWeight: FontWeight.w500,
         ),
       ),

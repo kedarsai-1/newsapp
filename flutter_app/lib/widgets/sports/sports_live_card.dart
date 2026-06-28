@@ -2,7 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/sports_models.dart';
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Horizontal live / upcoming match card — Dailyhunt compact style.
 class SportsLiveCard extends StatelessWidget {
@@ -55,22 +55,22 @@ class SportsLiveCard extends StatelessWidget {
                       Container(
                         width: 7,
                         height: 7,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE53935),
+                        decoration: BoxDecoration(
+                          color: fx.live,
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      SizedBox(width: 6),
                       Text(
                         'LIVE',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFFE53935),
+                          color: fx.live,
                           letterSpacing: 0.6,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                     ],
                     Expanded(
                       child: Text(
@@ -106,7 +106,7 @@ class SportsLiveCard extends StatelessWidget {
                 if (!compact &&
                     match.thumbnail != null &&
                     match.thumbnail!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: CachedNetworkImage(
@@ -161,7 +161,7 @@ class SportsLiveCard extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Expanded(
           child: Text(
             t.name,

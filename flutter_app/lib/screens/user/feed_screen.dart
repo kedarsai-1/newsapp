@@ -5,7 +5,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
@@ -16,12 +15,18 @@ import '../../services/api_service.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/feed/dailyhunt_feed_skeleton.dart';
 import '../../widgets/feed/feed_image_cache.dart';
+import '../../widgets/feed/feed_highlights_rail.dart';
 import '../../widgets/feed/feed_list_view.dart';
 import '../../widgets/feed/feed_scope_chip_bar.dart';
+import '../../widgets/feed/local_saved_location_bar.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/breaking_banner.dart';
 import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/feed/dailyhunt_feed_article_card.dart';
 import '../../widgets/feed/feed_list_tuning.dart';
+import '../../utils/category_navigation.dart';
+import '../../utils/i18n.dart';
+import '../../utils/post_share.dart';
 import '../../widgets/dailyhunt/xpresso_side_menu.dart';
 import '../../widgets/premium_utils.dart';
 
@@ -42,6 +47,9 @@ const List<(String, String?)> _kFeedTabs = [
   ('Business', 'business'),
   ('Health', 'health'),
   ('Education', 'education'),
+  ('Crime', 'crime'),
+  ('Agriculture', 'agriculture'),
+  ('Jobs & Exams', 'jobs'),
   ('Local', 'local'),
 ];
 
@@ -54,27 +62,28 @@ const List<String> _kFeedTabLabels = [
   'Business',
   'Health',
   'Education',
+  'Crime',
+  'Agriculture',
+  'Jobs & Exams',
   'Local',
 ];
 
 class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   static const _likedCacheKey = 'feed_liked_state_cache_v1';
-  /// Web has no socket push — poll API often enough to match server cron (~5 min).
-  static const _autoRefreshInterval = Duration(minutes: 2);
+  /// Web has no socket push — poll often enough to match server cron (~5 min).
+  static const _autoRefreshInterval = Duration(minutes: 5);
 
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<double> _headerCollapse = ValueNotifier(0);
   final Map<String, bool> _bookmarkedByPostId = {};
   final Map<String, bool> _likedByPostId = {};
   Timer? _autoRefreshTimer;
   DateTime? _lastFeedRefreshAt;
-  late final PageController _feedPageController;
-  int _activePage = 0;
   bool _sidebarOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _feedPageController = PageController();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     _restoreLikedCache();
@@ -82,6 +91,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) => _autoRefreshFeed());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<NewsProvider>();
+      provider.loadFeedHighlights();
       if (provider.posts.isEmpty && !provider.refreshing) {
         _refreshFeed(markAuto: true);
       } else {
@@ -96,7 +106,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     _autoRefreshTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
-    _feedPageController.dispose();
+    _headerCollapse.dispose();
     super.dispose();
   }
 
@@ -138,10 +148,44 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     if (news.posts.isNotEmpty) {
       FeedImagePrecache.onScroll(context, news.posts, pos);
     }
+    final offset = pos.pixels;
+    final progress = (offset / 100.0).clamp(0.0, 1.0);
+    final quantized = (progress * 10).round() / 10;
+    if ((quantized - _headerCollapse.value).abs() >= 0.08) {
+      _headerCollapse.value = quantized;
+    }
     if (pos.maxScrollExtent <= 0) return;
     if (pos.pixels >= pos.maxScrollExtent - 480) {
       if (news.hasMore && !news.loading) news.loadMore();
     }
+  }
+
+  /// Collapsing chrome — quantized [ValueNotifier] avoids per-pixel rebuilds (DEF-001).
+  Widget _collapsingHeader({
+    required double translateMax,
+    required Widget child,
+  }) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _headerCollapse,
+      builder: (context, adjusted, child) {
+        final heightFactor = (1.0 - adjusted).clamp(0.0, 1.0);
+        final opacity = (1.0 - adjusted).clamp(0.0, 1.0);
+        return ClipRect(
+          child: Opacity(
+            opacity: opacity,
+            child: Align(
+              heightFactor: heightFactor,
+              alignment: Alignment.topCenter,
+              child: Transform.translate(
+                offset: Offset(0, -translateMax * adjusted),
+                child: child,
+              ),
+            ),
+          ),
+        );
+      },
+      child: child,
+    );
   }
 
   Future<void> _restoreLikedCache() async {
@@ -225,8 +269,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       _scrollFeedToTop();
       return;
     }
-    if (slug == 'sports') {
-      if (mounted) context.push('/sports');
+    if (slug == 'sports' || slug == 'weather') {
+      if (mounted) await openCategorySlug(context, slug, news: news);
       return;
     }
     Category? match;
@@ -307,9 +351,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _share(NewsPost post) async {
-    final text =
-        '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n${post.sourceUrl ?? ''}';
-    await Share.share(text, subject: post.title);
+    await PostShare.sharePost(post, context: context);
   }
 
   void _openArticle(NewsPost post) {
@@ -321,67 +363,18 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     bool markAuto = false,
     bool scrollToTop = true,
   }) async {
-    await context.read<NewsProvider>().refresh();
+    final news = context.read<NewsProvider>();
+    if (markAuto) {
+      await news.refreshPostsOnly();
+    } else {
+      await news.refresh();
+    }
     if (markAuto) _lastFeedRefreshAt = DateTime.now();
     if (scrollToTop) _scrollFeedToTop();
   }
 
-  static (String emoji, List<Color> colors) _categoryStyle(String slug) {
-    switch (slug.toLowerCase()) {
-      case 'politics':
-        return ('🏛️', [const Color(0xFFC084FC), const Color(0xFF8B5CF6)]); // Purple
-      case 'sports':
-        return ('⚽', [const Color(0xFF34D399), const Color(0xFF059669)]); // Green
-      case 'entertainment':
-        return ('🎬', [const Color(0xFFFBBF24), const Color(0xFFD97706)]); // Amber/Yellow
-      case 'technology':
-        return ('💻', [const Color(0xFF38BDF8), const Color(0xFF0284C7)]); // Blue
-      case 'business':
-        return ('📈', [const Color(0xFF2DD4BF), const Color(0xFF0D9488)]); // Teal
-      case 'health':
-        return ('🏥', [const Color(0xFFF87171), const Color(0xFFDC2626)]); // Red
-      case 'education':
-        return ('🎓', [const Color(0xFF818CF8), const Color(0xFF4F46E5)]); // Indigo
-      case 'local':
-        return ('📍', [const Color(0xFFF97316), const Color(0xFFEA580C)]); // Orange
-      default:
-        return ('📰', [Colors.white30, Colors.white10]);
-    }
-  }
-
-  Widget _deckSelectorTabs() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: GlassColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: GlassColors.borderWhite, width: 0.8),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _DeckTab(
-              label: 'Curated Feed',
-              selected: _activePage == 0,
-              onTap: () {
-                _feedPageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
-              },
-            ),
-          ),
-          Expanded(
-            child: _DeckTab(
-              label: 'Discover Topics',
-              selected: _activePage == 1,
-              onTap: () {
-                _feedPageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeOutCubic);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  static (String emoji, List<Color> colors) _categoryStyle(String slug) =>
+      FeedXpressoPalette.categoryGradient(slug);
 
   Widget _activeCategoryBanner(NewsProvider news) {
     if (news.selectedCategoryId == null) return const SizedBox.shrink();
@@ -407,8 +400,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       ),
       child: Row(
         children: [
-          Text(style.$1, style: const TextStyle(fontSize: 14)),
-          const SizedBox(width: 8),
+          Text(style.$1, style: TextStyle(fontSize: 14)),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               'Filtering by Topic: ${activeCat.name}',
@@ -437,95 +430,59 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _discoverDeck(NewsProvider news) {
-    if (news.categories.isEmpty) {
-      return Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: GlassColors.accentGreen,
-        ),
-      );
-    }
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 32),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.1,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: news.categories.length,
-      itemBuilder: (context, idx) {
-        final cat = news.categories[idx];
-        final style = _categoryStyle(cat.slug);
-        final isSelected = news.selectedCategoryId == cat.id;
-
-        return GestureDetector(
-          onTap: () {
-            news.selectCategory(cat.id);
-            _feedPageController.animateToPage(
-              0,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOutCubic,
-            );
-          },
-          child: GlassCard(
-            radius: 16,
-            padding: const EdgeInsets.all(12),
-            color: isSelected
-                ? style.$2[0].withOpacity(0.18)
-                : GlassColors.surfaceWhite,
-            borderColor: isSelected
-                ? style.$2[0].withOpacity(0.50)
-                : GlassColors.borderWhite,
-            boxShadow: [
-              BoxShadow(
-                color: isSelected
-                    ? style.$2[0].withOpacity(0.12)
-                    : (Theme.of(context).brightness == Brightness.light
-                        ? Colors.black.withOpacity(0.04)
-                        : Colors.black.withOpacity(0.12)),
-                blurRadius: 12,
-                spreadRadius: 1,
-              ),
-            ],
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [style.$2[0].withOpacity(0.5), style.$2[1].withOpacity(0.2)],
-                    ),
-                    border: Border.all(color: style.$2[0].withOpacity(0.4), width: 0.8),
-                  ),
-                  child: Text(style.$1, style: const TextStyle(fontSize: 16)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    cat.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: isSelected ? style.$2[0] : GlassColors.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
+  Widget _sidebarNavTile({
+    required NewsProvider news,
+    required String label,
+    required String emoji,
+    required String slug,
+    required bool isSelected,
+    required Future<void> Function() onTap,
+  }) {
+    final fx = context.fx;
+    final style = _categoryStyle(slug);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: GestureDetector(
+        onTap: () => onTap(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? style.$2[0].withOpacity(0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? style.$2[0].withOpacity(0.35) : Colors.transparent,
+              width: 0.8,
             ),
           ),
-        );
-      },
+          child: Row(
+            children: [
+              Text(emoji, style: TextStyle(fontSize: 14)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: isSelected ? style.$2[0] : fx.textSecondary,
+                  ),
+                ),
+              ),
+              if (isSelected)
+                Icon(
+                  Icons.check_circle_outline_rounded,
+                  size: 14,
+                  color: style.$2[0],
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _sidebarCategoryList(NewsProvider news) {
+    final fx = context.fx;
     return Container(
       width: 250,
       decoration: BoxDecoration(
@@ -537,11 +494,11 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
-              'DISCOVER TOPICS',
+              I18n.t(context, 'feed_filter_topics').toUpperCase(),
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
-                color: GlassColors.textTertiary,
+                color: fx.textTertiary,
                 letterSpacing: 0.6,
               ),
             ),
@@ -549,24 +506,55 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              itemCount: news.categories.length + 1,
+              itemCount: news.categories.length + 2,
               itemBuilder: (context, index) {
-                final isTop = index == 0;
-                final cat = isTop ? null : news.categories[index - 1];
-                final String label = isTop ? 'Top News' : cat!.name;
-                final String? id = isTop ? null : cat!.id;
-                final bool isSelected = news.selectedCategoryId == id;
-                final style = _categoryStyle(isTop ? '' : cat!.slug);
+                if (index == 0) {
+                  return _sidebarNavTile(
+                    news: news,
+                    label: I18n.t(context, 'feed_top_news'),
+                    emoji: '📰',
+                    slug: '',
+                    isSelected: news.selectedCategoryId == null && !news.followingFeedOnly,
+                    onTap: () async {
+                      await news.selectCategory(null);
+                      _scrollFeedToTop();
+                      setState(() => _sidebarOpen = false);
+                    },
+                  );
+                }
+                if (index == 1) {
+                  return _sidebarNavTile(
+                    news: news,
+                    label: I18n.t(context, 'feed_following'),
+                    emoji: '⭐',
+                    slug: 'following',
+                    isSelected: news.followingFeedOnly,
+                    onTap: () async {
+                      await news.selectFollowingFeed();
+                      _scrollFeedToTop();
+                      setState(() => _sidebarOpen = false);
+                    },
+                  );
+                }
+                final cat = news.categories[index - 2];
+                final bool isSelected =
+                    news.selectedCategoryId == cat.id && !news.followingFeedOnly;
+                final style = _categoryStyle(cat.slug);
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: GestureDetector(
-                    onTap: () {
-                      news.selectCategory(id);
+                    onTap: () async {
+                      final slug = cat.slug.toLowerCase();
+                      if (slug == 'sports' || slug == 'weather') {
+                        setState(() => _sidebarOpen = false);
+                        if (!context.mounted) return;
+                        await openCategorySlug(context, slug, news: news);
+                        return;
+                      }
+                      await news.selectCategory(cat.id);
                       _scrollFeedToTop();
-                      setState(() {
-                        _sidebarOpen = false; // close drawer on mobile
-                      });
+                      setState(() => _sidebarOpen = false);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -584,15 +572,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       ),
                       child: Row(
                         children: [
-                          Text(style.$1, style: const TextStyle(fontSize: 14)),
-                          const SizedBox(width: 10),
+                          Text(style.$1, style: TextStyle(fontSize: 14)),
+                          SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              label,
+                              cat.name,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w800,
-                                color: isSelected ? style.$2[0] : GlassColors.textSecondary,
+                                color: isSelected ? style.$2[0] : fx.textSecondary,
                               ),
                             ),
                           ),
@@ -617,6 +605,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final bottomInset = FeedXpressoTheme.feedBottomInset(context);
     final news = context.watch<NewsProvider>();
     final width = MediaQuery.sizeOf(context).width;
@@ -625,37 +614,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AnimatedBuilder(
-            animation: _scrollController,
-            builder: (context, child) {
-              double offset = 0.0;
-              if (_scrollController.hasClients) {
-                offset = _scrollController.offset;
-              }
-              final collapseProgress = (offset / 100.0).clamp(0.0, 1.0);
-              final double heightFactor = 1.0 - collapseProgress;
-              final double opacity = 1.0 - collapseProgress;
-              final double translateY = -10.0 * collapseProgress;
-
-              return ClipRect(
-                child: Opacity(
-                  opacity: opacity,
-                  child: Align(
-                    heightFactor: heightFactor,
-                    alignment: Alignment.topCenter,
-                    child: Transform.translate(
-                      offset: Offset(0.0, translateY),
-                      child: child,
-                    ),
-                  ),
-                ),
-              );
-            },
+          _collapsingHeader(
+            translateMax: 10,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _activeCategoryBanner(news),
+                if (news.isLocalMode) const LocalSavedLocationBar(),
                 Selector<NewsProvider, _RegionChipBarData>(
                   selector: (_, news) {
                     if (news.shouldShowPoliticalScopeDropdown) {
@@ -698,19 +664,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             ),
           ),
           Expanded(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: const Duration(milliseconds: 500),
-              builder: (context, value, child) {
-                return Opacity(
-                  opacity: value,
-                  child: Transform.translate(
-                    offset: Offset(0, 20 * (1 - value)),
-                    child: child,
-                  ),
-                );
-              },
-              child: Selector<NewsProvider, FeedListSnapshot>(
+            child: Selector<NewsProvider, FeedListSnapshot>(
                 selector: (_, news) => readFeedListSnapshot(news),
                 builder: (context, snap, _) {
                   if (snap.error != null) {
@@ -752,7 +706,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                           : 'No stories yet',
                       subtitle: news.categories.isEmpty
                           ? 'Categories did not load — check API and pull to refresh.'
-                          : 'Pull down to refresh or pick another category in Discover Topics.',
+                          : I18n.t(context, 'feed_empty_pick_category'),
                       dark: FeedXpressoTheme.isDark(context),
                       buttonLabel: news.categories.isEmpty ? 'Retry' : null,
                       onButtonTap: news.categories.isEmpty
@@ -765,6 +719,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                     snap.posts,
                     _scrollController,
                   );
+                  final breakingPosts = context.watch<NewsProvider>().breakingHighlightPosts;
+                  final trendingPosts = context.watch<NewsProvider>().trendingPosts;
+                  final breakingLoading = context.watch<NewsProvider>().breakingLoading;
+
                   return FeedListView(
                     posts: snap.posts,
                     loadingMore: snap.loading && snap.hasMore,
@@ -775,6 +733,22 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                     onRefresh: _refreshFeed,
                     onLike: _toggleLike,
                     onBookmark: _toggleBookmark,
+                    listHeader: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (breakingPosts.isNotEmpty)
+                          BreakingBanner(
+                            breakingPosts: breakingPosts,
+                            onTap: _openArticle,
+                          ),
+                        FeedHighlightsRail(
+                          breaking: breakingPosts,
+                          trending: trendingPosts,
+                          loading: breakingLoading,
+                          onOpen: _openArticle,
+                        ),
+                      ],
+                    ),
                     onShare: _share,
                     onOpen: _openArticle,
                     isPostSeen: context.read<NewsProvider>().isPostSeen,
@@ -782,7 +756,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                 },
               ),
             ),
-          ),
         ],
       );
     }
@@ -790,90 +763,19 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     Widget bodyContent;
     final bool useMobileLayout = width < 800;
 
-    if (news.layoutMode == AppLayoutMode.dualDeck) {
+    if (news.layoutMode == AppLayoutMode.carouselWheel ||
+        news.layoutMode == AppLayoutMode.dualDeck) {
       bodyContent = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AnimatedBuilder(
-            animation: _scrollController,
-            builder: (context, child) {
-              double offset = 0.0;
-              if (_scrollController.hasClients) {
-                offset = _scrollController.offset;
-              }
-              final collapseProgress = (offset / 100.0).clamp(0.0, 1.0);
-              final double heightFactor = 1.0 - collapseProgress;
-              final double opacity = 1.0 - collapseProgress;
-              final double translateY = -10.0 * collapseProgress;
-
-              return ClipRect(
-                child: Opacity(
-                  opacity: opacity,
-                  child: Align(
-                    heightFactor: heightFactor,
-                    alignment: Alignment.topCenter,
-                    child: Transform.translate(
-                      offset: Offset(0.0, translateY),
-                      child: child,
-                    ),
-                  ),
-                ),
-              );
-            },
-            child: _deckSelectorTabs(),
-          ),
-          Expanded(
-            child: PageView(
-              controller: _feedPageController,
-              onPageChanged: (value) {
-                setState(() {
-                  _activePage = value;
-                });
-              },
-              children: [
-                buildCuratedFeedContent(),
-                _discoverDeck(news),
-              ],
-            ),
-          ),
-        ],
-      );
-    } else if (news.layoutMode == AppLayoutMode.carouselWheel) {
-      bodyContent = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AnimatedBuilder(
-            animation: _scrollController,
-            builder: (context, child) {
-              double offset = 0.0;
-              if (_scrollController.hasClients) {
-                offset = _scrollController.offset;
-              }
-              final collapseProgress = (offset / 120.0).clamp(0.0, 1.0);
-              final double heightFactor = 1.0 - collapseProgress;
-              final double opacity = 1.0 - collapseProgress;
-              final double translateY = -15.0 * collapseProgress;
-
-              return ClipRect(
-                child: Opacity(
-                  opacity: opacity,
-                  child: Align(
-                    heightFactor: heightFactor,
-                    alignment: Alignment.topCenter,
-                    child: Transform.translate(
-                      offset: Offset(0.0, translateY),
-                      child: child,
-                    ),
-                  ),
-                ),
-              );
-            },
+          _collapsingHeader(
+            translateMax: 15,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: CategoryCarouselWheel(
                 categories: news.categories,
                 selectedCategoryId: news.selectedCategoryId,
-                onSelected: (id) => news.selectCategory(id),
+                onSelected: (id) => openCategoryById(context, id, news: news),
               ),
             ),
           ),
@@ -902,7 +804,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               GestureDetector(
                 onTap: () => setState(() => _sidebarOpen = false),
                 child: Container(
-                  color: Colors.black54,
+                  color: fx.overlayScrim,
                 ),
               ),
             AnimatedPositioned(
@@ -917,10 +819,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.60),
+                      color: fx.overlayScrim,
                       border: Border(
                         right: BorderSide(
-                          color: Colors.white.withOpacity(0.08),
+                          color: fx.onImage.withOpacity(0.08),
                           width: 0.8,
                         ),
                       ),
@@ -1028,18 +930,9 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
     super.dispose();
   }
 
-  (String, List<Color>) _categoryStyle(String? name) {
-    if (name == null) return ('📰', [Colors.white30, Colors.white10]);
-    final n = name.toLowerCase();
-    if (n.contains('sport')) return ('⚽', [const Color(0xFF34D399), const Color(0xFF059669)]);
-    if (n.contains('polit')) return ('🏛️', [const Color(0xFFC084FC), const Color(0xFF7C3AED)]);
-    if (n.contains('entert')) return ('🎬', [const Color(0xFFFBBF24), const Color(0xFFD97706)]);
-    if (n.contains('tech')) return ('💻', [const Color(0xFF38BDF8), const Color(0xFF0284C7)]);
-    if (n.contains('busin')) return ('💼', [const Color(0xFFF472B6), const Color(0xFFDB2777)]);
-    if (n.contains('health')) return ('🩺', [const Color(0xFFF87171), const Color(0xFFDC2626)]);
-    if (n.contains('educat')) return ('🎓', [const Color(0xFF818CF8), const Color(0xFF4F46E5)]);
-    if (n.contains('local')) return ('📍', [const Color(0xFFF97316), const Color(0xFFEA580C)]);
-    return ('📰', [Colors.white30, Colors.white10]);
+  (String, List<Color>) _categoryStyle(String? name, FeedXpressoPalette fx) {
+    if (name == null) return ('📰', [fx.meta, fx.chipInactiveBg]);
+    return FeedXpressoPalette.categoryGradient(name);
   }
 
   @override
@@ -1077,7 +970,8 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
               final opacity = 1.0 - (value.abs() * 0.45);
               final rotation = value * 0.38;
 
-              final style = _categoryStyle(item.$2 == null ? null : item.$1);
+              final chipFx = context.fx;
+              final style = _categoryStyle(item.$2 == null ? null : item.$1, chipFx);
               final isSelected = index == _selectedIndex();
 
               return Center(
@@ -1103,12 +997,12 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? style.$2[0].withOpacity(0.20)
-                              : GlassColors.surfaceWhite,
+                              : chipFx.glassSurface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected
                                 ? style.$2[0].withOpacity(0.50)
-                                : GlassColors.borderWhite,
+                                : chipFx.glassBorder,
                             width: isSelected ? 1.5 : 0.8,
                           ),
                           boxShadow: [
@@ -1124,8 +1018,8 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(style.$1, style: const TextStyle(fontSize: 14)),
-                            const SizedBox(width: 6),
+                            Text(style.$1, style: TextStyle(fontSize: 14)),
+                            SizedBox(width: 6),
                             Flexible(
                               child: Text(
                                 item.$1,
@@ -1134,7 +1028,7 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
-                                  color: isSelected ? style.$2[0] : GlassColors.textSecondary,
+                                  color: isSelected ? style.$2[0] : chipFx.textSecondary,
                                 ),
                               ),
                             ),
@@ -1148,57 +1042,6 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _DeckTab extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _DeckTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: selected
-              ? LinearGradient(
-                  colors: [
-                    GlassColors.accentGreen.withOpacity(0.35),
-                    GlassColors.accentGreen.withOpacity(0.15),
-                  ],
-                )
-              : null,
-          border: selected
-              ? Border.all(
-                  color: GlassColors.accentGreen.withOpacity(0.40),
-                  width: 0.8,
-                )
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: selected ? GlassColors.textPrimary : GlassColors.textTertiary,
-            letterSpacing: -0.1,
-          ),
-        ),
       ),
     );
   }
@@ -1219,7 +1062,7 @@ class _CategoriesLoadBanner extends StatelessWidget {
         child: Row(
           children: [
             Icon(Icons.cloud_off_outlined, size: 18, color: fx.accent),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Expanded(
               child: Text(
                 message,
@@ -1238,7 +1081,7 @@ class _CategoriesLoadBanner extends StatelessWidget {
                 foregroundColor: fx.accent,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text('Retry'),
+              child: Text('Retry'),
             ),
           ],
         ),
@@ -1288,7 +1131,9 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                 child: Row(
                   children: [
                     IconButton(
-                      tooltip: onMenuPressed != null ? 'Open Categories' : 'Menu',
+                      tooltip: onMenuPressed != null
+                          ? I18n.t(context, 'feed_filter_topics')
+                          : 'Menu',
                       onPressed: onMenuPressed ?? () => XpressoSideMenu.open(context),
                       icon: onMenuPressed != null
                           ? Icon(
@@ -1348,7 +1193,7 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                                 size: 17,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             Text(
                               AppConstants.appName,
                               maxLines: 1,
@@ -1392,7 +1237,7 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
               ),
             ),
           ),
-          Divider(height: 1, thickness: 1, color: Colors.white.withOpacity(0.08)),
+          Divider(height: 1, thickness: 1, color: fx.onImage.withOpacity(0.08)),
         ],
       ),
     );
@@ -1427,14 +1272,14 @@ class FeedSearchDelegate extends SearchDelegate<String> {
   List<Widget> buildActions(BuildContext context) => [
         IconButton(
           onPressed: () => query = '',
-          icon: const Icon(Icons.clear_rounded),
+          icon: Icon(Icons.clear_rounded),
         ),
       ];
 
   @override
   Widget buildLeading(BuildContext context) => IconButton(
         onPressed: () => _exit(context),
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+        icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18),
       );
 
   @override
@@ -1452,7 +1297,7 @@ class FeedSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildSuggestions(BuildContext context) => query.isEmpty
-      ? const Center(child: Text('Search news, topics, places...'))
+      ? Center(child: Text('Search news, topics, places...'))
       : buildResults(context);
 }
 
@@ -1597,7 +1442,7 @@ class _PoliticalReelsEntry extends StatelessWidget {
             child: Row(
               children: [
                 Icon(Icons.play_circle_outline_rounded, color: fx.accent, size: 22),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Political interviews & debates',

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Compact category tab — accent underline (no partial-border assert).
 class DailyhuntCategoryChip extends StatelessWidget {
@@ -49,7 +49,7 @@ class DailyhuntCategoryChip extends StatelessWidget {
                   color: selected ? fx.accent : fx.chipInactive,
                 ),
               ),
-              const SizedBox(height: 5),
+              SizedBox(height: 5),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 height: 2.5,

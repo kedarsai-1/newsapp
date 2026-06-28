@@ -4,6 +4,7 @@ const aiProvider = require('./aiProvider');
 const { decodeHtmlEntities } = require('../utils/decodeHtmlEntities');
 const {
   clipSummaryForStorage,
+  cleanArticlePlainText,
   SUMMARY_STORAGE_MAX_CHARS,
 } = require('../utils/summaryText');
 const {
@@ -12,6 +13,7 @@ const {
   translateToFeedLanguage: aiTranslateToFeedLanguage,
   isAiSummaryEnabled,
   isOllamaProvider,
+  isOllamaIngestCircuitOpen,
 } = aiProvider;
 
 const parser = new Parser({
@@ -34,18 +36,15 @@ const parser = new Parser({
 
 function stripHtml(input = '') {
   return decodeHtmlEntities(
-    String(input || '')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim(),
+    cleanArticlePlainText(String(input || ''), { stripHtml: true }),
   );
 }
 
 function summarizeLocal(text) {
   if (!text) return null;
-  return clipSummaryForStorage(String(text));
+  const cleaned = cleanArticlePlainText(String(text), { stripHtml: true });
+  if (!cleaned) return null;
+  return clipSummaryForStorage(cleaned);
 }
 
 function summaryInputMaxChars() {
@@ -92,9 +91,9 @@ function looksMojibake(text) {
 }
 
 function sanitizeForSummarization(text) {
+  const cleaned = cleanArticlePlainText(String(text || ''), { stripHtml: true });
   return decodeHtmlEntities(
-    String(text || '')
-      .replace(/<[^>]*>/g, ' ')
+    cleaned
       .replace(/â€™/g, "'")
       .replace(/â€œ|â€\x9D/g, '"')
       .replace(/â€"/g, '-')
@@ -120,9 +119,41 @@ async function summarize(text, feedLang = 'en') {
   return aiSummarize(text, feedLang);
 }
 
+const EXTRACTIVE_BOILERPLATE = /^(?:edition|report|live|updated|breaking|watch|listen|video|gallery|in pictures)\b/i;
+const EXTRACTIVE_JUNK_LINE = /youtube|facebook|twitter|instagram|subscribe|follow us|getty images|pa media|cookie|sign up|newsletter/i;
+
+function pickExtractiveSentences(text, maxLen = SUMMARY_STORAGE_MAX_CHARS) {
+  const sentences = String(text || '')
+    .split(/(?<=[.!?।])\s+|[\n\r]+/)
+    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .filter((s) => s.length >= 24 && !EXTRACTIVE_JUNK_LINE.test(s))
+    .filter((s) => !EXTRACTIVE_BOILERPLATE.test(s));
+
+  if (!sentences.length) return '';
+
+  const picked = [];
+  let total = 0;
+  for (const sentence of sentences) {
+    if (picked.length >= 3) break;
+    const nextLen = total + (picked.length ? 1 : 0) + sentence.length;
+    if (picked.length > 0 && nextLen > maxLen) break;
+    picked.push(sentence);
+    total = nextLen;
+    if (total >= Math.min(maxLen, 280)) break;
+  }
+
+  const joined = picked.join(' ').trim();
+  if (joined.length <= maxLen) return joined;
+  return clipSummaryForStorage(joined);
+}
+
 function extractiveSummaryNative(text, maxLen = SUMMARY_STORAGE_MAX_CHARS) {
   const t = sanitizeForSummarization(text);
   if (!t) return '';
+
+  const fromSentences = pickExtractiveSentences(t, maxLen);
+  if (fromSentences) return fromSentences;
+
   if (t.length <= maxLen) return t;
   const cut = t.slice(0, maxLen);
   const sentenceEnd = /[.!?।॥\u0964\u0965\n]/;
@@ -261,7 +292,7 @@ async function summarizeIndicViaEnglish(src, feedLang) {
  * target language; HF: translate → EN → summarize → translate back). Always falls back to
  * extractive, then summarizeLocal. English summaries may be translated to hi/te when needed.
  */
-async function summarizeForRssIngest(text, originalLang, feedLang) {
+async function summarizeForRssIngest(text, originalLang, feedLang, { skipAi = false } = {}) {
   const src = String(text || '').trim();
   const minChars = Math.max(12, Number(process.env.RSS_SUMMARY_MIN_CHARS || 15));
   if (!src || src.length < minChars) return '';
@@ -272,8 +303,13 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
   let summary = '';
 
   if (originalLang === 'eng' && !isIndicScript) {
-    const useAi = isOllamaProvider() || shouldUseHfSummarization(src, { language: 'en' });
-    if (useAi && isAiSummaryEnabled()) {
+    const hasHf = Boolean(String(process.env.HF_TOKEN || '').trim());
+    const ollamaBlocked = isOllamaProvider() && isOllamaIngestCircuitOpen();
+    const useAi = !skipAi && isAiSummaryEnabled() && (
+      (!ollamaBlocked && isOllamaProvider())
+      || (hasHf && shouldUseHfSummarization(src, { language: 'en' }))
+    );
+    if (useAi) {
       try {
         summary = await aiSummarize(src, fl || 'en');
       } catch {
@@ -281,7 +317,7 @@ async function summarizeForRssIngest(text, originalLang, feedLang) {
       }
     }
     if (!summary) summary = extractiveSummaryNative(src);
-  } else if (isIndicAiSummaryEnabled() && (isIndicContent || fl === 'hi' || fl === 'te')) {
+  } else if (!skipAi && isIndicAiSummaryEnabled() && (isIndicContent || fl === 'hi' || fl === 'te')) {
     try {
       summary = await summarizeIndicViaEnglish(src, fl);
     } catch {

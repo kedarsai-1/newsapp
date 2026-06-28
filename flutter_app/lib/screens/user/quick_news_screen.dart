@@ -7,8 +7,11 @@ import 'package:timeago/timeago.dart' as timeago;
 import '../../constants.dart';
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
+import '../../utils/i18n.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/premium_news_ui.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
+import '../../utils/feed_image_url.dart';
 
 class QuickNewsScreen extends StatefulWidget {
   const QuickNewsScreen({super.key});
@@ -82,7 +85,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
             ),
             const SizedBox(height: 16),
             GradientPillButton(
-              label: 'Open full news',
+              label: I18n.t(context, 'quick_news_open_full'),
               icon: AppIcons.share,
               onPressed: () {
                 Navigator.pop(context);
@@ -99,9 +102,15 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<NewsProvider>();
     final p = context.palette;
-    final posts = provider.posts.take(12).toList();
+    final posts = provider.breakingPosts;
+    final loading = provider.breakingLoading;
 
-    return PremiumScaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: PremiumScaffold(
       safeArea: true,
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
@@ -121,7 +130,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Quick News',
+                          I18n.t(context, 'menu_quick_news'),
                           style: Theme.of(context)
                               .textTheme
                               .headlineSmall
@@ -132,7 +141,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
                               ),
                         ),
                         Text(
-                          'Ultra-fast headline mode',
+                          I18n.t(context, 'quick_news_subtitle'),
                           style: context.subtitleText.copyWith(
                             color: p.textHint,
                           ),
@@ -151,13 +160,13 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _ModeChip(
-                          label: 'Quick',
+                          label: I18n.t(context, 'quick_news_mode_quick'),
                           selected: _quickMode,
                           onTap: () => setState(() => _quickMode = true),
                         ),
                         const SizedBox(width: 4),
                         _ModeChip(
-                          label: 'Full',
+                          label: I18n.t(context, 'quick_news_mode_full'),
                           selected: !_quickMode,
                           onTap: () {
                             setState(() => _quickMode = false);
@@ -171,12 +180,19 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
               ),
             ),
           ),
-          if (posts.isEmpty)
+          if (loading)
             const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (posts.isEmpty)
+            SliverFillRemaining(
               child: EmptyState(
                 icon: AppIcons.alert,
-                title: 'No quick briefs yet',
-                subtitle: 'Refresh the feed and try again.',
+                title: I18n.t(context, 'quick_news_empty_title'),
+                subtitle: provider.breakingError ??
+                    I18n.t(context, 'quick_news_empty_subtitle'),
+                buttonLabel: I18n.t(context, 'action_retry'),
+                onButtonTap: () => provider.loadBreakingFeed(),
               ),
             )
           else if (_quickMode)
@@ -226,7 +242,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
             SliverFillRemaining(
               child: Center(
                 child: GradientPillButton(
-                  label: 'Switching to full mode...',
+                  label: I18n.t(context, 'quick_news_switching_full'),
                   icon: AppIcons.home,
                   onPressed: () => context.go('/feed'),
                 ),
@@ -234,6 +250,7 @@ class _QuickNewsScreenState extends State<QuickNewsScreen> {
             ),
         ],
       ),
+    ),
     );
   }
 }
@@ -254,89 +271,158 @@ class _QuickHeadlineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final thumb = premiumImageUrl(post);
-    return FrostedPanel(
-      radius: 24,
-      padding: const EdgeInsets.all(16),
+    final fx = context.fx;
+    final imageUrl = feedImageUrlForPost(post);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final memW = (MediaQuery.sizeOf(context).width * dpr).round().clamp(480, 1400);
+
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: fx.heroOverlayBorder),
+            boxShadow: [
+              BoxShadow(
+                color: fx.heroShadow,
+                blurRadius: 24,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: p.primary.withValues(alpha: 0.16),
-                  ),
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      color: p.primary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    post.category?.name ?? 'Headline',
-                    style: context.metaText.copyWith(
-                      color: p.primary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${index + 1}/$total',
-                  style: context.metaText.copyWith(color: p.textHint),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (thumb.isNotEmpty) ...[
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: CachedNetworkImage(
-                        imageUrl: thumb,
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.high,
-                        memCacheWidth: 420,
-                        placeholder: (_, __) => ColoredBox(color: p.inputFill),
-                        errorWidget: (_, __, ___) =>
-                            Icon(AppIcons.image, color: p.textHint),
+                if (imageUrl.isNotEmpty)
+                  CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.medium,
+                    memCacheWidth: memW,
+                    placeholder: (_, __) => ColoredBox(
+                      color: p.inputFill,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: p.primary.withValues(alpha: 0.7),
+                        ),
                       ),
                     ),
+                    errorWidget: (_, __, ___) => _QuickImageFallback(p: p),
+                  )
+                else
+                  _QuickImageFallback(p: p),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          fx.overlayScrim.withValues(alpha: 0.72),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: p.primary.withValues(alpha: 0.9),
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: fx.onImage,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            post.category?.name ?? 'Headline',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.metaText.copyWith(
+                              color: fx.onImage,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${index + 1}/$total',
+                          style: context.metaText.copyWith(
+                            color: fx.onImage.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Text(
-                    post.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.titleText.copyWith(
-                      color: p.textPrimary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                      height: 1.2,
-                      shadows: const [
-                        Shadow(
-                          color: Color(0x77000000),
-                          blurRadius: 6,
-                          offset: Offset(0, 1),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 32, 16, 16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          fx.overlayScrim.withValues(alpha: 0.55),
+                          fx.overlayScrim.withValues(alpha: 0.92),
+                        ],
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          post.title,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.titleText.copyWith(
+                            color: fx.onImage,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                            height: 1.22,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '${post.displaySourceName} • ${timeago.format(post.displayTime)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.metaText.copyWith(
+                            color: fx.onImage.withValues(alpha: 0.88),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          I18n.t(context, 'quick_news_tap_expand'),
+                          style: context.metaText.copyWith(
+                            color: p.primary.withValues(alpha: 0.95),
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ],
                     ),
@@ -344,25 +430,27 @@ class _QuickHeadlineCard extends StatelessWidget {
                 ),
               ],
             ),
-            const Spacer(),
-            Text(
-              '${post.sourceName ?? post.category?.name ?? 'News'} • ${timeago.format(post.displayTime)}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.metaText.copyWith(
-                color: p.textHint,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap to expand',
-              style: context.metaText.copyWith(
-                color: p.primary,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickImageFallback extends StatelessWidget {
+  final AppPalette p;
+
+  const _QuickImageFallback({required this.p});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: p.inputFill,
+      child: Center(
+        child: Icon(
+          AppIcons.image,
+          size: 48,
+          color: p.textHint.withValues(alpha: 0.45),
         ),
       ),
     );

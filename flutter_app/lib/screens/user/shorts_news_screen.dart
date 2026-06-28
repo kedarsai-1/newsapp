@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/models.dart';
@@ -11,6 +10,7 @@ import '../../providers/shorts_playback_controller.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
 import '../../utils/i18n.dart';
+import '../../utils/post_share.dart';
 import '../../widgets/shorts/shorts_card_shimmer.dart';
 import '../../widgets/shorts/shorts_feed_theme.dart';
 import '../../widgets/premium_news_ui.dart';
@@ -82,7 +82,14 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
   void _syncShortsToFeedLanguage() {
     if (!mounted || !_news.prefsLoaded) return;
     final lang = _news.shortsFeedLanguage;
-    _shorts.ensureForLanguage(lang);
+    _shorts.ensureForLanguage(lang).then((_) {
+      if (!mounted) return;
+      final posts = _shorts.posts;
+      if (posts.isNotEmpty) {
+        ShortsFeedTuning.precacheInitialBatch(context, posts);
+        _playback.setActivePost(posts.first.id, immediate: true);
+      }
+    });
   }
 
   /// After each reload, show the newest video first (page 0).
@@ -157,6 +164,12 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
       final saved = await ApiService.toggleGuestBookmark(post);
       if (!mounted) return false;
       _saved[id] = saved;
+      // Also save YouTube videos to playlist
+      if (post.isYoutube && saved) {
+        await VideoPlaylistService.add(post);
+      } else if (post.isYoutube && !saved) {
+        await VideoPlaylistService.remove(id);
+      }
       return true;
     }
     final res = await ApiService.toggleBookmark(id);
@@ -169,17 +182,20 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
       return false;
     }
     _saved[id] = res['bookmarked'] == true;
+    // Also save YouTube videos to playlist
+    if (post.isYoutube) {
+      final isBookmarked = res['bookmarked'] == true;
+      if (isBookmarked) {
+        await VideoPlaylistService.add(post);
+      } else {
+        await VideoPlaylistService.remove(id);
+      }
+    }
     return true;
   }
 
   Future<void> _share(NewsPost post) async {
-    final link = post.isYoutube
-        ? (post.youtubeWatchUrl ?? post.sourceUrl ?? '')
-        : (post.sourceUrl ?? '');
-    final text = post.isYoutube
-        ? '${post.title}\n\n$link'
-        : '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n$link';
-    await Share.share(text, subject: post.title);
+    await PostShare.sharePost(post, context: context);
   }
 
   Future<void> _translate(NewsPost post) async {
@@ -394,20 +410,35 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
               ),
             ),
           ),
-          if (shortsLoading && posts.isNotEmpty)
+          if (shortsRefreshing && posts.isNotEmpty)
             Positioned(
+              top: MediaQuery.paddingOf(context).top + 72,
               left: 0,
               right: 0,
-              bottom: FeedXpressoTheme.feedBottomInset(context),
-              child: SafeArea(
-                child: Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: st.meta,
-                    ),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: st.scrim.withValues(alpha: 0.75),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: st.meta,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        I18n.t(context, 'shorts_refreshing'),
+                        style: TextStyle(color: st.meta, fontSize: 11),
+                      ),
+                    ],
                   ),
                 ),
               ),

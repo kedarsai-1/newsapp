@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'super_home_section.dart';
+import '../../../../widgets/feed/feed_xpresso_palette.dart';
+import '../../../../widgets/feed/feed_xpresso_theme.dart';
 
 enum CricketMatchStatus { live, upcoming, finished }
 
@@ -51,19 +53,19 @@ class SuperHomeCricketSection extends StatelessWidget {
     this.onMatchTap,
   });
 
-  static const List<CricketMatch> _matches = [
+  static final List<CricketMatch> _matches = [
     CricketMatch(
       tournament: 'IPL 2026',
       teamA: CricketTeam(
         code: 'CSK',
         name: 'Chennai Super Kings',
-        color: Color(0xFFF7C500),
+        color: FeedXpressoPalette.cricketTeamColor("AUS"),
         score: '186/4 (18.2)',
       ),
       teamB: CricketTeam(
         code: 'MI',
         name: 'Mumbai Indians',
-        color: Color(0xFF1F4FA0),
+        color: FeedXpressoPalette.cricketTeamColor("IND"),
         score: '142/6 (15.4)',
       ),
       status: CricketMatchStatus.live,
@@ -75,12 +77,12 @@ class SuperHomeCricketSection extends StatelessWidget {
       teamA: CricketTeam(
         code: 'RCB',
         name: 'Royal Challengers',
-        color: Color(0xFFD7152B),
+        color: FeedXpressoPalette.cricketTeamColor("ENG"),
       ),
       teamB: CricketTeam(
         code: 'KKR',
         name: 'Kolkata Knight Riders',
-        color: Color(0xFF512DA8),
+        color: FeedXpressoPalette.cricketTeamColor("WI"),
       ),
       status: CricketMatchStatus.upcoming,
       venue: 'M Chinnaswamy, Bengaluru',
@@ -91,13 +93,13 @@ class SuperHomeCricketSection extends StatelessWidget {
       teamA: CricketTeam(
         code: 'DC-W',
         name: 'Delhi Capitals (W)',
-        color: Color(0xFF1565C0),
+        color: FeedXpressoPalette.cricketTeamColor("SL"),
         score: '164/5 (20.0)',
       ),
       teamB: CricketTeam(
         code: 'GG-W',
         name: 'Gujarat Giants (W)',
-        color: Color(0xFF00897B),
+        color: FeedXpressoPalette.cricketTeamColor("SA"),
         score: '160/8 (20.0)',
       ),
       status: CricketMatchStatus.finished,
@@ -140,26 +142,26 @@ class SuperHomeCricketSection extends StatelessWidget {
           title: 'Live Cricket',
           subtitle: 'Live scores, upcoming fixtures and highlights',
           icon: Icons.sports_cricket_rounded,
-          accentColor: const Color(0xFF0D7A3E),
+          accentColor: FeedXpressoPalette.cricketPitchGreen,
           onSeeAll: onSeeAll,
           seeAllLabel: 'All matches',
         ),
-        const _ScoreboardStrip(matches: _matches),
-        const SizedBox(height: 6),
+        _ScoreboardStrip(matches: _matches),
+        SizedBox(height: 6),
         SuperHomeHorizontalRail(
           height: 162,
           itemCount: _matches.length,
           itemBuilder: (context, i) =>
               _MatchCard(match: _matches[i], onTap: onMatchTap),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
           child: Row(
             children: [
-              const Icon(Icons.movie_filter_rounded,
-                  size: 16, color: Color(0xFF0D7A3E)),
-              const SizedBox(width: 6),
+              Icon(Icons.movie_filter_rounded,
+                  size: 16, color: FeedXpressoPalette.cricketPitchGreen),
+              SizedBox(width: 6),
               Text(
                 'IPL Highlights',
                 style: TextStyle(
@@ -196,7 +198,7 @@ class _ScoreboardStrip extends StatelessWidget {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 14),
         itemCount: matches.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => SizedBox(width: 8),
         itemBuilder: (_, i) => _ScoreChip(match: matches[i]),
       ),
     );
@@ -224,7 +226,7 @@ class _ScoreChip extends StatelessWidget {
         children: [
           if (isLive) ...[
             const _LiveDot(),
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
           ],
           Text(
             '${match.teamA.code} ${match.teamA.score?.split(' ').first ?? '-'}',
@@ -234,7 +236,7 @@ class _ScoreChip extends StatelessWidget {
               color: cs.onSurface,
             ),
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: 4),
           Text(
             'vs',
             style: TextStyle(
@@ -243,7 +245,7 @@ class _ScoreChip extends StatelessWidget {
               color: cs.onSurface.withValues(alpha: 0.5),
             ),
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: 4),
           Text(
             '${match.teamB.code} ${match.teamB.score?.split(' ').first ?? '-'}',
             style: TextStyle(
@@ -279,13 +281,14 @@ class _LiveDotState extends State<_LiveDot>
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return FadeTransition(
       opacity: Tween<double>(begin: 0.55, end: 1).animate(_c),
       child: Container(
         width: 8,
         height: 8,
-        decoration: const BoxDecoration(
-          color: Color(0xFFEF4444),
+        decoration: BoxDecoration(
+          color: fx.live,
           shape: BoxShape.circle,
         ),
       ),
@@ -303,19 +306,20 @@ class _MatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final cs = Theme.of(context).colorScheme;
     final isLive = match.status == CricketMatchStatus.live;
     final isFinished = match.status == CricketMatchStatus.finished;
     final accent = match.status == CricketMatchStatus.upcoming
-        ? const Color(0xFF1F4FA0)
+        ? FeedXpressoPalette.cricketTeamColor("IND")
         : isFinished
-            ? const Color(0xFF6B7280)
-            : const Color(0xFFEF4444);
+            ? FeedXpressoPalette.cricketTeamColor("")
+            : fx.liked;
 
     return SizedBox(
       width: 280,
       child: Material(
-        color: Colors.white,
+        color: fx.onImage,
         borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -355,7 +359,7 @@ class _MatchCard extends StatelessWidget {
                         children: [
                           if (isLive) ...[
                             const _LiveDot(),
-                            const SizedBox(width: 4),
+                            SizedBox(width: 4),
                           ],
                           Text(
                             isLive
@@ -375,12 +379,12 @@ class _MatchCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _TeamRow(team: match.teamA),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 _TeamRow(team: match.teamB),
                 const Spacer(),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Text(
                   match.result ?? match.statusText,
                   maxLines: 1,
@@ -391,7 +395,7 @@ class _MatchCard extends StatelessWidget {
                     color: accent,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   match.venue,
                   maxLines: 1,
@@ -417,6 +421,7 @@ class _TeamRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -430,15 +435,15 @@ class _TeamRow extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             team.code.substring(0, team.code.length > 3 ? 3 : team.code.length),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w900,
-              color: Colors.white,
+              color: fx.onImage,
               letterSpacing: 0.4,
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         Expanded(
           child: Text(
             team.name,
@@ -451,7 +456,7 @@ class _TeamRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Text(
           team.score ?? '—',
           style: TextStyle(
@@ -485,11 +490,12 @@ class _HighlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: 180,
       child: Material(
-        color: Colors.white,
+        color: fx.onImage,
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -508,17 +514,17 @@ class _HighlightCard extends StatelessWidget {
                   children: [
                     Container(
                       height: 76,
-                      decoration: const BoxDecoration(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [Color(0xFF065F46), Color(0xFF0D7A3E)],
+                          colors: [FeedXpressoPalette.cricketPitchGreenDark, FeedXpressoPalette.cricketPitchGreen],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                       ),
                       alignment: Alignment.center,
-                      child: const Icon(
+                      child: Icon(
                         Icons.play_circle_fill_rounded,
-                        color: Colors.white,
+                        color: fx.onImage,
                         size: 38,
                       ),
                     ),
@@ -529,15 +535,15 @@ class _HighlightCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
+                          color: fx.overlayScrim,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           item.duration,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                            color: fx.onImage,
                           ),
                         ),
                       ),
@@ -549,15 +555,15 @@ class _HighlightCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.95),
+                          color: fx.onImage.withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: Text(
                           item.tag,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 9.5,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0D7A3E),
+                            color: FeedXpressoPalette.cricketPitchGreen,
                             letterSpacing: 0.4,
                           ),
                         ),

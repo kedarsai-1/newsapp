@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../dailyhunt_tokens.dart';
+import '../../../widgets/feed/feed_xpresso_theme.dart';
 
 enum DhActionStyle { glassDark, filledAccent, tonal }
 
@@ -25,6 +26,7 @@ class DhActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final cs = Theme.of(context).colorScheme;
     final iconOnly = _iconShell(
       context: context,
@@ -57,7 +59,7 @@ class DhActionButton extends StatelessWidget {
             child: iconOnly,
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         SizedBox(
           width: 72,
           child: Text(
@@ -69,14 +71,14 @@ class DhActionButton extends StatelessWidget {
               fontSize: 10.5,
               fontWeight: FontWeight.w800,
               color: style == DhActionStyle.glassDark
-                  ? Colors.white.withValues(alpha: 0.92)
+                  ? fx.onImage
                   : cs.onSurface.withValues(alpha: 0.75),
               shadows: style == DhActionStyle.glassDark
-                  ? const [
+                  ? [
                       Shadow(
-                        color: Color(0x66000000),
+                        color: fx.overlayScrim,
                         blurRadius: 4,
-                        offset: Offset(0, 1),
+                        offset: const Offset(0, 1),
                       ),
                     ]
                   : null,
@@ -99,6 +101,7 @@ class DhActionButton extends StatelessWidget {
   }
 
   Widget _iconShell({required BuildContext context, required Widget child}) {
+    final fx = context.fx;
     switch (style) {
       case DhActionStyle.glassDark:
         return ClipOval(
@@ -109,9 +112,9 @@ class DhActionButton extends StatelessWidget {
               height: 46,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.52),
+                color: fx.overlayScrim,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                border: Border.all(color: fx.onImage.withValues(alpha: 0.2)),
               ),
               child: child,
             ),
@@ -122,7 +125,7 @@ class DhActionButton extends StatelessWidget {
           width: 46,
           height: 46,
           alignment: Alignment.center,
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: DhTokens.accent,
             shape: BoxShape.circle,
           ),

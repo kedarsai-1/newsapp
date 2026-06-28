@@ -71,5 +71,26 @@ void main() {
       );
       expect(post.displayTime, published);
     });
+
+    test('displaySourceName prefers publisherName over ingestion bot', () {
+      final post = NewsPost.fromJson({
+        '_id': 'p1',
+        'title': 'Telugu headline',
+        'body': 'Body',
+        'status': 'approved',
+        'sourceName': 'RSS · V6 Velugu',
+        'publisherName': 'V6 Velugu',
+        'reporter': {
+          '_id': 'u1',
+          'name': 'V6 Velugu',
+          'email': 'scraper@newsnow.local',
+          'role': 'reporter',
+        },
+        'createdAt': '2024-06-01T10:00:00.000Z',
+      });
+
+      expect(post.displaySourceName, 'V6 Velugu');
+      expect(post.displaySourceInitial, 'V');
+    });
   });
 }

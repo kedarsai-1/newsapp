@@ -30,9 +30,31 @@ function flattenLocation(location) {
     locationLongitude: location.longitude != null ? Number(location.longitude) : null,
     locationAddress: location.address ?? null,
     locationCity: location.city ?? null,
+    locationDistrict: location.district ?? null,
+    locationMandal: location.mandal ?? null,
     locationState: location.state ?? null,
     locationCountry: location.country ?? 'India',
     locationCapturedAt: location.capturedAt ? new Date(location.capturedAt) : new Date(),
+  };
+}
+
+/** Merge nested `location` object with flat ingest fields (`locationCity`, etc.). */
+function flattenLocationFromDoc(doc) {
+  const nested = flattenLocation(doc?.location);
+  const flatLat = doc?.locationLatitude;
+  const flatLng = doc?.locationLongitude;
+  return {
+    locationLatitude: flatLat != null ? Number(flatLat) : nested.locationLatitude ?? null,
+    locationLongitude: flatLng != null ? Number(flatLng) : nested.locationLongitude ?? null,
+    locationAddress: nullIfBlank(doc?.locationAddress) ?? nested.locationAddress ?? null,
+    locationCity: nullIfBlank(doc?.locationCity) ?? nested.locationCity ?? null,
+    locationDistrict: nullIfBlank(doc?.locationDistrict) ?? nested.locationDistrict ?? null,
+    locationMandal: nullIfBlank(doc?.locationMandal) ?? nested.locationMandal ?? null,
+    locationState: nullIfBlank(doc?.locationState) ?? nested.locationState ?? null,
+    locationCountry: nullIfBlank(doc?.locationCountry) ?? nested.locationCountry ?? 'India',
+    locationCapturedAt: doc?.locationCapturedAt
+      ? new Date(doc.locationCapturedAt)
+      : nested.locationCapturedAt ?? null,
   };
 }
 
@@ -104,7 +126,7 @@ function newsPostDataFromDoc(doc) {
     videoCategory: doc.videoCategory ?? null,
     videoClassificationMethod: doc.videoClassificationMethod ?? null,
     videoClassificationScore: doc.videoClassificationScore == null ? null : Number(doc.videoClassificationScore),
-    ...flattenLocation(doc.location),
+    ...flattenLocationFromDoc(doc),
     ...flattenYoutube(doc.youtube),
   };
   if (Array.isArray(doc.media) && doc.media.length) {
@@ -131,5 +153,6 @@ module.exports = {
   entitiesCreate,
   createNewsPost,
   flattenLocation,
+  flattenLocationFromDoc,
   flattenYoutube,
 };

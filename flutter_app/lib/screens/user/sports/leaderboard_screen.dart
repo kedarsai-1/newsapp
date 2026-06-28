@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/sports_models.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../services/auth_provider.dart';
+import '../../../utils/i18n.dart';
 import '../../../widgets/feed/feed_xpresso_theme.dart';
 
 class LeaderboardScreen extends StatefulWidget {
@@ -62,20 +64,37 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
   }
 
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/feed');
+  }
+
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     final loggedIn = context.watch<AuthProvider>().isLoggedIn;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: fx.background,
       appBar: AppBar(
         backgroundColor: fx.background,
         foregroundColor: fx.title,
-        title: const Text('Prediction Leaderboard'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _handleBack,
+        ),
+        title: Text(I18n.t(context, 'menu_leaderboard')),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          ? Center(child: CircularProgressIndicator(strokeWidth: 2))
           : _error != null
               ? Center(
                   child: Padding(
@@ -84,8 +103,8 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 12),
-                        FilledButton(onPressed: _load, child: const Text('Retry')),
+                        SizedBox(height: 12),
+                        FilledButton(onPressed: _load, child: Text('Retry')),
                       ],
                     ),
                   ),
@@ -105,7 +124,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                         ),
                       if (_me != null) ...[
                         _MeCard(entry: _me!, fx: fx),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                       ],
                       ..._entries.map((e) => _RankTile(entry: e, fx: fx)),
                       if (_entries.isEmpty)
@@ -120,6 +139,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     ],
                   ),
                 ),
+    ),
     );
   }
 }
@@ -132,6 +152,7 @@ class _MeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -145,10 +166,10 @@ class _MeCard extends StatelessWidget {
             backgroundColor: fx.accent,
             child: Text(
               entry.name.isNotEmpty ? entry.name[0].toUpperCase() : '?',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+              style: TextStyle(color: fx.onImage, fontWeight: FontWeight.w800),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,6 +220,7 @@ class _RankTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

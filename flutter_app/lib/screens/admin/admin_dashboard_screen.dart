@@ -7,6 +7,7 @@ import '../../widgets/shimmer_widgets.dart';
 import '../../utils/app_utils.dart';
 import '../../models/models.dart';
 import '../../constants.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -20,47 +21,48 @@ class _State extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.watch<AdminProvider>();
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: GlassAppBar(
         showBack: false,
-        title: const Text('Admin Panel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: GlassColors.textPrimary)),
-        actions: [GlassBadge(label: 'Admin', accentColor: GlassColors.accentOrange, icon: Icons.admin_panel_settings), const SizedBox(width: 12)],
+        title: Text('Admin Panel', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: fx.title)),
+        actions: [GlassBadge(label: 'Admin', accentColor: fx.accentSecondary, icon: Icons.admin_panel_settings), SizedBox(width: 12)],
       ),
       body: p.loading && p.dashboardStats == null
           ? ListView(padding: const EdgeInsets.all(16), children: [const StatsShimmer()])
           : RefreshIndicator(
               onRefresh: () => p.loadDashboard(),
-              color: GlassColors.accentGreenLight,
+              color: fx.accentLight,
               child: ListView(padding: const EdgeInsets.all(16), children: [
                 if (p.dashboardStats != null) ...[
-                  const Text('Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
-                  const SizedBox(height: 12),
+                  Text('Overview', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fx.title)),
+                  SizedBox(height: 12),
                   GridView.count(
                     crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
                     childAspectRatio: 1.5, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
                     children: [
-                      GlassStatCard(label: 'Total Users', value: '${p.dashboardStats!['totalUsers']}', icon: Icons.people_outline, accentColor: GlassColors.info),
-                      GlassStatCard(label: 'Reporters', value: '${p.dashboardStats!['totalReporters']}', icon: Icons.mic_outlined, accentColor: GlassColors.accentGreenLight),
-                      GlassStatCard(label: 'Pending Review', value: '${p.dashboardStats!['pendingPosts']}', icon: Icons.pending_outlined, accentColor: GlassColors.warning),
-                      GlassStatCard(label: 'Published Today', value: '${p.dashboardStats!['approvedToday']}', icon: Icons.check_circle_outline, accentColor: GlassColors.success),
+                      GlassStatCard(label: 'Total Users', value: '${p.dashboardStats!['totalUsers']}', icon: Icons.people_outline, accentColor: fx.info),
+                      GlassStatCard(label: 'Reporters', value: '${p.dashboardStats!['totalReporters']}', icon: Icons.mic_outlined, accentColor: fx.accentLight),
+                      GlassStatCard(label: 'Pending Review', value: '${p.dashboardStats!['pendingPosts']}', icon: Icons.pending_outlined, accentColor: fx.warning),
+                      GlassStatCard(label: 'Published Today', value: '${p.dashboardStats!['approvedToday']}', icon: Icons.check_circle_outline, accentColor: fx.success),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                 ],
 
-                const Text('Management', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
-                const SizedBox(height: 12),
+                Text('Management', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fx.title)),
+                SizedBox(height: 12),
                 _ActionTile(icon: Icons.pending_actions, label: 'Review Pending Posts',
-                    badge: p.dashboardStats?['pendingPosts']?.toString(), color: GlassColors.warning, onTap: () => context.go('/admin/pending')),
-                const SizedBox(height: 10),
-                _ActionTile(icon: Icons.people, label: 'Manage Users', color: GlassColors.info, onTap: () => context.go('/admin/users')),
-                const SizedBox(height: 10),
+                    badge: p.dashboardStats?['pendingPosts']?.toString(), color: fx.warning, onTap: () => context.go('/admin/pending')),
+                SizedBox(height: 10),
+                _ActionTile(icon: Icons.people, label: 'Manage Users', color: fx.info, onTap: () => context.go('/admin/users')),
+                SizedBox(height: 10),
                 _ActionTile(
                   icon: Icons.play_circle_outline,
                   label: 'Run YouTube ingest',
-                  color: GlassColors.accentGreenLight,
+                  color: fx.accentLight,
                   onTap: () async {
                     final res = await p.runYoutubeIngestion();
                     if (!context.mounted) return;
@@ -76,11 +78,11 @@ class _State extends State<AdminDashboardScreen> {
                     );
                   },
                 ),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 _ActionTile(
                   icon: Icons.account_balance_outlined,
                   label: 'Run political video ingest',
-                  color: GlassColors.info,
+                  color: fx.info,
                   onTap: () async {
                     final res = await p.runPoliticalVideoIngestion();
                     if (!context.mounted) return;
@@ -98,11 +100,11 @@ class _State extends State<AdminDashboardScreen> {
                 ),
 
                 if (p.recentActivity.isNotEmpty) ...[
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text('Needs Review', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: GlassColors.textPrimary)),
+                    Text('Needs Review', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fx.title)),
                     TextButton(onPressed: () => context.go('/admin/pending'),
-                        child: const Text('View All', style: TextStyle(color: GlassColors.accentGreenLight))),
+                        child: Text('View All', style: TextStyle(color: fx.accentLight))),
                   ]),
                   ...p.recentActivity.map((post) => _PendingRow(post: post, provider: p)),
                 ],
@@ -122,22 +124,23 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return GestureDetector(
       onTap: onTap,
       child: GlassContainer(
         padding: const EdgeInsets.all(14),
         child: Row(children: [
           Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 20)),
-          const SizedBox(width: 14),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: GlassColors.textPrimary))),
+          SizedBox(width: 14),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fx.title))),
           if (badge != null && badge != '0')
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: GlassColors.warning.withOpacity(0.2), borderRadius: BorderRadius.circular(12), border: Border.all(color: GlassColors.warning.withOpacity(0.4))),
-              child: Text(badge!, style: TextStyle(color: GlassColors.warning, fontSize: 12, fontWeight: FontWeight.bold)),
+              decoration: BoxDecoration(color: fx.warning.withOpacity(0.2), borderRadius: BorderRadius.circular(12), border: Border.all(color: fx.warning.withOpacity(0.4))),
+              child: Text(badge!, style: TextStyle(color: fx.warning, fontSize: 12, fontWeight: FontWeight.bold)),
             ),
-          const SizedBox(width: 8),
-          Icon(Icons.chevron_right, color: GlassColors.textHint, size: 18),
+          SizedBox(width: 8),
+          Icon(Icons.chevron_right, color: fx.textHint, size: 18),
         ]),
       ),
     );
@@ -151,34 +154,35 @@ class _PendingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: GlassColors.surfaceWhite, borderRadius: BorderRadius.circular(14), border: Border.all(color: GlassColors.borderWhite, width: 0.8)),
+      decoration: BoxDecoration(color: fx.glassSurface, borderRadius: BorderRadius.circular(14), border: Border.all(color: fx.glassBorder, width: 0.8)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          CircleAvatar(radius: 14, backgroundColor: GlassColors.accentPurpleSurface, child: Text(AppUtils.initials(post.reporter?.name ?? '?'), style: const TextStyle(color: GlassColors.accentPurpleLight, fontSize: 10, fontWeight: FontWeight.bold))),
-          const SizedBox(width: 8),
+          CircleAvatar(radius: 14, backgroundColor: fx.accentTertiarySurface, child: Text(AppUtils.initials(post.reporter?.name ?? '?'), style: TextStyle(color: fx.accentTertiaryLight, fontSize: 10, fontWeight: FontWeight.bold))),
+          SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(post.reporter?.name ?? 'Reporter', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: GlassColors.textPrimary)),
-            Text(timeago.format(post.createdAt), style: const TextStyle(fontSize: 10, color: GlassColors.textHint)),
+            Text(post.reporter?.name ?? 'Reporter', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fx.title)),
+            Text(timeago.format(post.createdAt), style: TextStyle(fontSize: 10, color: fx.textHint)),
           ])),
           if (post.category != null)
-            GlassBadge(label: post.category!.name, accentColor: GlassColors.accentGreen),
+            GlassBadge(label: post.category!.name, accentColor: fx.accent),
         ]),
-        const SizedBox(height: 8),
-        Text(post.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: GlassColors.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 10),
+        SizedBox(height: 8),
+        Text(post.title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fx.title), maxLines: 2, overflow: TextOverflow.ellipsis),
+        SizedBox(height: 10),
         Row(children: [
           Expanded(child: GestureDetector(
             onTap: () async {
               final ctrl = TextEditingController();
               final reason = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(
-                title: const Text('Rejection Reason'),
-                content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Why is this being rejected?'), maxLines: 3, style: const TextStyle(color: GlassColors.textPrimary)),
+                title: Text('Rejection Reason'),
+                content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Why is this being rejected?'), maxLines: 3, style: TextStyle(color: fx.title)),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                  ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Reject')),
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
+                  ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: Text('Reject')),
                 ],
               ));
               if (reason != null && reason.isNotEmpty) {
@@ -188,15 +192,15 @@ class _PendingRow extends StatelessWidget {
             },
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(color: GlassColors.accentOrangeSurface, borderRadius: BorderRadius.circular(10), border: Border.all(color: GlassColors.accentOrangeBorder)),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.close, size: 14, color: GlassColors.accentOrangeLight),
+              decoration: BoxDecoration(color: fx.accentSecondarySurface, borderRadius: BorderRadius.circular(10), border: Border.all(color: fx.accentSecondaryBorder)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.close, size: 14, color: fx.accentSecondaryLight),
                 SizedBox(width: 4),
-                Text('Reject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: GlassColors.accentOrangeLight)),
+                Text('Reject', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fx.accentSecondaryLight)),
               ]),
             ),
           )),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(flex: 2, child: GestureDetector(
             onTap: () async {
               final ok = await provider.approvePost(post.id);
@@ -205,14 +209,14 @@ class _PendingRow extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [GlassColors.accentGreen.withOpacity(0.5), GlassColors.accentGreen.withOpacity(0.3)]),
+                gradient: LinearGradient(colors: [fx.accent.withOpacity(0.5), fx.accent.withOpacity(0.3)]),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: GlassColors.accentGreenBorder),
+                border: Border.all(color: fx.accentBorder),
               ),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.check, size: 14, color: GlassColors.accentGreenLight),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.check, size: 14, color: fx.accentLight),
                 SizedBox(width: 4),
-                Text('Approve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: GlassColors.accentGreenLight)),
+                Text('Approve', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fx.accentLight)),
               ]),
             ),
           )),

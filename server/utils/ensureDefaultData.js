@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../config/prisma');
+const { resolveAdminSeedPassword, isWeakAdminPassword } = require('./productionGuards');
 const { defaultCategories } = require('../config/defaultCategories');
+const { seedGeoMandals } = require('../scripts/seedGeoMandals');
 
 const DEFAULT_ADMIN_EMAIL = 'admin@newsapp.com';
 
@@ -32,10 +34,10 @@ async function ensureDefaultAdmin() {
   const existing = await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL } });
   if (existing) return false;
 
-  const plainPassword = String(process.env.ADMIN_SEED_PASSWORD || 'Admin@123').trim();
-  if (!plainPassword) {
-    console.warn('[db] ADMIN_SEED_PASSWORD is empty; skipping default admin creation.');
-    return false;
+  const plainPassword = resolveAdminSeedPassword();
+  if (process.env.NODE_ENV === 'production' && isWeakAdminPassword(plainPassword)) {
+    console.error('[db] FATAL: ADMIN_SEED_PASSWORD must not be the documented default in production.');
+    process.exit(1);
   }
 
   await prisma.user.create({
@@ -54,4 +56,12 @@ async function ensureDefaultAdmin() {
   return true;
 }
 
-module.exports = { ensureDefaultCategories, ensureDefaultAdmin, DEFAULT_ADMIN_EMAIL };
+async function ensureGeoMandals() {
+  const count = await prisma.geoMandal.count();
+  if (count > 0) return false;
+  const upserted = await seedGeoMandals();
+  console.log(`[geo] Seeded ${upserted} mandals (gazetteer was empty).`);
+  return true;
+}
+
+module.exports = { ensureDefaultCategories, ensureDefaultAdmin, ensureGeoMandals, DEFAULT_ADMIN_EMAIL };

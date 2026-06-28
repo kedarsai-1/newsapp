@@ -129,7 +129,7 @@ const sendToTopic = async (topic, title, body, data = {}, options = {}) => {
  * Notify subscribers when the feed ingests new approved stories.
  * Controlled by PUSH_NOTIFY_ON_INGEST and pushPolicy thresholds.
  */
-const notifyFeedIngestion = async ({ inserted = 0, source = 'news' } = {}) => {
+const notifyFeedIngestion = async ({ inserted = 0, source = 'news', articles = [] } = {}) => {
   const decision = shouldNotifyFeedIngest({
     inserted,
     source: normalizeIngestSource(source),
@@ -151,12 +151,23 @@ const notifyFeedIngestion = async ({ inserted = 0, source = 'news' } = {}) => {
     return decision;
   }
 
-  const { title, body } = buildIngestNotification(decision.count);
+  const leadArticle = Array.isArray(articles) && articles.length ? articles[0] : null;
+  const { title, body } = buildIngestNotification(decision.count, {
+    headline: leadArticle?.title,
+  });
+  const data = {
+    type: 'feed_update',
+    inserted: String(decision.count),
+    source: decision.source,
+  };
+  if (leadArticle?.id) {
+    data.postId = leadArticle.id;
+  }
   const result = await sendToTopic(
     'all',
     title,
     body,
-    { type: 'feed_update', inserted: String(decision.count), source: decision.source },
+    data,
     { collapseKey: 'feed_update' },
   );
   if (result.success) {
@@ -167,13 +178,16 @@ const notifyFeedIngestion = async ({ inserted = 0, source = 'news' } = {}) => {
 
 async function notifyPublishedPost(post) {
   if (!post?.id || !post?.category?.slug) return { skipped: true, reason: 'invalid_post' };
-  const body = truncatePushText(post.title, NOTIFICATION_BODY_MAX);
+  const title = truncatePushText(post.title, NOTIFICATION_TITLE_MAX);
+  const body = post.isBreaking
+    ? '🔴 Breaking News'
+    : truncatePushText(post.category.name, NOTIFICATION_BODY_MAX);
   const categoryTopic = `category_${post.category.slug}`;
   const data = { postId: post.id, type: 'news' };
 
   const categoryResult = await sendToTopic(
     categoryTopic,
-    post.isBreaking ? '🔴 Breaking News' : post.category.name,
+    title,
     body,
     data,
   );
@@ -182,8 +196,8 @@ async function notifyPublishedPost(post) {
   if (post.isBreaking && breakingTopicEnabled()) {
     breakingResult = await sendToTopic(
       'breaking',
+      title,
       '🔴 Breaking News',
-      body,
       data,
     );
   }

@@ -17,6 +17,8 @@ class OnboardingWelcomeScreen extends StatelessWidget {
       uiLanguageCode: draft.languageCode,
       interestSlugs: draft.interestSlugs.toList(),
       cityLabel: draft.cityLabel,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
       notificationsEnabled: draft.notificationsRequested,
     );
     if (!context.mounted) return;

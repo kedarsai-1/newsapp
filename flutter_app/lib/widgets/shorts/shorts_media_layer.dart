@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../models/models.dart';
+import '../feed/feed_xpresso_palette.dart';
 import '../premium_news_ui.dart';
 import 'youtube_shorts_player.dart';
+import '../feed/feed_xpresso_theme.dart';
 
 /// Full-bleed media for shorts — YouTube iframe or direct video/image fallback.
 class ShortsMediaLayer extends StatefulWidget {
@@ -90,7 +92,7 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
     super.dispose();
   }
 
-  Widget _imageBackdrop(String url, {int? memCacheWidth}) {
+  Widget _imageBackdrop(String url, FeedXpressoPalette fx, {int? memCacheWidth}) {
     return CachedNetworkImage(
       imageUrl: url,
       fit: BoxFit.cover,
@@ -99,20 +101,23 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
       memCacheWidth: memCacheWidth,
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => const ColoredBox(
-        color: Color(0xFF141414),
+      placeholder: (_, __) => ColoredBox(
+        color: fx.videoPlaceholder,
         child: Center(
           child: SizedBox(
             width: 28,
             height: 28,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: fx.onVideoMuted,
+            ),
           ),
         ),
       ),
-      errorWidget: (_, __, ___) => const ColoredBox(
-        color: Color(0xFF141414),
+      errorWidget: (_, __, ___) => ColoredBox(
+        color: fx.videoPlaceholder,
         child: Center(
-          child: Icon(Icons.article_outlined, color: Colors.white24, size: 56),
+          child: Icon(Icons.article_outlined, color: fx.onVideoMuted, size: 56),
         ),
       ),
     );
@@ -120,6 +125,7 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (widget.post.isYoutube) {
       return YoutubeShortsPlayer(
         post: widget.post,
@@ -139,7 +145,7 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
       final sz = _controller!.value.size;
       if (sz.width > 0 && sz.height > 0) {
         return ColoredBox(
-          color: Colors.black,
+          color: fx.mediaViewerBackground,
           child: FittedBox(
             fit: BoxFit.cover,
             clipBehavior: Clip.hardEdge,
@@ -155,13 +161,13 @@ class _ShortsMediaLayerState extends State<ShortsMediaLayer> {
 
     final imageUrl = premiumImageUrl(widget.post);
     if (imageUrl.isNotEmpty) {
-      return _imageBackdrop(imageUrl, memCacheWidth: kIsWeb ? null : memW);
+      return _imageBackdrop(imageUrl, fx, memCacheWidth: kIsWeb ? null : memW);
     }
 
-    return const ColoredBox(
-      color: Color(0xFF141414),
+    return ColoredBox(
+      color: fx.videoPlaceholder,
       child: Center(
-        child: Icon(Icons.article_outlined, color: Colors.white24, size: 56),
+        child: Icon(Icons.article_outlined, color: fx.onVideoMuted, size: 56),
       ),
     );
   }

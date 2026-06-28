@@ -15,6 +15,36 @@ const SUMMARY_SNIPPET_MAX_CHARS = Math.min(
  * @param {string} text
  * @returns {string}
  */
+const PAGE_CHROME_PREFIX = /^(?:(?:UK|US|India|World|Sport|Sports|Business|Tech)\s+)?Edition\s*/i;
+const PAGE_CHROME_LEAD = /^(?:Report|Live|Updated|Breaking|Watch|Listen|Video|Gallery|In pictures)\s*/i;
+const IMAGE_CREDIT_LINE = /\b(?:Getty Images|PA Media|Reuters|AFP|AP Photo|Shutterstock|Alamy)\b[^.!?]*[.!?]?/gi;
+const BOILERPLATE_FRAGMENT = /\b(?:subscribe|follow us|share this|download (?:the )?app|click here|read more)\b/gi;
+
+/** Fix words glued by stripped HTML (e.g. runsReport, GLSomerset). */
+function fixConcatenatedWords(text) {
+  return String(text || '')
+    .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([a-zA-Z])(\d)/g, '$1 $2')
+    .replace(/(\d)([a-zA-Z])/g, '$1 $2')
+    .replace(/([.!?])([A-Z])/g, '$1 $2')
+    .replace(/([a-z])(Report|Live|Edition)\b/g, '$1 $2');
+}
+
+function stripPageChrome(text) {
+  let x = String(text || '').trim();
+  if (!x) return '';
+  for (let i = 0; i < 4; i += 1) {
+    const next = x
+      .replace(PAGE_CHROME_PREFIX, '')
+      .replace(PAGE_CHROME_LEAD, '')
+      .trim();
+    if (next === x) break;
+    x = next;
+  }
+  return x;
+}
+
 function normalizeSummarySource(text) {
   let x = String(text || '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -25,7 +55,30 @@ function normalizeSummarySource(text) {
   x = x.replace(/https?:\/\/\S+/gi, ' ');
   x = x.replace(/(?:#\S+\s*){4,}/g, ' ');
   x = x.replace(/#(\S+)/g, '$1');
+  x = fixConcatenatedWords(x);
+  x = stripPageChrome(x);
+  x = x.replace(IMAGE_CREDIT_LINE, ' ');
+  x = x.replace(BOILERPLATE_FRAGMENT, ' ');
   return x.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Full plain-text cleanup for RSS/API ingest and extractive summaries.
+ * @param {string} text
+ * @param {{ stripHtml?: boolean }} [options]
+ * @returns {string}
+ */
+function cleanArticlePlainText(text, { stripHtml = false } = {}) {
+  let x = String(text || '');
+  if (stripHtml) {
+    x = x
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<\/(p|div|h[1-6]|li|tr|td|th|section|article|blockquote)>/gi, ' ')
+      .replace(/<(br|hr)\s*\/?>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ');
+  }
+  return normalizeSummarySource(x);
 }
 
 /**
@@ -88,6 +141,9 @@ module.exports = {
   SUMMARY_STORAGE_MAX_CHARS,
   SUMMARY_SNIPPET_MAX_CHARS,
   normalizeSummarySource,
+  cleanArticlePlainText,
+  fixConcatenatedWords,
+  stripPageChrome,
   truncateSummary,
   clipSummaryForStorage,
   clipSummaryForSnippet,

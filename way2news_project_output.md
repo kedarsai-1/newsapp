@@ -1,3 +1,5 @@
+
+
 Based on the provided Architecture Plan, I will now implement the code for `lib/models/article_model.dart`, `lib/services/news_service.dart`, `lib/widgets/news_card.dart`, and `lib/screens/home_screen.dart`.
 
 ```dart

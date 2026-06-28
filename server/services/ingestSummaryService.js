@@ -1,5 +1,10 @@
 const { summarizeForRssIngest } = require('./rssService');
-const { isAiSummaryEnabled, isOllamaProvider, shouldYieldIngestToChat } = require('./aiProvider');
+const {
+  isAiSummaryEnabled,
+  isOllamaProvider,
+  shouldYieldIngestToChat,
+  isOllamaIngestCircuitOpen,
+} = require('./aiProvider');
 
 function summaryMinBudgetMs() {
   const ollama = isOllamaProvider();
@@ -56,8 +61,12 @@ async function summarizeForIngest({
 
   if (shouldYieldIngestToChat()) {
     stats && (stats.summarySkippedChatPriority += 1);
-    return { summary: '', source: 'chat_priority' };
+  } else if (isOllamaProvider() && isOllamaIngestCircuitOpen()) {
+    stats && (stats.summarySkippedCircuit += 1);
   }
+
+  // Chat priority skips all AI; circuit open still allows HF backup inside aiSummarize.
+  const skipAi = shouldYieldIngestToChat();
 
   const retries = summaryMaxRetries();
   let lastError = null;
@@ -65,18 +74,27 @@ async function summarizeForIngest({
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       // eslint-disable-next-line no-await-in-loop
-      const summary = await summarizeForRssIngest(src, originalLang, fl);
+      const summary = await summarizeForRssIngest(src, originalLang, fl, { skipAi });
       const trimmed = String(summary || '').trim();
       if (trimmed) {
         stats && (stats.summaryAiOk += 1);
         if (attempt > 0) stats && (stats.summaryAiRetryOk += 1);
-        return { summary: trimmed, source: attempt > 0 ? 'ai_retry' : 'ai' };
+        const source = skipAi
+          ? 'chat_priority_extractive'
+          : (attempt > 0 ? 'ai_retry' : 'ai');
+        return { summary: trimmed, source };
       }
     } catch (err) {
       lastError = err;
       if (String(err?.message || '').includes('OLLAMA_CHAT_PRIORITY')) {
         stats && (stats.summarySkippedChatPriority += 1);
-        return { summary: '', source: 'chat_priority' };
+        skipAi = true;
+        continue;
+      }
+      if (String(err?.message || '').includes('OLLAMA_CIRCUIT_OPEN')) {
+        stats && (stats.summarySkippedCircuit += 1);
+        skipAi = true;
+        continue;
       }
       if (attempt < retries) {
         stats && (stats.summaryAiRetries += 1);
@@ -109,6 +127,7 @@ function createSummaryStats() {
     summarySkippedConfig: 0,
     summarySkippedAiOff: 0,
     summarySkippedChatPriority: 0,
+    summarySkippedCircuit: 0,
     summaryExtractiveFallback: 0,
   };
 }

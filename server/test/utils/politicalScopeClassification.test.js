@@ -23,9 +23,9 @@ describe('inferPoliticsScope', () => {
   });
 
   it('correctly classifies North Indian regional politics', () => {
-    assert.equal(inferPoliticsScope('Yogi Adityanath rally in Uttar Pradesh', ''), 'north');
-    assert.equal(inferPoliticsScope('Kejriwal press conference in Delhi', 'Delhi government announcements'), 'north');
-    assert.equal(inferPoliticsScope('उत्तर प्रदेश सरकार का बड़ा फैसला', ''), 'north');
+    assert.equal(inferPoliticsScope('Yogi Adityanath rally in Uttar Pradesh', ''), 'up');
+    assert.equal(inferPoliticsScope('Kejriwal press conference in Delhi', 'Delhi government announcements'), 'delhi');
+    assert.equal(inferPoliticsScope('उत्तर प्रदेश सरकार का बड़ा फैसला', ''), 'up');
   });
 
   it('ignores boilerplate domain links in description to avoid false positives', () => {

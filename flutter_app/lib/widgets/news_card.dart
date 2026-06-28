@@ -29,9 +29,7 @@ class NewsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = feedImageUrlForPost(post);
-    final source = (post.sourceName?.trim().isNotEmpty == true)
-        ? post.sourceName!.trim()
-        : (post.category?.name ?? 'News').trim();
+    final source = post.displaySourceName;
 
     return CompactNewsRow(
       title: post.title,

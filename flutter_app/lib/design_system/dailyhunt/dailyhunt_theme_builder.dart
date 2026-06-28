@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../../theme/app_palette.dart';
 import 'dailyhunt_tokens.dart';
 import 'dailyhunt_typography.dart';
+import '../../widgets/feed/feed_xpresso_palette.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Material 3 theme bundles: cards, buttons, app bar, bottom navigation.
 class DailyhuntDesignThemes {
@@ -79,13 +81,13 @@ class DailyhuntDesignThemes {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: DhTokens.accent,
-          foregroundColor: Colors.white,
+          foregroundColor: FeedXpressoPalette.light.onImage,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(DhTokens.radiusButton),
           ),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+          textStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -96,7 +98,7 @@ class DailyhuntDesignThemes {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(DhTokens.radiusButton),
           ),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+          textStyle: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -123,7 +125,7 @@ class DailyhuntDesignThemes {
         }),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: isLight ? const Color(0xFFF3F4F6) : DhTokens.darkSurfaceHigh,
+        backgroundColor: isLight ? FeedXpressoPalette.light.surface : DhTokens.darkSurfaceHigh,
         selectedColor: DhTokens.accent.withValues(alpha: 0.2),
         disabledColor: cs.onSurface.withValues(alpha: 0.08),
         labelStyle: TextStyle(

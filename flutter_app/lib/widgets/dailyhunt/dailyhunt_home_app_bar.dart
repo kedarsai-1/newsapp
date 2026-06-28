@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../constants.dart';
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Top bar: profile (left), logo/title (center), notifications (right).
 class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -66,7 +66,7 @@ class DailyhuntHomeAppBar extends StatelessWidget implements PreferredSizeWidget
                           size: 20,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Flexible(
                         child: Text(
                           AppConstants.appName,

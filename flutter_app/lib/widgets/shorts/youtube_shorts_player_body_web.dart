@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:web/web.dart' as web;
 
 import '../../models/models.dart';
 import '../../providers/shorts_playback_controller.dart';
+import '../feed/feed_xpresso_theme.dart';
 import 'youtube_shorts_player_shared.dart';
 
 /// Web: YouTube nocookie embed via platform view; Flutter controls play/pause/mute.
@@ -31,6 +33,8 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
 
   String? get _videoId => widget.post.youtube?.videoId;
   String get _viewType => 'yt-short-${widget.post.id}';
+  bool _playerRevealed = false;
+  Timer? _revealTimer;
 
   @override
   void initState() {
@@ -49,20 +53,32 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
       if (widget.isActive) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _prepareEmbed());
       } else {
+        _revealTimer?.cancel();
+        _playerRevealed = false;
         _applyPlaybackCommands();
       }
     }
   }
 
+  void _scheduleReveal() {
+    _revealTimer?.cancel();
+    _revealTimer = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted || !widget.isActive) return;
+      setState(() => _playerRevealed = true);
+      _applyPlaybackCommands();
+    });
+  }
+
   void _prepareEmbed() {
     if (!mounted || !widget.isActive) return;
     _ensureViewRegistered();
-    _applyPlaybackCommands();
+    _scheduleReveal();
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _revealTimer?.cancel();
     context.read<ShortsPlaybackController>().removeListener(_onPlaybackChanged);
     if (_registeredViews.contains(_viewType)) {
       _runJs(_pauseScript());
@@ -218,17 +234,11 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   Widget build(BuildContext context) {
     if (widget.post.youtube?.embeddable == false) {
       return _wrap(
-        Stack(
-          fit: StackFit.expand,
-          children: [
-            YoutubeThumbnailLayer(
-              post: widget.post,
-              immersive: widget.immersive,
-              showPlay: true,
-              onPlay: () => _openExternal(widget.post.youtubeWatchUrl),
-            ),
-            YoutubeFallbackCard(post: widget.post),
-          ],
+        YoutubeThumbnailLayer(
+          post: widget.post,
+          immersive: widget.immersive,
+          showPlay: true,
+          onPlay: () => _openExternal(widget.post.youtubeWatchUrl),
         ),
       );
     }
@@ -244,7 +254,7 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
           child: YoutubeThumbnailLayer(
             post: widget.post,
             immersive: widget.immersive,
-            showPlay: true,
+            showPlay: !_playerRevealed,
           ),
         ),
       );
@@ -261,13 +271,24 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
     );
   }
 
-  /// Iframe uses pointer-events:none so Flutter overlays (mute, etc.) receive taps on web.
+  /// Thumbnail stays visible until the embed is ready, then fades in the player.
   Widget _embeddedPlayerStack() {
+    final fx = context.fx;
     return Stack(
       fit: StackFit.expand,
       children: [
-        const ColoredBox(color: Colors.black),
-        HtmlElementView(viewType: _viewType),
+        YoutubeThumbnailLayer(
+          post: widget.post,
+          immersive: widget.immersive,
+        ),
+        AnimatedOpacity(
+          opacity: _playerRevealed ? 1 : 0,
+          duration: const Duration(milliseconds: 220),
+          child: ColoredBox(
+            color: fx.mediaViewerBackground,
+            child: HtmlElementView(viewType: _viewType),
+          ),
+        ),
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -280,9 +301,10 @@ class _YoutubeShortsPlayerBodyWebState extends State<YoutubeShortsPlayerBody> {
   }
 
   Widget _wrap(Widget child) {
+    final fx = context.fx;
     if (!widget.immersive) {
       return ColoredBox(
-        color: Colors.black,
+        color: fx.mediaViewerBackground,
         child: SizedBox.expand(child: child),
       );
     }

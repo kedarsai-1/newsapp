@@ -26,14 +26,29 @@ model User {
   likes               PostLike[]
   bookmarks           UserBookmark[]
   seenPosts           PostSeen[]
+  postReports         PostReport[]
   preferredCategories UserPreferredCategory[]
   pollVotes           MatchPollVote[]
   points              Int                     @default(0)
   predictionStreak    Int                     @default(0) @map("prediction_streak")
   maxPredictionStreak Int                     @default(0) @map("max_prediction_streak")
+  savedLocations      UserSavedLocation[]
+  publisherFollows    UserPublisherFollow[]
 
   @@index([role])
   @@map("users")
+}
+
+model UserPublisherFollow {
+  userId        String   @map("user_id") @db.Uuid
+  publisherKey  String   @map("publisher_key") @db.VarChar(120)
+  publisherName String   @map("publisher_name") @db.VarChar(200)
+  createdAt     DateTime @default(now()) @map("created_at")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, publisherKey])
+  @@index([userId, createdAt])
+  @@map("user_publisher_follows")
 }
 
 model Category {
@@ -93,6 +108,8 @@ model NewsPost {
   locationLongitude         Float?           @map("location_longitude")
   locationAddress           String?          @map("location_address")
   locationCity              String?          @map("location_city")
+  locationDistrict          String?          @map("location_district") @db.VarChar(120)
+  locationMandal            String?          @map("location_mandal") @db.VarChar(120)
   locationState             String?          @map("location_state")
   locationCountry           String?          @default("India") @map("location_country")
   locationCapturedAt        DateTime?        @map("location_captured_at")
@@ -103,6 +120,7 @@ model NewsPost {
   videoCategory             String?          @map("video_category")
   videoClassificationMethod String?          @map("video_classification_method")
   videoClassificationScore  Float?           @map("video_classification_score")
+  shareCode                 String?          @unique @map("share_code") @db.VarChar(12)
   createdAt                 DateTime         @default(now()) @map("created_at")
   updatedAt                 DateTime         @updatedAt @map("updated_at")
   reporter                  User             @relation("PostReporter", fields: [reporterId], references: [id], onDelete: Restrict)
@@ -114,6 +132,7 @@ model NewsPost {
   likedBy                   PostLike[]
   bookmarkedBy              UserBookmark[]
   seenBy                    PostSeen[]
+  reports                   PostReport[]
   politicalVideo            PoliticalVideo?
 
   @@index([status, createdAt])
@@ -122,6 +141,8 @@ model NewsPost {
   @@index([titleNormalized, status, createdAt])
   @@index([reporterId, createdAt])
   @@index([locationCity, status])
+  @@index([locationDistrict, status])
+  @@index([locationMandal, status])
   @@index([language, status, createdAt])
   @@index([status, sourceType, sourcePublishedAt])
   @@index([politicsScope])
@@ -257,6 +278,21 @@ model PostSeen {
   @@map("post_seen")
 }
 
+model PostReport {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  reason    String   @db.VarChar(120)
+  details   String?  @db.VarChar(1000)
+  createdAt DateTime @default(now()) @map("created_at")
+  post      NewsPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([postId, createdAt])
+  @@index([userId, createdAt])
+  @@map("post_reports")
+}
+
 model UserPreferredCategory {
   userId     String   @map("user_id") @db.Uuid
   categoryId String   @map("category_id") @db.Uuid
@@ -300,3 +336,40 @@ model MatchPollVote {
   @@map("match_poll_votes")
 }
 
+model GeoMandal {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(120)
+  slug      String   @db.VarChar(140)
+  district  String   @db.VarChar(120)
+  state     String   @db.VarChar(80)
+  aliases   String[] @default([])
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([slug, district, state])
+  @@index([district, state])
+  @@index([state])
+  @@map("geo_mandals")
+}
+
+model UserSavedLocation {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  slot      Int
+  label     String   @default("Home") @db.VarChar(40)
+  city      String?  @db.VarChar(120)
+  district  String?  @db.VarChar(120)
+  mandal    String?  @db.VarChar(120)
+  state     String?  @db.VarChar(80)
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slot])
+  @@index([userId])
+  @@map("user_saved_locations")
+}

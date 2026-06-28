@@ -15,8 +15,11 @@ const { emitFeedUpdated } = require('./feedSocket');
 const { isPoliticalShortContent } = require('../utils/shortsFeedFilter');
 const {
   isYoutubeQuotaError,
+  isYoutubeSearchQuotaError,
   isYoutubeQuotaBlocked,
+  isYoutubeSearchQuotaBlocked,
   markYoutubeQuotaBlocked,
+  markYoutubeSearchQuotaBlocked,
   formatBlockedUntil,
 } = require('../utils/youtubeQuota');
 
@@ -79,7 +82,23 @@ async function youtubeGet(path, params) {
 }
 
 function isSearchEnabled() {
-  return process.env.YOUTUBE_SEARCH_ENABLED === 'true';
+  if (process.env.YOUTUBE_SEARCH_ENABLED !== 'true') return false;
+  if (isYoutubeSearchQuotaBlocked()) return false;
+  return true;
+}
+
+function handleYoutubeSearchQuotaHit(stats, context) {
+  const until = markYoutubeSearchQuotaBlocked();
+  stats.searchQuotaExceeded = true;
+  stats.searchQuotaBlockedUntil = until;
+  if (!stats.searchQuotaWarned) {
+    stats.searchQuotaWarned = true;
+    console.warn(
+      `[youtube] Search quota exceeded${context ? ` (${context})` : ''} — `
+        + `skipping search until ${formatBlockedUntil(until)}. `
+        + 'Channel ID ingestion (playlistItems) continues. Set YOUTUBE_SEARCH_ENABLED=false to avoid this.',
+    );
+  }
 }
 
 function handleYoutubeQuotaHit(stats, context) {
@@ -566,6 +585,15 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube', languages } = {}) 
             success: true,
           });
         } catch (e) {
+          if (isYoutubeSearchQuotaError(e)) {
+            handleYoutubeSearchQuotaHit(stats, `search "${plan.query}"`);
+            stats.sourceRuns.push({
+              source: `YouTube:search:${plan.categorySlug}`,
+              success: false,
+              error: 'searchQuotaExceeded',
+            });
+            break;
+          }
           if (isYoutubeQuotaError(e)) {
             handleYoutubeQuotaHit(stats, `search "${plan.query}"`);
             quotaHit = true;
@@ -587,6 +615,9 @@ async function runYoutubeIngestion({ triggeredBy = 'youtube', languages } = {}) 
       }
     } else if (!isSearchEnabled()) {
       stats.youtubeSearchSkipped = true;
+      if (isYoutubeSearchQuotaBlocked()) {
+        stats.youtubeSearchSkippedReason = 'searchQuotaCooldown';
+      }
     }
 
     console.log(

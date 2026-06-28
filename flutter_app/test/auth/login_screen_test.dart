@@ -11,7 +11,7 @@ void main() {
 
   group('LoginScreen', () {
     testWidgets('renders mobile and email mode switcher', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await tester.pumpWidget(testMaterialApp(const LoginScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -21,7 +21,7 @@ void main() {
     });
 
     testWidgets('switches to email form', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await tester.pumpWidget(testMaterialApp(const LoginScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -34,7 +34,7 @@ void main() {
     });
 
     testWidgets('shows phone validation error for invalid mobile', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+      await tester.pumpWidget(testMaterialApp(const LoginScreen()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 

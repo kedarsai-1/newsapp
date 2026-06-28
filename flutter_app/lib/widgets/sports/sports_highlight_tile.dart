@@ -2,7 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/sports_models.dart';
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// YouTube highlight — thumbnail only until user taps play.
 class SportsHighlightTile extends StatelessWidget {
@@ -50,12 +50,12 @@ class SportsHighlightTile extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
+                          color: fx.overlayScrim,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.play_arrow_rounded,
-                          color: Colors.white,
+                          color: fx.onImage,
                           size: 28,
                         ),
                       ),

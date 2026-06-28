@@ -18,6 +18,12 @@ function feedTtlMs() {
 }
 
 function feedTtlForQuery(query = {}) {
+  if (
+    String(query.hasVideo || '').toLowerCase() === 'true'
+    && String(query.sourceTypes || '').toLowerCase() === 'youtube'
+  ) {
+    return Math.max(30_000, Number(process.env.SHORTS_FEED_CACHE_TTL_MS || 180_000));
+  }
   const lang = String(query.language || '').toLowerCase();
   if (lang === 'hi' || lang === 'te') {
     return Math.max(5000, Number(process.env.FEED_INDIC_CACHE_TTL_MS || 90_000));
@@ -56,6 +62,10 @@ const FEED_CACHE_PARAMS = new Set([
   'hasVideo',
   'politicalOnly',
   'excludePolitics',
+  'sort',
+  'following',
+  'publisher',
+  'publishers',
 ]);
 
 function normalizeFeedCacheValue(key, value) {

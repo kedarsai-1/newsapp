@@ -67,8 +67,22 @@ function shouldNotifyFeedIngest({
   return { ok: true, count, source: normalizedSource };
 }
 
-function buildIngestNotification(count) {
+function buildIngestNotification(count, { headline } = {}) {
   const n = Number(count);
+  const safeHeadline = truncatePushText(headline, NOTIFICATION_TITLE_MAX);
+  if (safeHeadline) {
+    if (n <= 1) {
+      return {
+        title: safeHeadline,
+        body: 'Tap to read the latest update.',
+      };
+    }
+    const more = n - 1;
+    return {
+      title: safeHeadline,
+      body: `${more} more new ${more === 1 ? 'story' : 'stories'} in your feed.`,
+    };
+  }
   if (n === 1) {
     return {
       title: 'New story in your feed',

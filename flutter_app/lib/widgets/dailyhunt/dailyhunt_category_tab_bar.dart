@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import 'dailyhunt_category_chip.dart';
 
 /// Horizontal category strip — light or Xpresso dark feed.

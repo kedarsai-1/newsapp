@@ -49,12 +49,14 @@ void precacheUpcomingFeedImages(
   int ahead = 4,
 }) {
   if (posts.isEmpty) return;
+  final dpr = MediaQuery.devicePixelRatioOf(context);
+  final memW = (MediaQuery.sizeOf(context).width * dpr).round().clamp(480, 1400);
   final end = (currentIndex + ahead + 1).clamp(0, posts.length);
   for (var i = currentIndex + 1; i < end; i++) {
     final url = premiumImageUrl(posts[i]);
     if (url.isEmpty) continue;
     precacheImage(
-      CachedNetworkImageProvider(url),
+      ResizeImage(CachedNetworkImageProvider(url), width: memW),
       context,
     );
   }

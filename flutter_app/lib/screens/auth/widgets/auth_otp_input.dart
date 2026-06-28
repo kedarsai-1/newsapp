@@ -151,7 +151,7 @@ class AuthOtpInputState extends State<AuthOtpInput> {
                     filled: true,
                     fillColor: filled
                         ? OnboardingDesign.accent(context).withValues(alpha: 0.06)
-                        : const Color(0xFFF9FAFB),
+                        : OnboardingDesign.surface(context),
                     contentPadding: EdgeInsets.zero,
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),

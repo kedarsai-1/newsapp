@@ -51,27 +51,27 @@ class ShortsFeedPalette {
     required this.shimmerHighlight,
   });
 
-  static const dark = ShortsFeedPalette(
-    background: Color(0xFF050505),
-    card: Color(0xFF121212),
-    cardBorder: Color(0xFF252525),
-    surfaceMuted: Color(0xFF1A1A1A),
-    scrim: Color(0x99000000),
-    title: Color(0xFFF5F5F5),
-    body: Color(0xFFB8B8B8),
-    meta: Color(0xFF8A8A8A),
-    accent: Color(0xFFFF3B30),
-    onVideo: Color(0xFFF5F5F5),
-    onVideoMuted: Color(0xB3FFFFFF),
-    chromeFg: Color(0xFFF5F5F5),
-    chromeFgMuted: Color(0x80FFFFFF),
-    iconOnChrome: Color(0xFFFFFFFF),
-    chipBg: Color(0xFF1A1A1A),
-    chipBorder: Color(0xFF333333),
-    chipFg: Color(0xB3FFFFFF),
-    chipFgActive: Color(0xFF050505),
-    shimmerBase: Color(0xFF1A1A1A),
-    shimmerHighlight: Color(0xFF2A2A2A),
+  static final dark = ShortsFeedPalette(
+    background: FeedXpressoPalette.dark.background,
+    card: FeedXpressoPalette.dark.surfaceElevated,
+    cardBorder: FeedXpressoPalette.dark.divider,
+    surfaceMuted: FeedXpressoPalette.dark.iconSurface,
+    scrim: FeedXpressoPalette.dark.overlayScrim,
+    title: FeedXpressoPalette.dark.title,
+    body: FeedXpressoPalette.dark.summary,
+    meta: FeedXpressoPalette.dark.meta,
+    accent: FeedXpressoPalette.dark.liked,
+    onVideo: FeedXpressoPalette.dark.onVideo,
+    onVideoMuted: FeedXpressoPalette.dark.onVideoMuted,
+    chromeFg: FeedXpressoPalette.dark.title,
+    chromeFgMuted: FeedXpressoPalette.dark.meta,
+    iconOnChrome: FeedXpressoPalette.dark.onImage,
+    chipBg: FeedXpressoPalette.dark.surface,
+    chipBorder: FeedXpressoPalette.dark.chipInactiveBorder,
+    chipFg: FeedXpressoPalette.dark.chipInactive,
+    chipFgActive: FeedXpressoPalette.dark.onAccent,
+    shimmerBase: FeedXpressoPalette.dark.shimmerBase,
+    shimmerHighlight: FeedXpressoPalette.dark.shimmerHighlight,
   );
 
   static ShortsFeedPalette fromFeed(FeedXpressoPalette fx, {required bool isDark}) {
@@ -81,20 +81,20 @@ class ShortsFeedPalette {
       card: fx.surfaceElevated,
       cardBorder: fx.divider,
       surfaceMuted: fx.iconSurface,
-      scrim: const Color(0x66000000),
+      scrim: fx.overlayScrim,
       title: fx.title,
       body: fx.summary,
       meta: fx.meta,
       accent: fx.accent,
-      onVideo: const Color(0xFFF5F5F5),
-      onVideoMuted: const Color(0xB3FFFFFF),
+      onVideo: fx.onVideo,
+      onVideoMuted: fx.onVideoMuted,
       chromeFg: fx.title,
       chromeFgMuted: fx.meta,
       iconOnChrome: fx.iconFg,
       chipBg: fx.surface,
       chipBorder: fx.chipInactiveBorder,
       chipFg: fx.chipInactive,
-      chipFgActive: Colors.white,
+      chipFgActive: fx.onVideo,
       shimmerBase: fx.shimmerBase,
       shimmerHighlight: fx.shimmerHighlight,
     );
@@ -139,15 +139,15 @@ abstract final class ShortsFeedTheme {
     );
   }
 
-  static const Color background = Color(0xFF050505);
-  static const Color card = Color(0xFF121212);
-  static const Color cardBorder = Color(0xFF252525);
-  static const Color surfaceMuted = Color(0xFF1A1A1A);
-  static const Color scrim = Color(0x99000000);
-  static const Color title = Color(0xFFF5F5F5);
-  static const Color body = Color(0xFFB8B8B8);
-  static const Color meta = Color(0xFF8A8A8A);
-  static const Color accent = Color(0xFFFF3B30);
+  static Color get background => ShortsFeedPalette.dark.background;
+  static Color get card => ShortsFeedPalette.dark.card;
+  static Color get cardBorder => ShortsFeedPalette.dark.cardBorder;
+  static Color get surfaceMuted => ShortsFeedPalette.dark.surfaceMuted;
+  static Color get scrim => ShortsFeedPalette.dark.scrim;
+  static Color get title => ShortsFeedPalette.dark.title;
+  static Color get body => ShortsFeedPalette.dark.body;
+  static Color get meta => ShortsFeedPalette.dark.meta;
+  static Color get accent => ShortsFeedPalette.dark.accent;
 
   static const double cardRadius = 16;
   static const double videoRadius = 14;

@@ -49,7 +49,7 @@ class DhCategoryChip extends StatelessWidget {
                   size: 13,
                   color: selected ? active : inactive,
                 ),
-                const SizedBox(width: 4),
+                SizedBox(width: 4),
                 Text(
                   label,
                   style: TextStyle(

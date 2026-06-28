@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/feed/feed_xpresso_palette.dart';
 import 'app_palette.dart';
 import 'app_spacing.dart';
 
@@ -9,7 +10,7 @@ class AppButtonStyles {
 
   static ButtonStyle primary(AppPalette p) => ElevatedButton.styleFrom(
         backgroundColor: p.primary,
-        foregroundColor: Colors.black,
+        foregroundColor: FeedXpressoPalette.dark.onAccent,
         minimumSize: const Size.fromHeight(48),
         shape:
             const RoundedRectangleBorder(borderRadius: AppSpacing.buttonRadius),

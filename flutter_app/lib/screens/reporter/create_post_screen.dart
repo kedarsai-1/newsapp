@@ -12,6 +12,7 @@ import '../../services/api_service.dart';
 import '../../services/location_service.dart';
 import '../../utils/app_utils.dart';
 import '../auth/widgets/auth_text_field.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../onboarding/onboarding_design.dart';
 
 class CreatePostScreen extends StatefulWidget {
@@ -237,6 +238,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   }
 
   InputDecoration _inputDecoration(BuildContext context, String hint) {
+    final fx = context.fx;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(OnboardingDesign.radiusCard),
       borderSide: BorderSide(color: OnboardingDesign.outline(context)),
@@ -249,7 +251,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         fontWeight: FontWeight.w500,
       ),
       filled: true,
-      fillColor: const Color(0xFFF9FAFB),
+      fillColor: OnboardingDesign.surface(context),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       border: border,
       enabledBorder: border,
@@ -257,14 +259,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         borderSide: BorderSide(color: OnboardingDesign.accent(context), width: 1.6),
       ),
       errorBorder: border.copyWith(
-        borderSide: BorderSide(color: Colors.red.shade400, width: 1.4),
+        borderSide: BorderSide(color: fx.error, width: 1.4),
       ),
       focusedErrorBorder: border.copyWith(
-        borderSide: BorderSide(color: Colors.red.shade600, width: 1.6),
+        borderSide: BorderSide(color: fx.error, width: 1.6),
       ),
       errorStyle: GoogleFonts.notoSans(
         fontSize: 12,
-        color: Colors.red.shade700,
+        color: fx.onErrorSurface,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -272,6 +274,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final loading = context.watch<ReporterProvider>().loading;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
@@ -337,21 +340,21 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
+                        color: fx.errorSurface,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFFECACA)),
+                        border: Border.all(color: fx.errorBorder),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.info_outline, color: Colors.red.shade600, size: 18),
-                          const SizedBox(width: 8),
+                          Icon(Icons.info_outline, color: fx.error, size: 18),
+                          SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               _rejectionReason!,
                               style: GoogleFonts.notoSans(
                                 fontSize: 13,
-                                color: Colors.red.shade700,
+                                color: fx.onErrorSurface,
                                 height: 1.35,
                               ),
                             ),
@@ -359,7 +362,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16),
                   ],
                   if (!_isEdit)
                     _GpsBar(
@@ -367,26 +370,26 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       position: _gpsPosition,
                       onRefresh: _captureLocation,
                     ),
-                  if (!_isEdit) const SizedBox(height: 16),
+                  if (!_isEdit) SizedBox(height: 16),
                   const _FieldLabel('Story Headline', required: true),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   AuthTextField(
                     controller: _titleCtrl,
                     hintText: 'Write a compelling headline...',
                     maxLength: 200,
                     validator: (v) => AppUtils.validateMinLength(v, 'Headline', 5),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   const _FieldLabel('Short Summary'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   AuthTextField(
                     controller: _summaryCtrl,
                     hintText: 'Brief description shown in the feed...',
                     maxLength: 300,
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   const _FieldLabel('Story Body', required: true),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   TextFormField(
                     controller: _bodyCtrl,
                     maxLines: 10,
@@ -400,13 +403,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     cursorColor: OnboardingDesign.accent(context),
                     decoration: _inputDecoration(context, 'Write the full story here...'),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   const _FieldLabel('Category', required: true),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: _selectedCategoryId,
                     decoration: _inputDecoration(context, 'Select a category'),
-                    dropdownColor: Colors.white,
+                    dropdownColor: OnboardingDesign.surfaceElevated(context),
                     style: GoogleFonts.notoSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -421,14 +424,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     onChanged: (v) => setState(() => _selectedCategoryId = v),
                     validator: (v) => v != null ? null : 'Select a category',
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   const _FieldLabel('Tags'),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   AuthTextField(
                     controller: _tagsCtrl,
                     hintText: 'politics, flood, vijayawada',
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   Text(
                     'Comma-separated',
                     style: GoogleFonts.notoSans(
@@ -436,7 +439,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       color: OnboardingDesign.subtitleColor(context),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -462,14 +465,14 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   if (_existingMedia.isNotEmpty) ...[
                     SizedBox(
                       height: 110,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: _existingMedia.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (_, __) => SizedBox(width: 8),
                         itemBuilder: (_, i) {
                           final item = _existingMedia[i];
                           return Stack(
@@ -480,7 +483,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     ? Container(
                                         width: 100,
                                         height: 100,
-                                        color: const Color(0xFFF3F4F6),
+                                        color: fx.surface,
                                         alignment: Alignment.center,
                                         child: Icon(
                                           Icons.videocam_outlined,
@@ -496,7 +499,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                         errorBuilder: (_, __, ___) => Container(
                                           width: 100,
                                           height: 100,
-                                          color: const Color(0xFFF3F4F6),
+                                          color: fx.surface,
                                           child: Icon(
                                             Icons.broken_image_outlined,
                                             color: OnboardingDesign.subtitleColor(context),
@@ -511,13 +514,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                   onTap: () => _removeExistingMedia(item),
                                   child: Container(
                                     padding: const EdgeInsets.all(2),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.black54,
+                                    decoration: BoxDecoration(
+                                      color: fx.overlayScrim,
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Icon(
+                                    child: Icon(
                                       Icons.close,
-                                      color: Colors.white,
+                                      color: fx.onImage,
                                       size: 14,
                                     ),
                                   ),
@@ -528,7 +531,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                   ],
                   if (_mediaFiles.isEmpty && _existingMedia.isEmpty)
                     GestureDetector(
@@ -536,7 +539,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       child: Container(
                         height: 100,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
+                          color: OnboardingDesign.surface(context),
                           border: Border.all(color: OnboardingDesign.outline(context)),
                           borderRadius: BorderRadius.circular(OnboardingDesign.radiusCard),
                         ),
@@ -545,7 +548,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           children: [
                             Icon(Icons.add_photo_alternate_outlined,
                                 size: 32, color: OnboardingDesign.subtitleColor(context)),
-                            const SizedBox(height: 6),
+                            SizedBox(height: 6),
                             Text(
                               'Tap to add photos or videos',
                               style: GoogleFonts.notoSans(
@@ -563,7 +566,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: _mediaFiles.length + 1,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (_, __) => SizedBox(width: 8),
                         itemBuilder: (_, i) {
                           if (i == _mediaFiles.length) {
                             return GestureDetector(
@@ -586,7 +589,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                   ? Container(
                                       width: 100,
                                       height: 100,
-                                      color: const Color(0xFFF3F4F6),
+                                      color: fx.surface,
                                       alignment: Alignment.center,
                                       child: Icon(Icons.videocam_outlined,
                                           size: 36, color: OnboardingDesign.subtitleColor(context)),
@@ -598,7 +601,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                           return Container(
                                             width: 100,
                                             height: 100,
-                                            color: const Color(0xFFF3F4F6),
+                                            color: fx.surface,
                                             alignment: Alignment.center,
                                             child: SizedBox(
                                               width: 22,
@@ -626,11 +629,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 onTap: () => setState(() => _mediaFiles.removeAt(i)),
                                 child: Container(
                                   padding: const EdgeInsets.all(2),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.black54,
+                                  decoration: BoxDecoration(
+                                    color: fx.overlayScrim,
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.close, color: Colors.white, size: 14),
+                                  child: Icon(Icons.close, color: fx.onImage, size: 14),
                                 ),
                               ),
                             ),
@@ -652,17 +655,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     backgroundColor: OnboardingDesign.accent(context),
                     disabledBackgroundColor:
                         OnboardingDesign.accent(context).withValues(alpha: 0.55),
-                    foregroundColor: Colors.white,
+                    foregroundColor: context.fx.onAccent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(OnboardingDesign.radiusButton),
                     ),
                     elevation: 0,
                   ),
                   child: loading
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                          child: CircularProgressIndicator(color: context.fx.onAccent, strokeWidth: 2.4),
                         )
                       : Text(
                           _isEdit ? 'Re-submit for Approval' : 'Submit for Approval',
@@ -696,7 +699,7 @@ class _FieldLabel extends StatelessWidget {
           ),
         ),
         if (required) ...[
-          const SizedBox(width: 3),
+          SizedBox(width: 3),
           Text(
             '*',
             style: GoogleFonts.notoSans(
@@ -724,13 +727,14 @@ class _GpsBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final hasGps = position != null;
     final bg = hasGps
         ? OnboardingDesign.accent(context).withValues(alpha: 0.08)
-        : const Color(0xFFFEF3C7);
+        : fx.warningSurface;
     final iconColor = hasGps
         ? OnboardingDesign.accent(context)
-        : const Color(0xFFD97706);
+        : fx.onWarningSurface;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -740,7 +744,7 @@ class _GpsBar extends StatelessWidget {
         border: Border.all(
           color: hasGps
               ? OnboardingDesign.accent(context).withValues(alpha: 0.25)
-              : const Color(0xFFFDE68A),
+              : fx.warningBorder,
         ),
       ),
       child: Row(children: [
@@ -751,7 +755,7 @@ class _GpsBar extends StatelessWidget {
           size: 18,
           color: iconColor,
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: 8),
         Expanded(
           child: loading
               ? Text(
@@ -774,7 +778,7 @@ class _GpsBar extends StatelessWidget {
                       'Location unavailable',
                       style: GoogleFonts.notoSans(
                         fontSize: 13,
-                        color: const Color(0xFFD97706),
+                        color: fx.onWarningSurface,
                       ),
                     ),
         ),

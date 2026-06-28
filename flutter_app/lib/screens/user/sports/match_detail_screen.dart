@@ -93,7 +93,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         ),
       ),
       body: _loading && m == null
-          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          ? Center(child: CircularProgressIndicator(strokeWidth: 2))
           : _error != null && m == null
               ? Center(
                   child: Padding(
@@ -108,6 +108,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
   }
 
   Widget _buildBody(BuildContext context, FeedXpressoPalette fx, SportsMatch m) {
+    final fx = context.fx;
     final hasScorecard = m.scorecard.isNotEmpty;
 
     return RefreshIndicator(
@@ -118,10 +119,10 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         children: [
           _summaryCard(fx, m),
           if (_poll != null) ...[
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             _pollCard(context, fx, _poll!),
           ],
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Text(
             'Scorecard',
             style: TextStyle(
@@ -130,7 +131,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
               color: fx.title,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           if (hasScorecard) ...[
             if (m.scorecard.every((inn) => inn.batting.isEmpty && inn.totals != null))
               Padding(
@@ -151,7 +152,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
                     .map((inn) => Tab(text: _shortInningLabel(inn.label)))
                     .toList(),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               SizedBox(
                 height: _scorecardPaneHeight(m.scorecard[_inningsTab!.index]),
                 child: TabBarView(
@@ -221,7 +222,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
                 memCacheWidth: 720,
               ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
           ],
           Row(
             children: [
@@ -229,21 +230,21 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE53935),
+                  decoration: BoxDecoration(
+                    color: fx.live,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 6),
-                const Text(
+                SizedBox(width: 6),
+                Text(
                   'LIVE',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFFE53935),
+                    color: fx.live,
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
               ],
               Expanded(
                 child: Text(
@@ -253,26 +254,26 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             m.statusLabel,
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: fx.title),
           ),
           if (m.venue.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text(m.venue, style: TextStyle(fontSize: 12, color: fx.summary)),
           ],
           if (m.tossWinner != null && m.tossWinner!.isNotEmpty) ...[
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
               'Toss: ${m.tossWinner} chose to ${m.tossChoice ?? 'bat/bowl'}',
               style: TextStyle(fontSize: 12, color: fx.meta),
             ),
           ],
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           ...m.teams.map((t) => _teamRow(fx, t)),
           if (m.matchWinner != null && m.matchWinner!.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               'Winner: ${m.matchWinner}',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: fx.accent),
@@ -301,7 +302,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, color: fx.title),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Text(
               t.name,
@@ -314,7 +315,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: fx.title),
             ),
           if (t.overs != null) ...[
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             Text('(${t.overs} ov)', style: TextStyle(fontSize: 11, color: fx.meta)),
           ],
         ],
@@ -340,7 +341,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
         if (inn.batting.isNotEmpty) ...[
           _sectionTitle(fx, 'Batting'),
           _battingTable(fx, inn.batting),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
         ],
         if (inn.bowling.isNotEmpty) ...[
           _sectionTitle(fx, 'Bowling'),
@@ -493,6 +494,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
   }
 
   Widget _pollCard(BuildContext context, FeedXpressoPalette fx, MatchPoll poll) {
+    final fx = context.fx;
     final total = poll.totalVotes;
     final pctA = total > 0 ? poll.votesA / total : 0.5;
     final pctB = total > 0 ? poll.votesB / total : 0.5;
@@ -512,7 +514,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
           Row(
             children: [
               Icon(Icons.how_to_vote_outlined, color: fx.accent, size: 20),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(
                 'Who will win?',
                 style: TextStyle(
@@ -529,7 +531,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           _pollOption(
             fx: fx,
             label: poll.optionATitle,
@@ -538,7 +540,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
             enabled: !closed && !voted && !_voting,
             onTap: () => _castVote('A'),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _pollOption(
             fx: fx,
             label: poll.optionBTitle,
@@ -548,7 +550,7 @@ class _MatchDetailScreenState extends State<MatchDetailScreen>
             onTap: () => _castVote('B'),
           ),
           if (total > 0) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               '$total votes',
               style: TextStyle(color: fx.actionMuted, fontSize: 12),

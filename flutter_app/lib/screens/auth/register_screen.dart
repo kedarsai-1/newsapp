@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../services/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../constants.dart';
 import '../../utils/i18n.dart';
 import '../onboarding/onboarding_design.dart';
@@ -209,12 +210,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // ── Strength helpers ────────────────────────────────────────────────────────
 
-  Color get _strengthColor {
+  Color _strengthColor(BuildContext context) {
+    final fx = context.fx;
     switch (_passStrength) {
-      case 0: case 1: return GlassColors.error;
-      case 2: return GlassColors.warning;
-      case 3: return const Color(0xFF9FE1CB);
-      default: return GlassColors.success;
+      case 0: case 1: return fx.error;
+      case 2: return fx.warning;
+      case 3: return fx.info;
+      default: return fx.success;
     }
   }
 
@@ -231,6 +233,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
       backgroundColor: OnboardingDesign.background(context),
@@ -271,7 +274,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         backgroundColor: OnboardingDesign.accent(context),
                         disabledBackgroundColor: OnboardingDesign.accent(context)
                             .withValues(alpha: 0.55),
-                        foregroundColor: Colors.white,
+                        foregroundColor: context.fx.onAccent,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
                             OnboardingDesign.radiusButton,
@@ -280,12 +283,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         elevation: 0,
                       ),
                       child: _loading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.4,
-                                color: Colors.white,
+                                color: context.fx.onAccent,
                               ),
                             )
                           : Text(
@@ -319,134 +322,134 @@ class _RegisterScreenState extends State<RegisterScreen> {
             I18n.t(context, 'reg_title'),
             style: OnboardingDesign.titleStyle(context),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             I18n.t(context, 'reg_subtitle'),
             style: OnboardingDesign.subtitleStyle(context),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
 
           if (_apiError != null) ...[
             _ErrorBanner(message: _apiError!),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
           ],
 
           // ── Full Name ────────────────────────────────────────────────────
           _FieldLabel(label: I18n.t(context, 'field_full_name'), required: true),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           GlassTextField(
             controller: _nameCtrl, focusNode: _nameFocus,
             hintText: I18n.t(context, 'hint_full_name'),
-            prefixIcon: const Icon(Icons.person_outline),
+            prefixIcon: Icon(Icons.person_outline),
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
             validator: _valName,
             onChanged: (_) { if (_submitted) setState(() {}); },
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           // ── Email ────────────────────────────────────────────────────────
           _FieldLabel(label: I18n.t(context, 'field_email'), required: true),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           GlassTextField(
             controller: _emailCtrl, focusNode: _emailFocus,
             hintText: I18n.t(context, 'hint_email'),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
-            prefixIcon: const Icon(Icons.email_outlined),
+            prefixIcon: Icon(Icons.email_outlined),
             validator: _valEmail,
             onChanged: (_) { if (_submitted) setState(() {}); },
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           // ── Phone ────────────────────────────────────────────────────────
           _FieldLabel(label: I18n.t(context, 'field_phone'), required: false),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           GlassTextField(
             controller: _phoneCtrl, focusNode: _phoneFocus,
             hintText: I18n.t(context, 'hint_phone_optional'),
             keyboardType: TextInputType.phone,
             textInputAction: TextInputAction.next,
-            prefixIcon: const Icon(Icons.phone_outlined),
+            prefixIcon: Icon(Icons.phone_outlined),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\s\+\-\(\)]'))],
             validator: _valPhone,
             onChanged: (_) { if (_submitted) setState(() {}); },
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           // ── Password ─────────────────────────────────────────────────────
           _FieldLabel(label: I18n.t(context, 'field_password'), required: true),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           GlassTextField(
             controller: _passCtrl, focusNode: _passFocus,
             hintText: I18n.t(context, 'hint_password'),
             obscureText: _obscurePass,
             textInputAction: TextInputAction.next,
-            prefixIcon: const Icon(Icons.lock_outline),
+            prefixIcon: Icon(Icons.lock_outline),
             suffixIcon: IconButton(
               icon: Icon(_obscurePass ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: GlassColors.textTertiary, size: 18),
+                  color: context.fx.textTertiary, size: 18),
               onPressed: () => setState(() => _obscurePass = !_obscurePass),
             ),
             validator: _valPass,
             onChanged: (_) { if (_submitted) setState(() {}); },
           ),
           if (_passCtrl.text.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _StrengthMeter(strength: _passStrength, color: _strengthColor, label: _strengthLabel),
+            SizedBox(height: 8),
+            _StrengthMeter(strength: _passStrength, color: _strengthColor(context), label: _strengthLabel),
           ],
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           // ── Confirm Password ─────────────────────────────────────────────
           _FieldLabel(label: I18n.t(context, 'field_confirm_password'), required: true),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           GlassTextField(
             controller: _confirmCtrl, focusNode: _confirmFocus,
             hintText: I18n.t(context, 'hint_confirm_password'),
             obscureText: _obscureConfirm,
             textInputAction: TextInputAction.done,
-            prefixIcon: const Icon(Icons.lock_outline),
+            prefixIcon: Icon(Icons.lock_outline),
             suffixIcon: IconButton(
               icon: Icon(_obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  color: GlassColors.textTertiary, size: 18),
+                  color: context.fx.textTertiary, size: 18),
               onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
             ),
             validator: _valConfirm,
             onChanged: (_) { if (_submitted) setState(() {}); },
             onFieldSubmitted: (_) => _register(),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
 
           // ── Role ─────────────────────────────────────────────────────────
           const _FieldLabel(label: 'Register as', required: true),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(children: [
             _RoleChip(label: 'Reader',   value: 'user',     icon: Icons.person_outline,
                 selected: _role, onTap: (v) => setState(() => _role = v)),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             _RoleChip(label: 'Reporter', value: 'reporter', icon: Icons.mic_none,
                 selected: _role, onTap: (v) => setState(() => _role = v)),
           ]),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           GlassContainer(
             padding: const EdgeInsets.all(12),
-            borderColor: GlassColors.accentGreenBorder,
-            color: GlassColors.accentGreenSurface,
+            borderColor: context.fx.accentBorder,
+            color: context.fx.accentSurface,
             child: Text(
               _role == 'reporter'
                   ? '📸  ${I18n.t(context, 'reporter_register_note')}'
                   : '📰  Readers can browse the news feed, like and bookmark stories, and comment.',
-              style: const TextStyle(fontSize: 12, color: GlassColors.accentGreenLight, height: 1.5),
+              style: TextStyle(fontSize: 12, color: context.fx.accentLight, height: 1.5),
             ),
           ),
 
           // Requirements checklist
           if (_passCtrl.text.isNotEmpty) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             _RequirementsChecklist(password: _passCtrl.text),
           ],
 
-          const SizedBox(height: 28),
+          SizedBox(height: 28),
 
           Center(
             child: Wrap(
@@ -488,6 +491,7 @@ class _StrengthMeter extends StatelessWidget {
   const _StrengthMeter({required this.strength, required this.color, required this.label});
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Row(children: [
       Expanded(child: Row(
         children: List.generate(4, (i) => Expanded(child: AnimatedContainer(
@@ -495,12 +499,12 @@ class _StrengthMeter extends StatelessWidget {
           height: 4,
           margin: EdgeInsets.only(right: i < 3 ? 3 : 0),
           decoration: BoxDecoration(
-            color: i < strength ? color : GlassColors.surfaceBright,
+            color: i < strength ? color : fx.glassSurfaceBright,
             borderRadius: BorderRadius.circular(4),
           ),
         ))),
       )),
-      const SizedBox(width: 10),
+      SizedBox(width: 10),
       Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
     ]);
   }
@@ -518,13 +522,14 @@ class _RequirementsChecklist extends StatelessWidget {
   ];
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return GlassContainer(
       padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Password requirements',
+        Text('Password requirements',
             style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                color: GlassColors.textTertiary, letterSpacing: 0.5)),
-        const SizedBox(height: 8),
+                color: fx.textTertiary, letterSpacing: 0.5)),
+        SizedBox(height: 8),
         ..._reqs.map((r) {
           final met = RegExp(r.$2).hasMatch(password);
           return Padding(
@@ -535,14 +540,14 @@ class _RequirementsChecklist extends StatelessWidget {
                 width: 16, height: 16,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: met ? GlassColors.accentGreen.withOpacity(0.2) : GlassColors.surfaceBright,
-                  border: Border.all(color: met ? GlassColors.accentGreenBorder : GlassColors.borderWhite, width: 0.8),
+                  color: met ? fx.accent.withOpacity(0.2) : fx.glassSurfaceBright,
+                  border: Border.all(color: met ? fx.accentBorder : fx.glassBorder, width: 0.8),
                 ),
-                child: met ? const Icon(Icons.check, size: 10, color: GlassColors.accentGreenLight) : null,
+                child: met ? Icon(Icons.check, size: 10, color: fx.accentLight) : null,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(r.$1, style: TextStyle(fontSize: 12,
-                  color: met ? GlassColors.accentGreenLight : GlassColors.textHint)),
+                  color: met ? fx.accentLight : fx.textHint)),
             ]),
           );
         }),
@@ -558,6 +563,7 @@ class _RoleChip extends StatelessWidget {
   const _RoleChip({required this.label, required this.value, required this.selected, required this.icon, required this.onTap});
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final isSel = value == selected;
     return Expanded(child: GestureDetector(
       onTap: () => onTap(value),
@@ -565,16 +571,16 @@ class _RoleChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
-          color: isSel ? GlassColors.accentGreenSurface : GlassColors.surfaceWhite,
+          color: isSel ? fx.accentSurface : fx.glassSurface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSel ? GlassColors.accentGreenBorder : GlassColors.borderWhite, width: isSel ? 1.0 : 0.8),
+          border: Border.all(color: isSel ? fx.accentBorder : fx.glassBorder, width: isSel ? 1.0 : 0.8),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 17, color: isSel ? GlassColors.accentGreenLight : GlassColors.textSecondary),
-          const SizedBox(width: 7),
+          Icon(icon, size: 17, color: isSel ? fx.accentLight : fx.textSecondary),
+          SizedBox(width: 7),
           Text(label, style: TextStyle(fontSize: 13,
               fontWeight: isSel ? FontWeight.w700 : FontWeight.w400,
-              color: isSel ? GlassColors.accentGreenLight : GlassColors.textSecondary)),
+              color: isSel ? fx.accentLight : fx.textSecondary)),
         ]),
       ),
     ));
@@ -597,7 +603,7 @@ class _FieldLabel extends StatelessWidget {
         ),
       ),
       if (required) ...[
-        const SizedBox(width: 3),
+        SizedBox(width: 3),
         Text(
           '*',
           style: OnboardingDesign.subtitleStyle(context).copyWith(
@@ -616,24 +622,25 @@ class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message});
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
+        color: fx.errorSurface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        border: Border.all(color: fx.errorBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline, size: 18, color: Colors.red.shade600),
-          const SizedBox(width: 8),
+          Icon(Icons.error_outline, size: 18, color: fx.error),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.red.shade700,
+                color: fx.onErrorSurface,
                 height: 1.35,
                 fontWeight: FontWeight.w500,
               ),

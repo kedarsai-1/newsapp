@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../widgets/feed/feed_xpresso_palette.dart';
+import '../../../../widgets/feed/feed_xpresso_theme.dart';
 import '../../../../theme/dailyhunt_theme.dart';
 import 'super_home_section.dart';
 
@@ -33,90 +35,90 @@ class SuperHomeAstrologySection extends StatefulWidget {
 }
 
 class _SuperHomeAstrologySectionState extends State<SuperHomeAstrologySection> {
-  static const List<ZodiacSign> _signs = [
+  static final List<ZodiacSign> _signs = [
     ZodiacSign(
       name: 'Aries',
       sanskrit: 'Mesha',
       emoji: '♈',
       range: 'Mar 21 – Apr 19',
-      gradient: [Color(0xFFFFE0E0), Color(0xFFFFB4B4)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[0],
     ),
     ZodiacSign(
       name: 'Taurus',
       sanskrit: 'Vrishabha',
       emoji: '♉',
       range: 'Apr 20 – May 20',
-      gradient: [Color(0xFFE8F5E9), Color(0xFFA5D6A7)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[1],
     ),
     ZodiacSign(
       name: 'Gemini',
       sanskrit: 'Mithuna',
       emoji: '♊',
       range: 'May 21 – Jun 20',
-      gradient: [Color(0xFFFFF8E1), Color(0xFFFFE082)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[2],
     ),
     ZodiacSign(
       name: 'Cancer',
       sanskrit: 'Karka',
       emoji: '♋',
       range: 'Jun 21 – Jul 22',
-      gradient: [Color(0xFFE3F2FD), Color(0xFF90CAF9)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[3],
     ),
     ZodiacSign(
       name: 'Leo',
       sanskrit: 'Simha',
       emoji: '♌',
       range: 'Jul 23 – Aug 22',
-      gradient: [Color(0xFFFFF3E0), Color(0xFFFFB74D)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[4],
     ),
     ZodiacSign(
       name: 'Virgo',
       sanskrit: 'Kanya',
       emoji: '♍',
       range: 'Aug 23 – Sep 22',
-      gradient: [Color(0xFFEDE7F6), Color(0xFFB39DDB)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[5],
     ),
     ZodiacSign(
       name: 'Libra',
       sanskrit: 'Tula',
       emoji: '♎',
       range: 'Sep 23 – Oct 22',
-      gradient: [Color(0xFFFCE4EC), Color(0xFFF48FB1)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[6],
     ),
     ZodiacSign(
       name: 'Scorpio',
       sanskrit: 'Vrishchika',
       emoji: '♏',
       range: 'Oct 23 – Nov 21',
-      gradient: [Color(0xFFE0F2F1), Color(0xFF4DB6AC)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[7],
     ),
     ZodiacSign(
       name: 'Sagittarius',
       sanskrit: 'Dhanu',
       emoji: '♐',
       range: 'Nov 22 – Dec 21',
-      gradient: [Color(0xFFFFF3E0), Color(0xFFFFA726)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[8],
     ),
     ZodiacSign(
       name: 'Capricorn',
       sanskrit: 'Makara',
       emoji: '♑',
       range: 'Dec 22 – Jan 19',
-      gradient: [Color(0xFFECEFF1), Color(0xFF90A4AE)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[9],
     ),
     ZodiacSign(
       name: 'Aquarius',
       sanskrit: 'Kumbha',
       emoji: '♒',
       range: 'Jan 20 – Feb 18',
-      gradient: [Color(0xFFE1F5FE), Color(0xFF4FC3F7)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[10],
     ),
     ZodiacSign(
       name: 'Pisces',
       sanskrit: 'Meena',
       emoji: '♓',
       range: 'Feb 19 – Mar 20',
-      gradient: [Color(0xFFE8EAF6), Color(0xFF7986CB)],
+      gradient: FeedXpressoPalette.zodiacSignGradients[11],
     ),
   ];
 
@@ -200,6 +202,7 @@ class _SuperHomeAstrologySectionState extends State<SuperHomeAstrologySection> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final selected = _selected.clamp(0, _signs.length - 1);
     final sign = _signs[selected];
     return Column(
@@ -209,7 +212,7 @@ class _SuperHomeAstrologySectionState extends State<SuperHomeAstrologySection> {
           title: 'Astrology',
           subtitle: 'Daily horoscope, lucky number and color',
           icon: Icons.auto_awesome_rounded,
-          accentColor: const Color(0xFFB45309),
+          accentColor: fx.onWarningSurface,
           onSeeAll: widget.onSeeAll,
           seeAllLabel: 'All signs',
         ),
@@ -222,7 +225,7 @@ class _SuperHomeAstrologySectionState extends State<SuperHomeAstrologySection> {
             luckyColor: _luckyColor(selected),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         SuperHomeHorizontalRail(
           height: 110,
           itemCount: _signs.length,
@@ -253,6 +256,7 @@ class _FeaturedHoroscopeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
@@ -262,7 +266,7 @@ class _FeaturedHoroscopeCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.6)),
+        border: Border.all(color: fx.heroOverlayBorder),
       ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
@@ -275,32 +279,32 @@ class _FeaturedHoroscopeCard extends StatelessWidget {
                 height: 46,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
+                  color: fx.onImage.withValues(alpha: 0.85),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(sign.emoji,
-                    style: const TextStyle(fontSize: 26, height: 1)),
+                    style: TextStyle(fontSize: 26, height: 1)),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       '${sign.name} · ${sign.sanskrit}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1F2937),
+                        color: fx.title,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       sign.range,
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF1F2937).withValues(alpha: 0.65),
+                        color: fx.summary,
                       ),
                     ),
                   ],
@@ -310,22 +314,22 @@ class _FeaturedHoroscopeCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
+                  color: fx.onImage.withValues(alpha: 0.85),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
+                child: Text(
                   'TODAY',
                   style: TextStyle(
                     fontSize: 9.5,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF1F2937),
+                    color: fx.title,
                     letterSpacing: 0.6,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Text(
             prediction,
             style: TextStyle(
@@ -335,7 +339,7 @@ class _FeaturedHoroscopeCard extends StatelessWidget {
               height: 1.45,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -375,31 +379,32 @@ class _LuckyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
+        color: fx.onImage.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF1F2937)),
-          const SizedBox(width: 6),
+          Icon(icon, size: 14, color: fx.title),
+          SizedBox(width: 6),
           Text(
             '$label: ',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF4B5563),
+              color: fx.summary,
             ),
           ),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
-              color: Color(0xFF1F2937),
+              color: fx.title,
             ),
           ),
         ],
@@ -421,6 +426,7 @@ class _ZodiacChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return SizedBox(
       width: 92,
       child: AnimatedContainer(
@@ -435,7 +441,7 @@ class _ZodiacChip extends StatelessWidget {
           border: Border.all(
             color: selected
                 ? DailyhuntTheme.accentGreen(context)
-                : Colors.white.withValues(alpha: 0.7),
+                : fx.onImageMuted,
             width: selected ? 2 : 1,
           ),
         ),
@@ -450,16 +456,16 @@ class _ZodiacChip extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(sign.emoji,
-                      style: const TextStyle(fontSize: 28, height: 1)),
-                  const SizedBox(height: 6),
+                      style: TextStyle(fontSize: 28, height: 1)),
+                  SizedBox(height: 6),
                   Text(
                     sign.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF1F2937),
+                      color: fx.title,
                     ),
                   ),
                   Text(
@@ -470,7 +476,7 @@ class _ZodiacChip extends StatelessWidget {
                       fontSize: 10.5,
                       fontWeight: FontWeight.w600,
                       color:
-                          const Color(0xFF1F2937).withValues(alpha: 0.65),
+                          fx.summary,
                     ),
                   ),
                 ],

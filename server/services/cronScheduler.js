@@ -3,7 +3,7 @@ const { runIngestion } = require('./newsIngestionService');
 const { runYoutubeIngestion } = require('./youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('./politicalVideoIngestionService');
 const { runLanguageIngestion, runAllLanguageIngestionParallel } = require('./languageIngestionService');
-const { purgeOldNews } = require('./retentionCleanupService');
+const { runRetentionCleanup } = require('./retentionCleanupService');
 const { emitFeedUpdated } = require('./feedSocket');
 const {
   preloadPoliticalClassifier,
@@ -175,21 +175,37 @@ function schedulePerLanguagePipelines(isRailway) {
 
 async function runRetention(triggeredBy) {
   try {
-    const out = await purgeOldNews({
-      retentionDays: Number(process.env.RETENTION_DAYS || 7),
+    const out = await runRetentionCleanup({
+      retentionDays: Number(process.env.RETENTION_DAYS || 18),
       limit: Number(process.env.RETENTION_BATCH || 2000),
       keepManual: true,
       dryRun: process.env.RETENTION_DRY_RUN === 'true',
     });
+    const news = out.news || {};
     console.log(
-      `[retention] ${triggeredBy}: matched=${out.matched} deleted=${out.deletedPosts} cutoff=${out.cutoff.toISOString()}`,
+      `[retention] ${triggeredBy}: days=${out.retentionDays} `
+        + `posts matched=${news.matched || 0} deleted=${news.deletedPosts || 0} `
+        + `cutoff=${news.cutoff?.toISOString?.() || 'n/a'}`,
     );
-    if (out.matched) {
+    if (out.cloudinaryFolders) {
       console.log(
-        `[retention] cloudinary images: attempted=${out.cloudinary.images.attempted} deleted=${out.cloudinary.images.deleted} skipped=${Boolean(out.cloudinary.images.skipped)}`,
+        `[retention] cloudinary folders: deleted=${out.cloudinaryFolders.deleted || 0} `
+          + `(${out.cloudinaryFolders.folders?.map((f) => `${f.prefix}:${f.deleted || 0}`).join(', ') || 'none'})`,
+      );
+    }
+    if (out.localMedia) {
+      console.log(
+        `[retention] local media: scanned=${out.localMedia.scanned || 0} deleted=${out.localMedia.deleted || 0}`,
+      );
+    }
+    if (news.matched) {
+      console.log(
+        `[retention] cloudinary by publicId images: attempted=${news.cloudinary?.images?.attempted || 0} `
+          + `deleted=${news.cloudinary?.images?.deleted || 0}`,
       );
       console.log(
-        `[retention] cloudinary videos: attempted=${out.cloudinary.videos.attempted} deleted=${out.cloudinary.videos.deleted} skipped=${Boolean(out.cloudinary.videos.skipped)}`,
+        `[retention] cloudinary by publicId videos: attempted=${news.cloudinary?.videos?.attempted || 0} `
+          + `deleted=${news.cloudinary?.videos?.deleted || 0}`,
       );
     }
   } catch (e) {
@@ -321,7 +337,7 @@ function startCronScheduler() {
   }
 
   const retentionEnabled = process.env.RETENTION_ENABLED !== 'false';
-  const retentionDays = Number(process.env.RETENTION_DAYS || 7);
+  const retentionDays = Number(process.env.RETENTION_DAYS || 18);
   const retentionCron = process.env.RETENTION_CRON || '10 3 * * *';
   const retentionRunOnStart = process.env.RETENTION_RUN_ON_START === 'true';
 
@@ -334,6 +350,20 @@ function startCronScheduler() {
     }
   } else {
     console.log('[retention] disabled by RETENTION_ENABLED=false');
+  }
+
+  const briefEnabled = process.env.MORNING_BRIEF_ENABLED !== 'false';
+  const briefCron = process.env.MORNING_BRIEF_CRON || '30 1 * * *'; // 07:00 IST
+  if (briefEnabled) {
+    const { sendMorningBrief } = require('./morningBriefService');
+    cron.schedule(briefCron, () => {
+      sendMorningBrief().then((r) => {
+        console.log('[morning-brief] sent:', JSON.stringify(r));
+      }).catch((e) => console.error('[morning-brief] error:', e.message));
+    });
+    console.log(`[morning-brief] active cron="${briefCron}"`);
+  } else {
+    console.log('[morning-brief] disabled by MORNING_BRIEF_ENABLED=false');
   }
 }
 

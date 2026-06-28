@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../onboarding/onboarding_design.dart';
 import 'widgets/auth_otp_input.dart';
 
@@ -147,6 +148,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final canVerify = _code.length == 6 && !_verifying;
     final bottom = MediaQuery.paddingOf(context).bottom;
 
@@ -175,12 +177,12 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(height: 8),
+                        SizedBox(height: 8),
                         Text(
                           'Verify your number',
                           style: OnboardingDesign.titleStyle(context),
                         ),
-                        const SizedBox(height: 10),
+                        SizedBox(height: 10),
                         RichText(
                           text: TextSpan(
                             style: OnboardingDesign.subtitleStyle(context),
@@ -199,7 +201,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        SizedBox(height: 28),
                         AuthOtpInput(
                           key: _otpKey,
                           length: 6,
@@ -212,20 +214,20 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                           onCompleted: (_) => _verify(),
                         ),
                         if (_error != null) ...[
-                          const SizedBox(height: 14),
+                          SizedBox(height: 14),
                           _StatusBanner(
                             message: _error!,
                             isError: true,
                           ),
                         ],
                         if (_info != null) ...[
-                          const SizedBox(height: 14),
+                          SizedBox(height: 14),
                           _StatusBanner(
                             message: _info!,
                             isError: false,
                           ),
                         ],
-                        const SizedBox(height: 22),
+                        SizedBox(height: 22),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -271,7 +273,7 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                         backgroundColor: OnboardingDesign.accent(context),
                         disabledBackgroundColor:
                             OnboardingDesign.accent(context).withValues(alpha: 0.55),
-                        foregroundColor: Colors.white,
+                        foregroundColor: context.fx.onAccent,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
                               OnboardingDesign.radiusButton),
@@ -279,12 +281,12 @@ class _OtpVerifyScreenState extends State<OtpVerifyScreen> {
                         elevation: 0,
                       ),
                       child: _verifying
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.4,
-                                color: Colors.white,
+                                color: context.fx.onAccent,
                               ),
                             )
                           : Text('Verify OTP',
@@ -308,13 +310,14 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = isError ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5);
+    final fx = context.fx;
+    final bg = isError ? fx.errorSurface : fx.successSurface;
     final border =
-        isError ? const Color(0xFFFECACA) : const Color(0xFFA7F3D0);
+        isError ? fx.errorBorder : fx.successBorder;
     final iconColor =
-        isError ? Colors.red.shade600 : OnboardingDesign.accentDark(context);
+        isError ? fx.error : OnboardingDesign.accentDark(context);
     final textColor =
-        isError ? Colors.red.shade700 : OnboardingDesign.accentDark(context);
+        isError ? fx.onErrorSurface : OnboardingDesign.accentDark(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -330,7 +333,7 @@ class _StatusBanner extends StatelessWidget {
             size: 18,
             color: iconColor,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               message,

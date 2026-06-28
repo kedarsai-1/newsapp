@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../onboarding_design.dart';
+import '../../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Theme-aware scaffold + scroll area + sticky bottom primary action for onboarding steps.
 class OnboardingStepShell extends StatelessWidget {
@@ -74,7 +75,7 @@ class OnboardingPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fg = isDark ? OnboardingDesign.titleColor(context) : Colors.white;
+    final fg = isDark ? OnboardingDesign.titleColor(context) : context.fx.onImage;
     return FilledButton(
       onPressed: onPressed,
       style: FilledButton.styleFrom(

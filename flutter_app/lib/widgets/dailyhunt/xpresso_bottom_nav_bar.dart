@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Dailyhunt Xpresso bottom bar — matte, compact, top-dash active state.
 class XpressoBottomNavBar extends StatelessWidget {
@@ -96,6 +96,7 @@ class _XpressoNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final iconColor =
         selected ? fx.navActiveIcon : fx.navInactiveIcon;
     final labelColor =
@@ -125,13 +126,13 @@ class _XpressoNavItem extends StatelessWidget {
                 ),
               )
             else
-              const SizedBox(height: 5),
+              SizedBox(height: 5),
             Icon(
               selected ? destination.selectedIcon : destination.icon,
               size: FeedXpressoTheme.navIconSize,
               color: iconColor,
             ),
-            const SizedBox(height: 2),
+            SizedBox(height: 2),
             Text(
               destination.label,
               maxLines: 1,

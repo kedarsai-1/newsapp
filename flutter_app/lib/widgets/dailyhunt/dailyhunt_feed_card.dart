@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../feed/compact_news_row.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Demo feed row — Dailyhunt-style layout.
 class DailyhuntFeedCard extends StatefulWidget {

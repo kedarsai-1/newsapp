@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../widgets/feed/feed_xpresso_theme.dart';
 import '../../../../theme/dailyhunt_theme.dart';
 
 /// Section heading + optional "See all" affordance.
@@ -45,7 +46,7 @@ class SuperHomeSectionHeader extends StatelessWidget {
               alignment: Alignment.center,
               child: Icon(icon, color: accent, size: 16),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
           ],
           Expanded(
             child: Column(
@@ -62,7 +63,7 @@ class SuperHomeSectionHeader extends StatelessWidget {
                   ),
                 ),
                 if (subtitle != null) ...[
-                  const SizedBox(height: 2),
+                  SizedBox(height: 2),
                   Text(
                     subtitle!,
                     style: TextStyle(
@@ -91,13 +92,13 @@ class SuperHomeSectionHeader extends StatelessWidget {
                 children: [
                   Text(
                     seeAllLabel,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 2),
-                  const Icon(Icons.chevron_right_rounded, size: 18),
+                  SizedBox(width: 2),
+                  Icon(Icons.chevron_right_rounded, size: 18),
                 ],
               ),
             ),
@@ -169,7 +170,7 @@ class SuperHomeMoreButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: const TextStyle(
+            textStyle: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
@@ -259,7 +260,7 @@ class SuperHomeNewsCard extends StatelessWidget {
                           height: 1.25,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       Text(
                         '$source · ${_relative(publishedAt)}',
                         maxLines: 1,
@@ -336,7 +337,7 @@ class SuperHomeNewsStrip extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +354,7 @@ class SuperHomeNewsStrip extends StatelessWidget {
                         height: 1.28,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       '$source · ${SuperHomeNewsCard._relative(publishedAt)}',
                       maxLines: 1,
@@ -367,7 +368,7 @@ class SuperHomeNewsStrip extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: SizedBox(
@@ -444,6 +445,7 @@ class _BadgePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -452,10 +454,10 @@ class _BadgePill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
-          color: Colors.white,
+          color: fx.onImage,
           letterSpacing: 0.4,
         ),
       ),

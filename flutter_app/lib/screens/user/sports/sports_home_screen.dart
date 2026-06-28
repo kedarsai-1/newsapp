@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../models/models.dart';
 import '../../../models/sports_models.dart';
@@ -9,6 +8,8 @@ import '../../../services/auth_provider.dart';
 import '../../../providers/news_provider.dart';
 import '../../../providers/sports_provider.dart';
 import '../../../services/api_service.dart';
+import '../../../utils/i18n.dart';
+import '../../../utils/post_share.dart';
 import '../../../widgets/dailyhunt/xpresso_sliver_app_bar.dart';
 import '../../../widgets/feed/dailyhunt_feed_article_card.dart';
 import '../../../widgets/feed/feed_image_cache.dart';
@@ -69,6 +70,14 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
     context.push('/sports/match/${match.id}', extra: match);
   }
 
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/feed');
+  }
+
   Future<bool> _toggleLike(NewsPost post) async {
     final id = post.id;
     final prev = _likedByPostId[id] ?? false;
@@ -120,9 +129,7 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
   }
 
   Future<void> _share(NewsPost post) async {
-    final text =
-        '${post.title}\n\n${premiumSnippet(post, maxLength: 260)}\n\n${post.sourceUrl ?? ''}';
-    await Share.share(text, subject: post.title);
+    await PostShare.sharePost(post, context: context);
   }
 
   void _openArticle(NewsPost post) {
@@ -144,7 +151,12 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
     final fx = FeedXpressoTheme.fx(context);
     final bottom = FeedXpressoTheme.feedBottomInset(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: fx.background,
       body: RefreshIndicator(
         color: fx.accent,
@@ -156,10 +168,12 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
           ),
           slivers: [
             XpressoSliverAppBar(
-              title: 'Cricket',
+              title: I18n.t(context, 'sports_title_cricket'),
+              showBack: true,
+              onBack: _handleBack,
               actions: [
                 IconButton(
-                  tooltip: 'Leaderboard',
+                  tooltip: I18n.t(context, 'sports_leaderboard_tooltip'),
                   onPressed: () => context.push('/sports/leaderboard'),
                   icon: const Icon(Icons.emoji_events_outlined),
                 ),
@@ -170,7 +184,7 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 18, 14, 8),
                 child: Text(
-                  'Sports news',
+                  I18n.t(context, 'sports_news_section'),
                   style: fx.screenTitleStyle.copyWith(fontSize: 16),
                 ),
               ),
@@ -187,6 +201,7 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }
@@ -248,7 +263,7 @@ class _LiveSection extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: matches.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        separatorBuilder: (_, __) => SizedBox(width: 10),
         itemBuilder: (_, i) => SportsLiveCard(
           match: matches[i],
           compact: true,
@@ -288,7 +303,7 @@ class _LiveSection extends StatelessWidget {
                 fx,
                 title: 'Live now',
                 badge: '${live.length} live',
-                badgeColor: const Color(0xFFE53935),
+                badgeColor: fx.live,
               ),
               _matchRow(live, height: 118),
             ],

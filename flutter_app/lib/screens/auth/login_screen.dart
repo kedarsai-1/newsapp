@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../constants.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../onboarding/onboarding_design.dart';
 import 'widgets/auth_text_field.dart';
 
@@ -150,6 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final continueLabel =
         _mode == _LoginMode.mobile ? 'Continue' : 'Sign in';
 
@@ -165,9 +167,9 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   const _BrandHeader(),
-                  const SizedBox(height: 28),
+                  SizedBox(height: 28),
                   _ModeSwitcher(
                     mode: _mode,
                     onChanged: (m) => setState(() {
@@ -175,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       _error = null;
                     }),
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
                   AnimatedSize(
                     duration: const Duration(milliseconds: 220),
                     curve: Curves.easeOutCubic,
@@ -185,37 +187,37 @@ class _LoginScreenState extends State<LoginScreen> {
                         : _buildEmailForm(),
                   ),
                   if (_error != null) ...[
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     _ErrorBanner(message: _error!),
                   ],
-                  const SizedBox(height: 22),
+                  SizedBox(height: 22),
                   _PrimaryActionButton(
                     label: continueLabel,
                     loading: _loading,
                     onPressed: _continue,
                   ),
-                  const SizedBox(height: 22),
+                  SizedBox(height: 22),
                   const _OrDivider(),
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   _SocialButton(
                     label: 'Continue with Google',
                     icon: const _GoogleGlyph(),
                     onPressed: () => _showComingSoon('Google'),
                   ),
                   if (_showAppleButton) ...[
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     _SocialButton(
                       label: 'Continue with Apple',
-                      icon: const Icon(Icons.apple,
-                          color: Colors.black, size: 22),
+                      icon: Icon(Icons.apple,
+                          color: fx.mediaViewerBackground, size: 22),
                       onPressed: () => _showComingSoon('Apple'),
                     ),
                   ],
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                   _RegisterPrompt(
                     onTap: () => context.push('/register'),
                   ),
-                  const SizedBox(height: 18),
+                  SizedBox(height: 18),
                   const _LegalFooter(),
                 ],
               ),
@@ -232,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _FieldLabel('Mobile number'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         AuthTextField(
           controller: _phoneCtrl,
           focusNode: _phoneFocus,
@@ -250,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
           },
           onSubmitted: (_) => _continue(),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         Text(
           "We'll send you a 6-digit OTP to verify",
           style: GoogleFonts.notoSans(
@@ -268,7 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _FieldLabel('Email'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         AuthTextField(
           controller: _emailCtrl,
           focusNode: _emailFocus,
@@ -285,9 +287,9 @@ class _LoginScreenState extends State<LoginScreen> {
           },
           onSubmitted: (_) => _passFocus.requestFocus(),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         const _FieldLabel('Password'),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         AuthTextField(
           controller: _passCtrl,
           focusNode: _passFocus,
@@ -342,7 +344,7 @@ class _BrandHeader extends StatelessWidget {
             size: 32,
           ),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         Text(
           AppConstants.appName,
           style: GoogleFonts.notoSans(
@@ -352,7 +354,7 @@ class _BrandHeader extends StatelessWidget {
             letterSpacing: -0.4,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
         Text(
           'News in your language',
           style: GoogleFonts.notoSans(
@@ -379,7 +381,7 @@ class _ModeSwitcher extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: OnboardingDesign.tileBackground(context),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -396,6 +398,7 @@ class _ModeSwitcher extends StatelessWidget {
   }
 
   Widget _modeTab(BuildContext context, _LoginMode m, IconData icon, String label) {
+    final fx = context.fx;
     final selected = mode == m;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -405,12 +408,12 @@ class _ModeSwitcher extends StatelessWidget {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? OnboardingDesign.surfaceElevated(context) : Colors.transparent,
           borderRadius: BorderRadius.circular(9),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
+                    color: fx.heroSurfaceSubtle,
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -427,7 +430,7 @@ class _ModeSwitcher extends StatelessWidget {
                   ? OnboardingDesign.titleColor(context)
                   : OnboardingDesign.subtitleColor(context),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             Text(
               label,
               style: GoogleFonts.notoSans(
@@ -466,7 +469,7 @@ class _CountryCodePrefix extends StatelessWidget {
               color: OnboardingDesign.titleColor(context),
             ),
           ),
-          const SizedBox(width: 6),
+          SizedBox(width: 6),
           Container(width: 1, height: 22, color: OnboardingDesign.outline(context)),
         ],
       ),
@@ -508,6 +511,8 @@ class _PrimaryActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
+    final onAccent = context.fx.onAccent;
     return SizedBox(
       height: 52,
       child: FilledButton(
@@ -516,19 +521,19 @@ class _PrimaryActionButton extends StatelessWidget {
           backgroundColor: OnboardingDesign.accent(context),
           disabledBackgroundColor:
               OnboardingDesign.accent(context).withValues(alpha: 0.55),
-          foregroundColor: Colors.white,
+          foregroundColor: onAccent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OnboardingDesign.radiusButton),
           ),
           elevation: 0,
         ),
         child: loading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.4,
-                  color: Colors.white,
+                  color: onAccent,
                 ),
               )
             : Text(label, style: OnboardingDesign.buttonLabel(context)),
@@ -585,7 +590,7 @@ class _SocialButton extends StatelessWidget {
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: OnboardingDesign.outline(context)),
-          backgroundColor: Colors.white,
+          backgroundColor: OnboardingDesign.surfaceElevated(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(OnboardingDesign.radiusButton),
           ),
@@ -594,7 +599,7 @@ class _SocialButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             icon,
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Text(
               label,
               style: GoogleFonts.notoSans(
@@ -615,12 +620,13 @@ class _GoogleGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Text(
       'G',
       style: GoogleFonts.notoSans(
         fontSize: 20,
         fontWeight: FontWeight.w900,
-        color: const Color(0xFF4285F4),
+        color: fx.brandGoogle,
         height: 1,
       ),
     );
@@ -635,24 +641,25 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
+        color: fx.errorSurface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFECACA)),
+        border: Border.all(color: fx.errorBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline, size: 18, color: Colors.red.shade600),
-          const SizedBox(width: 8),
+          Icon(Icons.error_outline, size: 18, color: fx.error),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: GoogleFonts.notoSans(
                 fontSize: 13,
-                color: Colors.red.shade700,
+                color: fx.onErrorSurface,
                 fontWeight: FontWeight.w500,
                 height: 1.35,
               ),

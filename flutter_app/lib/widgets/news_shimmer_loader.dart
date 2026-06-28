@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
-import 'feed/feed_xpresso_theme.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 /// Dailyhunt-style feed shimmer — image block, headline lines, meta + action row.
 class NewsShimmerLoader extends StatelessWidget {
@@ -67,6 +67,7 @@ class _DailyhuntRowSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Shimmer.fromColors(
       baseColor: fx.shimmerBase,
       highlightColor: fx.shimmerHighlight,
@@ -85,25 +86,25 @@ class _DailyhuntRowSkeleton extends StatelessWidget {
                     child: ColoredBox(color: fx.shimmerBase),
                   ),
                 ),
-                const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
+                SizedBox(height: FeedXpressoTheme.imageToTitleGap),
                 Container(height: 12, width: double.infinity, color: fx.shimmerBase),
-                const SizedBox(height: 7),
+                SizedBox(height: 7),
                 Container(height: 12, width: double.infinity, color: fx.shimmerBase),
-                const SizedBox(height: 7),
+                SizedBox(height: 7),
                 FractionallySizedBox(
                   widthFactor: 0.72,
                   alignment: Alignment.centerLeft,
                   child: Container(height: 12, color: fx.shimmerBase),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 Row(
                   children: [
                     Container(height: 10, width: 88, color: fx.shimmerBase),
                     const Spacer(),
                     Container(height: 14, width: 14, color: fx.shimmerBase),
-                    const SizedBox(width: 18),
+                    SizedBox(width: 18),
                     Container(height: 14, width: 14, color: fx.shimmerBase),
-                    const SizedBox(width: 18),
+                    SizedBox(width: 18),
                     Container(height: 14, width: 4, color: fx.shimmerBase),
                   ],
                 ),

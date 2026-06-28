@@ -9,7 +9,33 @@ import 'notification_service.dart';
 /// Registers device FCM token + topic subscriptions for news alerts.
 class PushNotifications {
   static const _topicsKey = 'push_subscribed_topics';
-  static const defaultTopics = ['all', 'breaking'];
+  static const _languagePrefKey = 'preferred_feed_language';
+
+  /// Core topics — digest is added per feed language only.
+  static const coreTopics = ['all', 'breaking'];
+
+  static List<String> topicsForLanguage(
+    String languageCode, {
+    bool dailyDigest = true,
+    bool breakingAlerts = true,
+  }) {
+    final topics = <String>['all'];
+    if (breakingAlerts) topics.add('breaking');
+    if (dailyDigest) {
+      final lang = languageCode.toLowerCase();
+      if (lang == 'en' || lang == 'hi' || lang == 'te') {
+        topics.add('digest_$lang');
+      } else {
+        topics.add('digest_en');
+      }
+    }
+    return topics;
+  }
+
+  static Future<String> _readFeedLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_languagePrefKey) ?? 'all';
+  }
 
   static Future<void> bootstrap() async {
     final ok = await FirebaseBootstrap.init();
@@ -36,18 +62,20 @@ class PushNotifications {
     _pendingArticleId = postId;
   }
 
-  static Future<void> enableForGuest() async {
+  static Future<void> enableForGuest({String? languageCode}) async {
     final ok = await FirebaseBootstrap.init();
     if (!ok) return;
     await NotificationService.init();
-    await applyTopics(defaultTopics);
+    final lang = languageCode ?? await _readFeedLanguage();
+    await applyTopics(topicsForLanguage(lang));
   }
 
-  static Future<void> syncAfterLogin() async {
+  static Future<void> syncAfterLogin({String? languageCode}) async {
     if (!FirebaseBootstrap.isInitialized) return;
     final token = await NotificationService.getToken();
     await _syncToken(token);
-    await applyTopics(defaultTopics);
+    final lang = languageCode ?? await _readFeedLanguage();
+    await applyTopics(topicsForLanguage(lang));
   }
 
   static Future<void> clearOnLogout() async {
@@ -64,10 +92,15 @@ class PushNotifications {
     }
   }
 
-  /// Subscribe interest slugs as `category_<slug>` plus defaults.
-  static Future<void> syncInterestTopics(List<String> interestSlugs) async {
+  /// Subscribe interest slugs as `category_<slug>` plus language-aware defaults.
+  static Future<void> syncInterestTopics(
+    List<String> interestSlugs, {
+    String? languageCode,
+    bool dailyDigest = true,
+  }) async {
+    final lang = languageCode ?? await _readFeedLanguage();
     final topics = <String>{
-      ...defaultTopics,
+      ...topicsForLanguage(lang, dailyDigest: dailyDigest),
       for (final s in interestSlugs)
         if (s.trim().isNotEmpty) 'category_${s.trim().toLowerCase()}',
     };

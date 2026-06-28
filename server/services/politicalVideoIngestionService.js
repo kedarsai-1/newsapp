@@ -25,6 +25,7 @@ const { emitFeedUpdated } = require('./feedSocket');
 const { hashUrl, canonicalizeUrl, normalizeTitle } = require('../utils/storyDedupe');
 const { isYoutubeQuotaBlocked } = require('../utils/youtubeQuota');
 const { createNewsPost } = require('../utils/prismaNewsPost');
+const { inferHindiPoliticsScope } = require('../config/hindiRegionalScopes');
 
 const SYSTEM_REPORTER_EMAIL = process.env.SCRAPER_SYSTEM_EMAIL || 'scraper@newsnow.local';
 const SYSTEM_REPORTER_PASSWORD = process.env.SCRAPER_SYSTEM_PASSWORD || 'change_me_123';
@@ -143,7 +144,11 @@ function inferPoliticsScope(title = '', description = '') {
     return 'telangana';
   }
 
-  // Check for North / Delhi / States
+  // Check for Hindi belt states (granular scopes before legacy `north`)
+  const hindiScope = inferHindiPoliticsScope(title, cleanDesc);
+  if (hindiScope) return hindiScope;
+
+  // Legacy broad North bucket
   const northKeywords = [
     'uttar pradesh', 'yogi adityanath', 'delhi', 'kejriwal', 'akhilesh yadav',
     'punjab', 'bihar', 'nitish kumar', 'tejashwi', 'haryana', 'rajasthan', 'madhya pradesh',

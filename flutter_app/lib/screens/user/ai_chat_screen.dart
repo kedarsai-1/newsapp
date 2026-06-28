@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/news_provider.dart';
 import '../../services/api_service.dart';
 import '../../utils/ai_chat_response.dart';
+import '../../utils/i18n.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 
 class AiChatScreen extends StatefulWidget {
@@ -48,6 +49,14 @@ class _AiChatScreenState extends State<AiChatScreen> {
       return rows.sublist(rows.length - 8);
     }
     return rows;
+  }
+
+  void _handleBack() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/feed');
   }
 
   Future<void> _send([String? preset]) async {
@@ -109,7 +118,12 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
       backgroundColor: fx.background,
       appBar: AppBar(
         backgroundColor: fx.background,
@@ -118,9 +132,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('AI News Assistant', style: fx.screenTitleStyle.copyWith(fontSize: 17)),
+            Text(I18n.t(context, 'ai_chat_title'), style: fx.screenTitleStyle.copyWith(fontSize: 17)),
             Text(
-              'Ask about news, weather, or trends',
+              I18n.t(context, 'ai_chat_subtitle'),
               style: TextStyle(
                 fontSize: 12,
                 color: fx.actionMuted,
@@ -130,8 +144,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
           ],
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
+          icon: Icon(Icons.arrow_back_rounded),
+          onPressed: _handleBack,
         ),
       ),
       body: Column(
@@ -157,9 +171,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                                   color: fx.accent,
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              SizedBox(width: 10),
                               Text(
-                                'Thinking…',
+                                I18n.t(context, 'ai_chat_thinking'),
                                 style: TextStyle(color: fx.actionMuted, fontSize: 13),
                               ),
                             ],
@@ -180,6 +194,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -206,27 +221,27 @@ class _EmptyPrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    const prompts = [
-      'What are today\'s top headlines?',
-      'Summarize the latest sports news',
-      'What is the weather in Hyderabad?',
+    final prompts = [
+      I18n.t(context, 'ai_chat_prompt_headlines'),
+      I18n.t(context, 'ai_chat_prompt_sports'),
+      I18n.t(context, 'ai_chat_prompt_weather'),
     ];
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
         Icon(Icons.auto_awesome_rounded, size: 42, color: fx.accent),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         Text(
-          'Ask anything about news',
+          I18n.t(context, 'ai_chat_empty_title'),
           style: fx.screenTitleStyle.copyWith(fontSize: 20),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Text(
-          'Powered by your server\'s Ollama models and live news index.',
+          I18n.t(context, 'ai_chat_empty_subtitle'),
           style: TextStyle(color: fx.actionMuted, height: 1.4),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         ...prompts.map(
           (p) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -263,9 +278,9 @@ class _MessageBubble extends StatelessWidget {
     final bg = message.isUser
         ? fx.accent.withValues(alpha: 0.18)
         : message.isError
-            ? Colors.red.withValues(alpha: 0.12)
+            ? fx.errorSurface
             : fx.iconSurface;
-    final fg = message.isError ? Colors.red.shade300 : fx.iconFg;
+    final fg = message.isError ? fx.error : fx.iconFg;
 
     return Align(
       alignment: align,
@@ -285,16 +300,16 @@ class _MessageBubble extends StatelessWidget {
           children: [
             Text(message.text, style: TextStyle(color: fg, height: 1.45)),
             if (message.relatedArticles.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              SizedBox(height: 10),
               Text(
-                'Related stories',
+                I18n.t(context, 'ai_chat_related_stories'),
                 style: TextStyle(
                   color: fx.actionMuted,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               ...message.relatedArticles.take(3).map(
                     (a) => TextButton(
                       style: TextButton.styleFrom(
@@ -348,7 +363,7 @@ class _InputBar extends StatelessWidget {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => onSend(),
                 decoration: InputDecoration(
-                  hintText: 'Ask about news or weather…',
+                  hintText: I18n.t(context, 'ai_chat_input_hint'),
                   filled: true,
                   fillColor: fx.iconSurface,
                   border: OutlineInputBorder(
@@ -364,10 +379,10 @@ class _InputBar extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
             IconButton.filled(
               onPressed: loading ? null : onSend,
-              icon: const Icon(Icons.send_rounded),
+              icon: Icon(Icons.send_rounded),
             ),
           ],
         ),

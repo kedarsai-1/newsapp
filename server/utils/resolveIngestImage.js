@@ -4,7 +4,7 @@ const {
   parseOgImageFromHtml,
   parseFirstContentImageFromHtml,
 } = require('../services/newsApiService');
-const { rehostExternalImageToCloudinary } = require('./rehostExternalImage');
+const { rehostExternalImageForIngest } = require('./rehostExternalImage');
 
 function normalizeMediaUrl(url) {
   if (!url || typeof url !== 'string') return null;
@@ -71,7 +71,7 @@ async function resolveIngestImage({
   }
 
   if (resolved && rehostEnabled()) {
-    const reh = await rehostExternalImageToCloudinary(resolved, { referer });
+    const reh = await rehostExternalImageForIngest(resolved, { referer });
     if (reh.ok && reh.url) {
       resolved = reh.url;
     }

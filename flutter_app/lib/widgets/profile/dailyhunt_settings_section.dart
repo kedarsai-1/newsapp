@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../feed/feed_xpresso_theme.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Settings block — section label + content + hairline separator.
 class DailyhuntSettingsSection extends StatelessWidget {
@@ -82,7 +82,7 @@ class XpressoSettingsRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Icon(icon, size: 20, color: fx.iconFg),
-              const SizedBox(width: 10),
+              SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,7 +97,7 @@ class XpressoSettingsRow extends StatelessWidget {
                       ),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty) ...[
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       Text(
                         subtitle!,
                         maxLines: 2,
@@ -149,7 +149,7 @@ class DailyhuntPrimaryButton extends StatelessWidget {
       minimumSize: const Size(0, 44),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+      textStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
     );
     if (icon != null) {
       return FilledButton.icon(

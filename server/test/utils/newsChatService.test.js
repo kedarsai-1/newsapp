@@ -14,6 +14,8 @@ const {
   sanitizeExtractiveText,
   rankArticlesByQuery,
   extractiveFallback,
+  filterArticlesForChat,
+  articleMatchesLanguage,
   formatArticle,
 } = require('../../services/newsChatService');
 
@@ -108,6 +110,33 @@ describe('newsChatService', () => {
     ], 'hi', 'आज क्रिकेट की खबर');
     assert.match(out, /मानव सुथार/);
     assert.doesNotMatch(out, /youtube/i);
+  });
+
+  it('english sports chat excludes hindi politics and entertainment', () => {
+    const articles = [
+      {
+        title: 'Jr NTR praises filmmaker',
+        summary: 'Telugu actor praised a new film attempt.',
+        category: { slug: 'entertainment' },
+      },
+      {
+        title: 'गायब सांसदों को मैसेज',
+        summary: 'पांच सांसदों की अनुपस्थिति से सदन की कार्यवाही प्रभावित।',
+        category: { slug: 'politics' },
+      },
+      {
+        title: 'Somerset beat Nottinghamshire by 306 runs',
+        summary: 'Craig Overton took key wickets as Somerset sealed a big county win.',
+        category: { slug: 'sports' },
+      },
+    ];
+    assert.equal(articleMatchesLanguage(articles[1], 'en'), false);
+    const out = extractiveFallback(articles, 'en', 'Summarize the latest sports news');
+    assert.match(out, /Somerset|306 runs/i);
+    assert.doesNotMatch(out, /गायब|Jr NTR/i);
+    const sportsOnly = filterArticlesForChat(articles, 'en', 'sports');
+    assert.equal(sportsOnly.length, 1);
+    assert.equal(sportsOnly[0].category.slug, 'sports');
   });
 
   it('formats article context with summary by default (no body)', () => {

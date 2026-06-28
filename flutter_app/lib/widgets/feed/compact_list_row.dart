@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/feed_failed_image_cache.dart';
 import 'feed_xpresso_theme.dart';
 
 /// Compact horizontal row for saved / search on dark surfaces.
@@ -46,7 +47,7 @@ class CompactListRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _Thumb(url: url, memCacheWidth: memW),
-                  const SizedBox(width: 7),
+                  SizedBox(width: 7),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,19 +122,22 @@ class _Thumb extends StatelessWidget {
             : CachedNetworkImage(
                 imageUrl: url,
                 fit: BoxFit.cover,
-                memCacheWidth: kIsWeb ? null : memCacheWidth,
+                memCacheWidth: memCacheWidth,
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
                 placeholder: (_, __) =>
                     ColoredBox(color: fx.imagePlaceholder),
-                errorWidget: (_, __, ___) => ColoredBox(
-                  color: fx.imagePlaceholder,
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: fx.iconFgMuted,
-                    size: 14,
-                  ),
-                ),
+                errorWidget: (_, __, ___) {
+                  FeedFailedImageCache.markFailed(url);
+                  return ColoredBox(
+                    color: fx.imagePlaceholder,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: fx.iconFgMuted,
+                      size: 14,
+                    ),
+                  );
+                },
               ),
       ),
     );

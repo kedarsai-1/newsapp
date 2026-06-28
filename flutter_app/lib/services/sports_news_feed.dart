@@ -14,7 +14,7 @@ abstract final class SportsNewsFeed {
         if (item is! Map) continue;
         final slug = item['slug']?.toString().toLowerCase();
         if (slug == 'sports') {
-          _sportsCategoryId = item['_id']?.toString();
+          _sportsCategoryId = item['_id']?.toString() ?? item['id']?.toString();
           return _sportsCategoryId;
         }
       }
@@ -42,7 +42,7 @@ abstract final class SportsNewsFeed {
     int? limit,
   }) async {
     final catId = await resolveSportsCategoryId();
-    final res = await ApiService.getFeed(
+    var res = await ApiService.getFeed(
       page: page,
       categoryId: catId,
       language: language,
@@ -53,6 +53,17 @@ abstract final class SportsNewsFeed {
 
     var posts = _parsePosts(res);
     posts = _filterByLanguage(posts, language);
+    if (posts.isEmpty && language != null && language.isNotEmpty && language != 'all') {
+      final fallback = await ApiService.getFeed(
+        page: page,
+        categoryId: catId,
+        days: 30,
+        sourceTypes: const ['api', 'manual', 'rss', 'html', 'youtube'],
+      );
+      if (fallback['success'] == true) {
+        posts = _parsePosts(fallback);
+      }
+    }
     posts.sort((a, b) => b.displayTime.compareTo(a.displayTime));
 
     return {

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/news_provider.dart';
 import '../../services/api_service.dart';
-import '../../widgets/feed/feed_xpresso_theme.dart';
+import 'feed_xpresso_theme.dart';
 
 /// Compact weather strip for the feed — uses onboarding city or Hyderabad default.
 class FeedWeatherBanner extends StatefulWidget {
@@ -114,7 +114,7 @@ class _FeedWeatherBannerState extends State<FeedWeatherBanner> {
               child: Row(
                 children: [
                   Icon(Icons.cloud_off_outlined, color: fx.actionMuted, size: 20),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _error!,
@@ -159,7 +159,7 @@ class _FeedWeatherBannerState extends State<FeedWeatherBanner> {
             child: Row(
               children: [
                 Icon(icon, color: fx.accent, size: 28),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +189,7 @@ class _FeedWeatherBannerState extends State<FeedWeatherBanner> {
                     ),
                   ),
                 if (humidity != null) ...[
-                  const SizedBox(width: 10),
+                  SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [

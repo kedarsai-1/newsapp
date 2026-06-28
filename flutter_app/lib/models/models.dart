@@ -109,6 +109,8 @@ class LocationData {
   final double longitude;
   final String? address;
   final String? city;
+  final String? district;
+  final String? mandal;
   final String? state;
   final String country;
 
@@ -117,6 +119,8 @@ class LocationData {
     required this.longitude,
     this.address,
     this.city,
+    this.district,
+    this.mandal,
     this.state,
     this.country = 'India',
   });
@@ -126,11 +130,15 @@ class LocationData {
         longitude: (json['longitude'] ?? 0).toDouble(),
         address: json['address'],
         city: json['city'],
+        district: json['district'],
+        mandal: json['mandal'],
         state: json['state'],
         country: json['country'] ?? 'India',
       );
 
   String get displayLocation {
+    if (mandal != null && district != null) return '$mandal, $district';
+    if (district != null && state != null) return '$district, $state';
     if (city != null && state != null) return '$city, $state';
     if (city != null) return city!;
     if (address != null) return address!;
@@ -186,6 +194,16 @@ class YoutubeMeta {
       );
 }
 
+/// Strip ingestion prefixes like `RSS ·` / `YouTube ·` for display.
+String? cleanIngestSourceLabel(String? raw) {
+  final src = raw?.trim();
+  if (src == null || src.isEmpty) return null;
+  for (final prefix in ['RSS · ', 'YouTube · ', 'GNews · ', 'NewsAPI · ']) {
+    if (src.startsWith(prefix)) return src.substring(prefix.length).trim();
+  }
+  return src;
+}
+
 class NewsPost {
   final String id;
   final String title;
@@ -207,8 +225,12 @@ class NewsPost {
   final String? originalLanguage;
   final String? politicsScope;
   final String? constituency;
+  final String? locationDistrict;
+  final String? locationMandal;
   final String? sourceUrl;
   final String? sourceName;
+  /// API-normalized outlet name (reporter.name is also rewritten for ingested posts).
+  final String? publisherName;
   final String? sourceType;
   final YoutubeMeta? youtube;
   /// When the publisher released the story (RSS/API). Prefer over [createdAt] for display.
@@ -235,8 +257,11 @@ class NewsPost {
     this.originalLanguage,
     this.politicsScope,
     this.constituency,
+    this.locationDistrict,
+    this.locationMandal,
     this.sourceUrl,
     this.sourceName,
+    this.publisherName,
     this.sourceType,
     this.youtube,
     this.sourcePublishedAt,
@@ -269,8 +294,32 @@ class NewsPost {
   /// Prefer original publish time so cards don’t all show the same “ingested X ago”.
   DateTime get displayTime => sourcePublishedAt ?? createdAt;
 
+  /// Publisher/outlet for UI — RSS feed, YouTube channel, or human reporter (not ingestion bot).
+  String get displaySourceName {
+    final pub = publisherName?.trim();
+    if (pub != null && pub.isNotEmpty) return pub;
+    final cleaned = cleanIngestSourceLabel(sourceName);
+    if (cleaned != null && cleaned.isNotEmpty) return cleaned;
+    if (isYoutube) return youtubeChannelLabel;
+    final reporterName = reporter?.name.trim();
+    if (reporterName != null &&
+        reporterName.isNotEmpty &&
+        reporterName != 'News Ingestion Bot') {
+      return reporterName;
+    }
+    final categoryName = category?.name.trim();
+    if (categoryName != null && categoryName.isNotEmpty) return categoryName;
+    return 'News';
+  }
+
+  String get displaySourceInitial {
+    final name = displaySourceName.trim();
+    if (name.isEmpty) return 'N';
+    return name[0].toUpperCase();
+  }
+
   factory NewsPost.fromJson(Map<String, dynamic> json) => NewsPost(
-        id: json['_id'] ?? '',
+        id: (json['_id'] ?? json['id'] ?? '').toString(),
         title: json['title'] ?? '',
         body: json['body'] ?? '',
         summary: json['summary'],
@@ -296,8 +345,17 @@ class NewsPost {
         originalLanguage: json['originalLanguage']?.toString().toLowerCase(),
         politicsScope: json['politicsScope']?.toString(),
         constituency: json['constituency']?.toString(),
+        locationDistrict: json['locationDistrict']?.toString() ??
+            (json['location'] is Map
+                ? json['location']['district']?.toString()
+                : null),
+        locationMandal: json['locationMandal']?.toString() ??
+            (json['location'] is Map
+                ? json['location']['mandal']?.toString()
+                : null),
         sourceUrl: json['sourceUrl'],
         sourceName: json['sourceName']?.toString(),
+        publisherName: json['publisherName']?.toString(),
         sourceType: json['sourceType']?.toString(),
         youtube: json['youtube'] is Map
             ? YoutubeMeta.fromJson(Map<String, dynamic>.from(json['youtube']))

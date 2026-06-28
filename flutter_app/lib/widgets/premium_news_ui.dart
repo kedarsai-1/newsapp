@@ -9,6 +9,7 @@ import '../constants.dart';
 import '../models/models.dart';
 import '../utils/feed_image_url.dart';
 import 'feed/compact_list_row.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 class PremiumScaffold extends StatelessWidget {
   final Widget child;
@@ -22,6 +23,7 @@ class PremiumScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Scaffold(
       extendBody: true,
       backgroundColor: Colors.transparent,
@@ -29,19 +31,19 @@ class PremiumScaffold extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            const _AuroraBlob(
+            _AuroraBlob(
               alignment: Alignment.topLeft,
-              color: Color(0x6634D399),
+              color: fx.accentSecondarySurface,
               size: 230,
             ),
-            const _AuroraBlob(
+            _AuroraBlob(
               alignment: Alignment(1.18, -0.45),
-              color: Color(0x55C084FC),
+              color: fx.accentTertiarySurface,
               size: 260,
             ),
-            const _AuroraBlob(
+            _AuroraBlob(
               alignment: Alignment(0.72, 1.08),
-              color: Color(0x44F97316),
+              color: fx.accentSurface,
               size: 220,
             ),
             safeArea ? SafeArea(child: child) : child,
@@ -108,6 +110,7 @@ class FrostedPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -120,22 +123,16 @@ class FrostedPanel extends StatelessWidget {
             padding: padding,
             decoration: AppCardStyles.glass(p).copyWith(
               color: color ??
-                  (isDark
-                      ? Colors.black.withValues(alpha: 0.46)
-                      : Colors.white.withValues(alpha: 0.72)),
+                  (fx.heroOverlay),
               borderRadius: BorderRadius.circular(radius),
               border: border ??
                   Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.18)
-                        : Colors.black.withValues(alpha: 0.14),
+                    color: fx.heroOverlayBorder,
                   ),
               boxShadow: boxShadow ??
                   [
                     BoxShadow(
-                      color: isDark
-                          ? Colors.black.withValues(alpha: 0.22)
-                          : Colors.black.withValues(alpha: 0.10),
+                      color: fx.heroShadow,
                       blurRadius: 24,
                       offset: const Offset(0, 14),
                     ),
@@ -165,6 +162,7 @@ class GradientPillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     return TapScale(
       onTap: onPressed,
@@ -192,13 +190,13 @@ class GradientPillButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (icon != null) ...[
-                Icon(icon, color: Colors.black, size: compact ? 16 : 18),
-                const SizedBox(width: 8),
+                Icon(icon, color: fx.mediaViewerBackground, size: compact ? 16 : 18),
+                SizedBox(width: 8),
               ],
               Text(
                 label,
                 style: TextStyle(
-                  color: Colors.black,
+                  color: fx.mediaViewerBackground,
                   fontWeight: FontWeight.w900,
                   fontSize: compact ? 12 : 14,
                   letterSpacing: 0.1,
@@ -266,19 +264,18 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final iconOnly = FrostedPanel(
       radius: 999,
       padding: const EdgeInsets.all(12),
       color: widget.panelColor ??
-          (isDark
-              ? Colors.black.withValues(alpha: 0.44)
-              : Colors.white.withValues(alpha: 0.74)),
+          (fx.heroOverlay),
       boxShadow: const [],
       child: Icon(
         widget.icon,
-        color: widget.color ?? (isDark ? Colors.white : Colors.black),
+        color: widget.color ?? (fx.heroActionFg),
         size: 22,
       ),
     );
@@ -286,20 +283,18 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
       radius: widget.circular ? 999 : 18,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       color: widget.panelColor ??
-          (isDark
-              ? Colors.black.withValues(alpha: 0.22)
-              : Colors.white.withValues(alpha: 0.68)),
+          (fx.heroOverlayBorder),
       boxShadow: const [],
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             widget.icon,
-            color: widget.color ?? (isDark ? Colors.white : Colors.black),
+            color: widget.color ?? (fx.heroActionFg),
             size: 22,
           ),
           if (widget.label != null) ...[
-            const SizedBox(height: 3),
+            SizedBox(height: 3),
             Text(
               widget.label!,
               style: TextStyle(
@@ -317,7 +312,7 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
             mainAxisSize: MainAxisSize.min,
             children: [
               iconOnly,
-              const SizedBox(height: 7),
+              SizedBox(height: 7),
               SizedBox(
                 height: 16,
                 child: Center(
@@ -330,11 +325,11 @@ class _PremiumIconButtonState extends State<PremiumIconButton>
                       color: widget.labelColor ?? p.textSecondary,
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
-                      shadows: const [
+                      shadows: [
                         Shadow(
-                            color: Color(0x66000000),
+                            color: fx.overlayScrim,
                             blurRadius: 4,
-                            offset: Offset(0, 1)),
+                            offset: const Offset(0, 1)),
                       ],
                     ),
                   ),
@@ -418,6 +413,7 @@ class StoryProgressDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     final visible = total.clamp(1, 12);
     return Row(
@@ -430,7 +426,7 @@ class StoryProgressDots extends StatelessWidget {
             margin: EdgeInsets.only(right: i == visible - 1 ? 0 : 5),
             decoration: BoxDecoration(
               color:
-                  selected ? p.primary : Colors.white.withValues(alpha: 0.18),
+                  selected ? fx.accent : fx.heroOverlayBorder,
               borderRadius: BorderRadius.circular(999),
             ),
           ),
@@ -454,7 +450,8 @@ class PremiumNewsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final source = post.category?.name ?? post.sourceName ?? 'News';
+    final fx = context.fx;
+    final source = post.displaySourceName;
     return RepaintBoundary(
       child: CompactListRow(
         title: post.title,
@@ -468,7 +465,7 @@ class PremiumNewsTile extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 17, color: Color(0xFF9E9E9E)),
+                icon: Icon(Icons.close_rounded, size: 17, color: fx.iconFgMuted),
               ),
       ),
     );
@@ -478,16 +475,14 @@ class PremiumNewsTile extends StatelessWidget {
 class PremiumSkeletonCard extends StatelessWidget {
   const PremiumSkeletonCard({super.key});
 
-  static const Color _base = Color(0xFFE0E0E0);
-  static const Color _highlight = Color(0xFFF5F5F5);
-
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Shimmer.fromColors(
-        baseColor: _base,
-        highlightColor: _highlight,
+        baseColor: fx.shimmerBase,
+        highlightColor: fx.shimmerHighlight,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -495,11 +490,11 @@ class PremiumSkeletonCard extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: _base,
+                color: fx.shimmerBase,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -508,25 +503,25 @@ class PremiumSkeletonCard extends StatelessWidget {
                     height: 12,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: _base,
+                      color: fx.shimmerBase,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   Container(
                     height: 12,
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: _base,
+                      color: fx.shimmerBase,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   Container(
                     height: 10,
                     width: 120,
                     decoration: BoxDecoration(
-                      color: _base,
+                      color: fx.shimmerBase,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),

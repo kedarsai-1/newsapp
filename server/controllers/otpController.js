@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const { Prisma, prisma } = require('../config/prisma');
-const { sendOtp, verifyOtp } = require('../utils/otpService');
+const otpService = require('../utils/otpService');
 const { generateToken } = require('../middleware/authMiddleware');
 const { serializeUser } = require('../utils/serializers');
 const { validateOtpRegisterPayload } = require('../utils/authValidation');
@@ -53,7 +53,7 @@ const sendOtpHandler = async (req, res) => {
       );
 
       if (canSendOtp) {
-        await sendOtp(target.trim(), channel, purpose);
+        await otpService.sendOtp(target.trim(), channel, purpose);
       }
 
       return res.json({
@@ -83,7 +83,7 @@ const sendOtpHandler = async (req, res) => {
       }
     }
 
-    await sendOtp(target.trim(), channel, purpose);
+    await otpService.sendOtp(target.trim(), channel, purpose);
 
     res.json({
       success: true,
@@ -111,7 +111,7 @@ const verifyLoginOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'target and code are required.' });
     }
 
-    const result = await verifyOtp(target.trim(), code.trim(), 'login');
+    const result = await otpService.verifyOtp(target.trim(), code.trim(), 'login');
     if (!result.valid) {
       return res.status(400).json({ success: false, message: result.error });
     }
@@ -128,6 +128,13 @@ const verifyLoginOtp = async (req, res) => {
 
     if (!user.isActive) {
       return res.status(403).json({ success: false, message: 'Account suspended.' });
+    }
+
+    if (user.role === 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin accounts must use password login.',
+      });
     }
 
     const token = generateToken(user.id);
@@ -163,7 +170,7 @@ const verifyRegisterOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: 'OTP code is required.' });
     }
 
-    const result = await verifyOtp(target.trim(), code.trim(), 'register');
+    const result = await otpService.verifyOtp(target.trim(), code.trim(), 'register');
     if (!result.valid) {
       return res.status(400).json({ success: false, message: result.error });
     }

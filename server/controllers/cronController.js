@@ -5,7 +5,7 @@ const {
 const { runYoutubeIngestion } = require('../services/youtubeIngestionService');
 const { runPoliticalVideoIngestion } = require('../services/politicalVideoIngestionService');
 const { runLanguageIngestion, runAllLanguageIngestionParallel } = require('../services/languageIngestionService');
-const { purgeOldNews } = require('../services/retentionCleanupService');
+const { runRetentionCleanup } = require('../services/retentionCleanupService');
 const { normalizeLanguage, INGEST_LANGS, isPerLanguageIngestEnabled, isParallelLanguageIngestEnabled } = require('../config/ingestLanguages');
 
 function getRequestSecret(req) {
@@ -179,15 +179,17 @@ const runRetentionCleanupCron = async (req, res) => {
       });
     }
 
-    const result = await purgeOldNews({
-      retentionDays: Number(process.env.RETENTION_DAYS || 7),
+    const result = await runRetentionCleanup({
+      retentionDays: Number(process.env.RETENTION_DAYS || 18),
       limit: Number(process.env.RETENTION_BATCH || 2000),
       keepManual: true,
       dryRun: process.env.RETENTION_DRY_RUN === 'true',
     });
 
+    const news = result.news || {};
     console.log(
-      `[retention] api-cron: matched=${result.matched} deleted=${result.deletedPosts} cutoff=${result.cutoff.toISOString()}`,
+      `[retention] api-cron: days=${result.retentionDays} matched=${news.matched || 0} `
+        + `deleted=${news.deletedPosts || 0} cloudinaryFolderDeleted=${result.cloudinaryFolders?.deleted || 0}`,
     );
 
     return res.json(result);

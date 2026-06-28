@@ -5,9 +5,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:web/web.dart' as web;
 
 import '../../models/models.dart';
+import '../feed/feed_xpresso_theme.dart';
+import '../shorts/youtube_shorts_player_shared.dart';
 import 'article_youtube_player_body.dart';
 
-/// Web: direct iframe embed with controls — no thumbnail overlay (avoids stuck loader).
+/// Web: tap thumbnail → reveal nocookie embed with controls.
 class ArticleYoutubePlayerBody extends StatefulWidget {
   final NewsPost post;
   final String videoId;
@@ -25,15 +27,9 @@ class ArticleYoutubePlayerBody extends StatefulWidget {
 
 class _ArticleYoutubePlayerBodyWebState extends State<ArticleYoutubePlayerBody> {
   static final Set<String> _registered = <String>{};
+  bool _revealed = false;
 
-  late final String _viewType = 'article-yt-${widget.post.id}';
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.post.youtube?.embeddable == false) return;
-    _registerView();
-  }
+  String get _viewType => 'article-yt-${widget.post.id}';
 
   void _registerView() {
     if (_registered.contains(_viewType)) return;
@@ -58,13 +54,18 @@ class _ArticleYoutubePlayerBodyWebState extends State<ArticleYoutubePlayerBody> 
         ..style.setProperty('width', '100%')
         ..style.setProperty('height', '100%')
         ..src =
-            'https://www.youtube-nocookie.com/embed/$videoId?playsinline=1&controls=1&rel=0&modestbranding=1&origin=$origin';
+            'https://www.youtube-nocookie.com/embed/$videoId?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1&origin=$origin';
 
       wrap.appendChild(iframe);
       return wrap;
     });
-
     _registered.add(_viewType);
+  }
+
+  void _revealPlayer() {
+    if (_revealed) return;
+    _registerView();
+    setState(() => _revealed = true);
   }
 
   Future<void> _openYouTube() async {
@@ -77,8 +78,27 @@ class _ArticleYoutubePlayerBodyWebState extends State<ArticleYoutubePlayerBody> 
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (widget.post.youtube?.embeddable == false) {
       return ArticleYoutubeFallback(post: widget.post, onOpen: _openYouTube);
+    }
+
+    if (!_revealed) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: GestureDetector(
+            onTap: _revealPlayer,
+            child: YoutubeThumbnailLayer(
+              post: widget.post,
+              immersive: false,
+              showPlay: true,
+              onPlay: _revealPlayer,
+            ),
+          ),
+        ),
+      );
     }
 
     return ClipRRect(
@@ -86,7 +106,7 @@ class _ArticleYoutubePlayerBodyWebState extends State<ArticleYoutubePlayerBody> 
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: ColoredBox(
-          color: Colors.black,
+          color: fx.mediaViewerBackground,
           child: HtmlElementView(viewType: _viewType),
         ),
       ),

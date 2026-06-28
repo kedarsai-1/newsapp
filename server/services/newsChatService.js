@@ -170,8 +170,10 @@ async function searchNewsArticles({
     where.locationCity = { equals: cityName, mode: 'insensitive' };
   }
 
-  const orClauses = [];
-  if (keywords.length) {
+  // When a category is detected (e.g. sports), do not require keyword hits in SQL —
+  // cricket headlines rarely contain the word "sports".
+  if (keywords.length && !categoryId) {
+    const orClauses = [];
     for (const kw of keywords) {
       orClauses.push(
         { title: { contains: kw, mode: 'insensitive' } },
@@ -180,12 +182,12 @@ async function searchNewsArticles({
         { tags: { has: kw } },
       );
     }
+    where.OR = orClauses;
   }
-  if (orClauses.length) where.OR = orClauses;
 
-  return prisma.newsPost.findMany({
+  const rows = await prisma.newsPost.findMany({
     where,
-    take: MAX_ARTICLES,
+    take: MAX_ARTICLES * 2,
     orderBy: [
       { isBreaking: 'desc' },
       { isFeatured: 'desc' },
@@ -202,9 +204,15 @@ async function searchNewsArticles({
       category: { select: { name: true, slug: true } },
     },
   });
+
+  const filtered = filterArticlesForChat(rows, lang, categorySlug);
+  const ranked = keywords.length
+    ? rankArticlesByQuery(filtered, query)
+    : filtered;
+  return ranked.slice(0, MAX_ARTICLES);
 }
 
-async function fetchTrendingHeadlines({ lang, excludeIds = [], limit = 6 }) {
+async function fetchTrendingHeadlines({ lang, excludeIds = [], limit = 6, categorySlug = null }) {
   const where = {
     status: 'approved',
     createdAt: { gte: sinceDate() },
@@ -212,9 +220,12 @@ async function fetchTrendingHeadlines({ lang, excludeIds = [], limit = 6 }) {
   if (lang === 'en' || lang === 'hi' || lang === 'te') where.language = lang;
   if (excludeIds.length) where.id = { notIn: excludeIds };
 
-  return prisma.newsPost.findMany({
+  const categoryId = await resolveCategoryId(categorySlug);
+  if (categoryId) where.categoryId = categoryId;
+
+  const rows = await prisma.newsPost.findMany({
     where,
-    take: limit,
+    take: limit * 2,
     orderBy: [
       { isBreaking: 'desc' },
       { sourcePublishedAt: 'desc' },
@@ -230,6 +241,8 @@ async function fetchTrendingHeadlines({ lang, excludeIds = [], limit = 6 }) {
       category: { select: { name: true, slug: true } },
     },
   });
+
+  return filterArticlesForChat(rows, lang, categorySlug).slice(0, limit);
 }
 
 async function buildNewsContext({
@@ -280,11 +293,15 @@ async function buildNewsContext({
       lang,
       excludeIds: [...seen],
       limit: MAX_ARTICLES - posts.length,
+      categorySlug: categorySlug || null,
     });
     for (const post of trending) pushPost(post);
   }
 
-  const limited = rankArticlesByQuery(posts, query).slice(0, MAX_ARTICLES);
+  const limited = rankArticlesByQuery(
+    filterArticlesForChat(posts, lang, categorySlug),
+    query,
+  ).slice(0, MAX_ARTICLES);
   const text = limited.length
     ? limited.map((p, i) => formatArticle(p, i)).join('\n\n')
     : '';
@@ -578,6 +595,41 @@ function isAnswerInTargetLanguage(answer, lang) {
 
 const BOILERPLATE_LINE = /youtube|facebook|twitter|instagram|telegram|subscribe|follow us|search us on|jansatta|live news|share this|download app|click here|http|www\./i;
 
+/** Drop mis-tagged or wrong-script articles from chat context (e.g. Hindi body tagged language=en). */
+function scriptRatios(text) {
+  const t = String(text || '');
+  const indic = (t.match(/[\u0900-\u0D7F]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  const telugu = (t.match(/[\u0C00-\u0C7F]/g) || []).length;
+  const total = indic + latin + telugu;
+  return { indic, latin, telugu, total };
+}
+
+function articleMatchesLanguage(article, lang) {
+  const blob = `${article.title || ''} ${article.summary || ''}`;
+  const { indic, latin, telugu, total } = scriptRatios(blob);
+  if (total < 8) return true;
+
+  if (lang === 'en') {
+    return indic / total < 0.12 && telugu / total < 0.12;
+  }
+  if (lang === 'hi') {
+    return indic / total >= 0.22;
+  }
+  if (lang === 'te') {
+    return telugu / total >= 0.18 || indic / total >= 0.22;
+  }
+  return true;
+}
+
+function filterArticlesForChat(articles, lang, categorySlug = null) {
+  const slug = categorySlug ? String(categorySlug).toLowerCase() : null;
+  return (articles || []).filter((article) => {
+    if (slug && article.category?.slug !== slug) return false;
+    return articleMatchesLanguage(article, lang);
+  });
+}
+
 /** Strip social/YouTube junk from RSS summaries used in extractive chat fallback. */
 function sanitizeExtractiveText(text) {
   let t = String(text || '').trim();
@@ -672,13 +724,15 @@ function isAcceptableChatAnswer(answer, lang, { query, keywords, isWeatherQuery 
 }
 
 function extractiveFallback(articles, lang, query = '') {
-  const ranked = rankArticlesByQuery(articles, query);
+  const intentSlug = detectCategorySlug(query);
+  const pool = filterArticlesForChat(articles, lang, intentSlug);
+  const ranked = rankArticlesByQuery(pool, query);
   const top = ranked
     .map((a) => ({
       ...a,
       clean: sanitizeExtractiveText(a.summary || a.title),
     }))
-    .filter((a) => a.clean.length > 20)
+    .filter((a) => a.clean.length > 20 && articleMatchesLanguage({ ...a, title: a.clean, summary: '' }, lang))
     .slice(0, 2);
   if (!top.length) return fallbackAnswer(lang);
 
@@ -890,6 +944,8 @@ module.exports = {
   sanitizeExtractiveText,
   rankArticlesByQuery,
   extractiveFallback,
+  filterArticlesForChat,
+  articleMatchesLanguage,
   formatArticle,
   buildWeatherAnswerFromMeta,
   weatherFallbackAnswer,

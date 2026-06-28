@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../constants.dart';
 import '../../theme/app_palette.dart';
 import '../../widgets/location_label.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 class NewsCard extends StatelessWidget {
   final NewsPost post;
@@ -16,6 +17,7 @@ class NewsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     final imageFit = kIsWeb ? BoxFit.contain : BoxFit.cover;
     return GestureDetector(
@@ -41,11 +43,11 @@ class NewsCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.circle, color: Colors.white, size: 8),
-                    const SizedBox(width: 6),
+                    Icon(Icons.circle, color: fx.onImage, size: 8),
+                    SizedBox(width: 6),
                     Text(
                       post.isBreaking ? 'BREAKING NEWS' : 'FEATURED',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                      style: TextStyle(color: fx.onImage, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                     ),
                   ],
                 ),
@@ -69,12 +71,12 @@ class NewsCard extends StatelessWidget {
                       fit: imageFit,
                       placeholder: (_, __) => Container(
                         height: 180,
-                        color: const Color(0xFFF0F0F0),
-                        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        color: fx.imagePlaceholder,
+                        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                       ),
                       errorWidget: (_, __, ___) => Container(
                         height: 180,
-                        color: const Color(0xFFF0F0F0),
+                        color: fx.imagePlaceholder,
                         child: Icon(Icons.image_not_supported, size: 40, color: p.textHint),
                       ),
                     ),
@@ -84,15 +86,15 @@ class NewsCard extends StatelessWidget {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.7),
+                            color: fx.overlayScrim,
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.play_arrow, color: Colors.white, size: 14),
+                              Icon(Icons.play_arrow, color: fx.onImage, size: 14),
                               SizedBox(width: 2),
-                              Text('VIDEO', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              Text('VIDEO', style: TextStyle(color: fx.onImage, fontSize: 10, fontWeight: FontWeight.bold)),
                             ],
                           ),
                         ),
@@ -134,22 +136,21 @@ class NewsCard extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
 
-                  // Meta row: reporter, time, location, views
+                  // Meta row: source, time, location, views
                   Wrap(
                     spacing: 10,
                     runSpacing: 4,
                     children: [
-                      if (post.reporter != null)
-                        Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.person_outline, size: 13, color: p.textHint),
-                          const SizedBox(width: 3),
-                          Text(post.reporter!.name, style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                        ]),
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.article_outlined, size: 13, color: p.textHint),
+                        SizedBox(width: 3),
+                        Text(post.displaySourceName, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                      ]),
                       Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.access_time, size: 13, color: p.textHint),
-                        const SizedBox(width: 3),
+                        SizedBox(width: 3),
                         Text(timeago.format(post.displayTime), style: TextStyle(fontSize: 12, color: p.textHint)),
                       ]),
                       if (post.location != null)
@@ -162,12 +163,12 @@ class NewsCard extends StatelessWidget {
                         ),
                       Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.visibility_outlined, size: 13, color: p.textHint),
-                        const SizedBox(width: 3),
+                        SizedBox(width: 3),
                         Text('${post.views}', style: TextStyle(fontSize: 12, color: p.textHint)),
                       ]),
                       Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.favorite_border, size: 13, color: p.textHint),
-                        const SizedBox(width: 3),
+                        SizedBox(width: 3),
                         Text('${post.likes}', style: TextStyle(fontSize: 12, color: p.textHint)),
                       ]),
                     ],

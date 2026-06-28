@@ -78,7 +78,7 @@ class _FeedYoutubeRailState extends State<FeedYoutubeRail> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SizedBox(
+      return SizedBox(
         height: 168,
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
@@ -94,7 +94,7 @@ class _FeedYoutubeRailState extends State<FeedYoutubeRail> {
           child: Row(
             children: [
               Icon(Icons.play_circle_outline_rounded, color: fx.accent, size: 20),
-              const SizedBox(width: 6),
+              SizedBox(width: 6),
               Text(
                 'Videos & Shorts',
                 style: TextStyle(
@@ -112,7 +112,7 @@ class _FeedYoutubeRailState extends State<FeedYoutubeRail> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             itemCount: _posts.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            separatorBuilder: (_, __) => SizedBox(width: 10),
             itemBuilder: (context, index) {
               final post = _posts[index];
               final imageUrl = premiumImageUrl(post);
@@ -126,7 +126,7 @@ class _FeedYoutubeRailState extends State<FeedYoutubeRail> {
             },
           ),
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
       ],
     );
   }
@@ -182,7 +182,7 @@ class _YoutubeTile extends StatelessWidget {
                     child: Center(
                       child: Icon(
                         Icons.play_circle_fill_rounded,
-                        color: Colors.white.withValues(alpha: 0.92),
+                        color: fx.onImage.withValues(alpha: 0.92),
                         size: 34,
                       ),
                     ),
@@ -194,13 +194,13 @@ class _YoutubeTile extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.65),
+                          color: fx.overlayScrim,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
+                        child: Text(
                           'SHORT',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: fx.onImage,
                             fontSize: 9,
                             fontWeight: FontWeight.w800,
                           ),
@@ -209,7 +209,7 @@ class _YoutubeTile extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
                 title,
                 maxLines: 2,

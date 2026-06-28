@@ -49,7 +49,7 @@ class _FeedHomeHeaderState extends State<FeedHomeHeader> {
         SuperHomeAstrologySection(
           onSeeAll: () => context.push('/ai-chat'),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
       ],
     );
   }
@@ -73,7 +73,7 @@ class _LiveCricketRail extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(Icons.sports_cricket_rounded, color: fx.accent, size: 20),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                   Text(
                     'Live Cricket',
                     style: TextStyle(
@@ -85,7 +85,7 @@ class _LiveCricketRail extends StatelessWidget {
                   const Spacer(),
                   TextButton(
                     onPressed: () => context.push('/sports'),
-                    child: const Text('All matches'),
+                    child: Text('All matches'),
                   ),
                 ],
               ),
@@ -96,7 +96,7 @@ class _LiveCricketRail extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 itemCount: matches.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                separatorBuilder: (_, __) => SizedBox(width: 10),
                 itemBuilder: (context, i) {
                   final m = matches[i];
                   final a = m.teams.isNotEmpty ? m.teams[0] : null;
@@ -152,7 +152,7 @@ class _LiveCricketRail extends StatelessWidget {
                 },
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
           ],
         );
       },

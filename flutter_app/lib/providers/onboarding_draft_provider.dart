@@ -11,6 +11,9 @@ class OnboardingDraftProvider extends ChangeNotifier {
   /// Display label for city / region (saved for future locality filters).
   String cityLabel = '';
 
+  double? latitude;
+  double? longitude;
+
   bool notificationsRequested = false;
 
   void setLanguage(String code) {
@@ -33,6 +36,12 @@ class OnboardingDraftProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCoordinates(double lat, double lng) {
+    latitude = lat;
+    longitude = lng;
+    notifyListeners();
+  }
+
   void setNotificationsRequested(bool value) {
     notificationsRequested = value;
     notifyListeners();
@@ -42,6 +51,8 @@ class OnboardingDraftProvider extends ChangeNotifier {
     languageCode = 'en';
     interestSlugs.clear();
     cityLabel = '';
+    latitude = null;
+    longitude = null;
     notificationsRequested = false;
     notifyListeners();
   }

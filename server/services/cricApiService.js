@@ -590,73 +590,96 @@ function buildLivePayload(rawList) {
   };
 }
 
+async function fetchCurrentMatchesFromApi() {
+  let rawList = [];
+  let rateLimited = false;
+  let warning = null;
+
+  // 1) International + live (primary — one API call per refresh)
+  try {
+    const body = await cricGet('/currentMatches', { offset: 0 });
+    rawList = Array.isArray(body.data) ? body.data : [];
+  } catch (e) {
+    rateLimited = e.code === 'CRICAPI_RATE_LIMIT';
+    console.warn('[cricapi] currentMatches skipped:', e.message);
+    if (!rateLimited) throw e;
+  }
+
+  // 2) IPL supplement — use 6h cache only when rate-limited; otherwise refresh cache quietly
+  const leagueCacheKey = 'sports:leagueSeriesMatches';
+  let leagueRaw = await cacheService.get(leagueCacheKey);
+  if (!leagueRaw && !rateLimited) {
+    try {
+      leagueRaw = await fetchLeagueSeriesMatches();
+    } catch (e) {
+      console.warn('[cricapi] IPL/WPL series merge skipped:', e.message);
+    }
+  }
+  if (Array.isArray(leagueRaw) && leagueRaw.length) {
+    const leagueRows = leagueMatchesForFeed(leagueRaw).map((m) => ({
+      ...m,
+      series: m.series || 'Indian Premier League',
+    }));
+    rawList = mergeRawMatches([rawList, leagueRows]);
+  }
+
+  // 3) Offline IPL snapshot only when API returned nothing at all (never mix with live data)
+  if (!rawList.length) {
+    const fallback = loadIplFallbackMatches().filter((m) => {
+      const y = matchSeasonYear(m);
+      return !y || y >= currentIplSeasonYear() - 1;
+    });
+    if (fallback.length) {
+      rawList = fallback;
+      warning =
+        'Live API limit reached — showing saved IPL results. International & live scores return when quota resets.';
+    } else {
+      const err = new Error('No cricket matches returned from CricAPI');
+      err.code = 'CRICAPI_EMPTY';
+      throw err;
+    }
+  } else if (rateLimited && rawList.length) {
+    warning = 'Some score updates may be delayed (API limit). Pull to refresh shortly.';
+  }
+
+  const payload = { ...buildLivePayload(rawList), ...(warning ? { warning } : {}) };
+  return payload;
+}
+
 async function fetchCurrentMatches() {
   const cacheKey = 'sports:currentMatches';
   const staleKey = 'sports:currentMatches:stale';
   const cached = await cacheService.get(cacheKey);
   if (cached) return cached;
 
-  try {
-    let rawList = [];
-    let rateLimited = false;
-    let warning = null;
-
-    // 1) International + live (primary — one API call per refresh)
-    try {
-      const body = await cricGet('/currentMatches', { offset: 0 });
-      rawList = Array.isArray(body.data) ? body.data : [];
-    } catch (e) {
-      rateLimited = e.code === 'CRICAPI_RATE_LIMIT';
-      console.warn('[cricapi] currentMatches skipped:', e.message);
-      if (!rateLimited) throw e;
-    }
-
-    // 2) IPL supplement — use 6h cache only when rate-limited; otherwise refresh cache quietly
-    const leagueCacheKey = 'sports:leagueSeriesMatches';
-    let leagueRaw = await cacheService.get(leagueCacheKey);
-    if (!leagueRaw && !rateLimited) {
+  const stale = await cacheService.get(staleKey);
+  if (stale) {
+    void (async () => {
       try {
-        leagueRaw = await fetchLeagueSeriesMatches();
+        const payload = await fetchCurrentMatchesFromApi();
+        await cacheService.set(cacheKey, payload, TTL_LIVE_MS);
+        await cacheService.set(staleKey, payload, TTL_STALE_MS);
       } catch (e) {
-        console.warn('[cricapi] IPL/WPL series merge skipped:', e.message);
+        console.warn('[cricapi] background revalidate failed:', e.message);
       }
-    }
-    if (Array.isArray(leagueRaw) && leagueRaw.length) {
-      const leagueRows = leagueMatchesForFeed(leagueRaw).map((m) => ({
-        ...m,
-        series: m.series || 'Indian Premier League',
-      }));
-      rawList = mergeRawMatches([rawList, leagueRows]);
-    }
+    })();
+    return {
+      ...stale,
+      stale: true,
+      warning: 'Refreshing cricket scores…',
+    };
+  }
 
-    // 3) Offline IPL snapshot only when API returned nothing at all (never mix with live data)
-    if (!rawList.length) {
-      const fallback = loadIplFallbackMatches().filter((m) => {
-        const y = matchSeasonYear(m);
-        return !y || y >= currentIplSeasonYear() - 1;
-      });
-      if (fallback.length) {
-        rawList = fallback;
-        warning =
-          'Live API limit reached — showing saved IPL results. International & live scores return when quota resets.';
-      } else {
-        const err = new Error('No cricket matches returned from CricAPI');
-        err.code = 'CRICAPI_EMPTY';
-        throw err;
-      }
-    } else if (rateLimited && rawList.length) {
-      warning = 'Some score updates may be delayed (API limit). Pull to refresh shortly.';
-    }
-
-    const payload = { ...buildLivePayload(rawList), ...(warning ? { warning } : {}) };
+  try {
+    const payload = await fetchCurrentMatchesFromApi();
     await cacheService.set(cacheKey, payload, TTL_LIVE_MS);
     await cacheService.set(staleKey, payload, TTL_STALE_MS);
     return payload;
   } catch (e) {
-    const stale = await cacheService.get(staleKey);
-    if (stale) {
+    const lastStale = await cacheService.get(staleKey);
+    if (lastStale) {
       return {
-        ...stale,
+        ...lastStale,
         stale: true,
         warning:
           e.code === 'CRICAPI_RATE_LIMIT'

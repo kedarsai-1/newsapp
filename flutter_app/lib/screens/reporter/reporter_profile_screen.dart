@@ -45,7 +45,7 @@ class ReporterProfileScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,7 +58,7 @@ class ReporterProfileScreen extends StatelessWidget {
                                 color: fx.title,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: 2),
                             Text(
                               user.email,
                               style: TextStyle(fontSize: 12, color: fx.summary),
@@ -78,7 +78,7 @@ class ReporterProfileScreen extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Center(
                 child: TextButton.icon(
                   onPressed: () async {

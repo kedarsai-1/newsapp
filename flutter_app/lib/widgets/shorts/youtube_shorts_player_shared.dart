@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/models.dart';
 import '../../utils/youtube_thumb_url.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Full-screen 9:16 frame for Shorts video/thumbnail.
 class ShortsVideoFrame extends StatelessWidget {
@@ -14,8 +15,9 @@ class ShortsVideoFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return ColoredBox(
-      color: Colors.black,
+      color: fx.mediaViewerBackground,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -63,9 +65,10 @@ class _HdYoutubeThumbnailState extends State<HdYoutubeThumbnail> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final urls = _urls;
     if (urls.isEmpty) {
-      return const ColoredBox(color: Color(0xFF141414));
+      return ColoredBox(color: fx.videoPlaceholder);
     }
     final idx = _urlIndex.clamp(0, urls.length - 1);
     final dpr = MediaQuery.devicePixelRatioOf(context);
@@ -79,7 +82,7 @@ class _HdYoutubeThumbnailState extends State<HdYoutubeThumbnail> {
       memCacheWidth: memW,
       fadeInDuration: const Duration(milliseconds: 120),
       fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => const ColoredBox(color: Color(0xFF141414)),
+      placeholder: (_, __) => ColoredBox(color: fx.videoPlaceholder),
       errorWidget: (_, __, ___) {
         if (idx + 1 < urls.length) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -87,7 +90,7 @@ class _HdYoutubeThumbnailState extends State<HdYoutubeThumbnail> {
             setState(() => _urlIndex = idx + 1);
           });
         }
-        return const ColoredBox(color: Color(0xFF141414));
+        return ColoredBox(color: fx.videoPlaceholder);
       },
     );
   }
@@ -109,6 +112,7 @@ class YoutubeThumbnailLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final stack = Stack(
       fit: StackFit.expand,
       children: [
@@ -121,13 +125,13 @@ class YoutubeThumbnailLayer extends StatelessWidget {
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
+                  color: fx.overlayScrim,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24),
+                  border: Border.all(color: fx.onVideoMuted),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.play_arrow_rounded,
-                  color: Colors.white,
+                  color: fx.onImage,
                   size: 40,
                 ),
               ),
@@ -143,7 +147,7 @@ class YoutubeThumbnailLayer extends StatelessWidget {
     );
     if (!immersive) {
       return ColoredBox(
-        color: Colors.black,
+        color: fx.mediaViewerBackground,
         child: SizedBox.expand(child: stack),
       );
     }
@@ -163,25 +167,26 @@ class YoutubeUnmuteChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (!muted) return const SizedBox.shrink();
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.65),
+          color: fx.overlayScrim,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white24),
+          border: Border.all(color: fx.onVideoMuted),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.volume_off_rounded, color: Colors.white, size: 18),
+            Icon(Icons.volume_off_rounded, color: fx.onImage, size: 18),
             SizedBox(width: 6),
             Text(
               'Tap to unmute',
               style: TextStyle(
-                color: Colors.white,
+                color: fx.onImage,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -207,33 +212,34 @@ class YoutubeFallbackCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return ColoredBox(
-      color: const Color(0xCC000000),
+      color: fx.overlayScrim,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.play_disabled_outlined, color: Colors.white38, size: 48),
-              const SizedBox(height: 12),
-              const Text(
+              Icon(Icons.play_disabled_outlined, color: fx.onVideoMuted, size: 48),
+              SizedBox(height: 12),
+              Text(
                 'Video unavailable in app',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: fx.onImage,
                   fontWeight: FontWeight.w600,
                   fontSize: 16,
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: () => _openExternal(post.youtubeWatchUrl),
-                icon: const Icon(Icons.play_circle_outline_rounded, size: 20),
-                label: const Text('Open on YouTube'),
+                icon: Icon(Icons.play_circle_outline_rounded, size: 20),
+                label: Text('Open on YouTube'),
               ),
               if (post.youtubeChannelUrl != null) ...[
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 TextButton(
                   onPressed: () => _openExternal(post.youtubeChannelUrl),
                   child: Text('View ${post.youtubeChannelLabel}'),
@@ -254,21 +260,22 @@ class YoutubeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: fx.overlayScrim,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.play_circle_filled, color: Color(0xFFFF0000), size: 16),
-          const SizedBox(width: 6),
+          Icon(Icons.play_circle_filled, color: fx.liked, size: 16),
+          SizedBox(width: 6),
           Text(
             'YouTube · $channel',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: fx.onVideo,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             ),

@@ -1,0 +1,162 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint (if exists)
+        run: |
+          if [ -f "server/.eslintrc.js" ]; then npm run lint; fi
+        continue-on-error: true
+
+      - name: Check backend formatting
+        run: npx prettier --check server/
+        continue-on-error: true
+
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run migrations
+        run: npx prisma migrate deploy
+
+      - name: Wait for services
+        run: |
+          until npx prisma db execute --query 'SELECT 1' > /dev/null 2>&1; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          sleep 2
+
+      - name: Run backend tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/news_app_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-secret-key-for-testing-only-long-enough-for-security
+          AI_PROVIDER: huggingface
+          HF_TOKEN: dummy
+          FIREBASE_PROJECT_ID: test
+
+  build-flutter:
+    name: Flutter Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.6'
+          cache: true
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: |
+          flutter pub get
+          cd server && npm ci
+
+      - name: Get Flutter packages
+        run: flutter pub get
+
+      - name: Run Flutter analyzer
+        run: flutter analyze
+
+      - name: Run Flutter tests (if tests exist)
+        run: flutter test
+        continue-on-error: true
+
+      - name: Build Android APK
+        run: flutter build apk --release
+        if: github.event_name == 'push'
+
+      - name: Build iOS (simulator)
+        run: flutter build ios --simulator
+        if: github.event_name == 'push'
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check for hardcoded secrets
+        run: |
+          echo "Checking for hardcoded secrets..."
+          # Check for common patterns
+          grep -r "password\s*=\s*['\"][^$].*['\"]" server/ --include="*.js" --include="*.ts" || true
+          grep -r "secret\s*=\s*['\"][^$].*['\"]" server/ --include="*.js" --include="*.ts" || true
+          grep -r "apiKey\s*=\s*['\"][^$].*['\"]" server/ --include="*.js" --include="*.ts" || true
+
+      - name: Check TODOs/FIXMEs in production code
+        run: |
+          echo "Checking for TODOs/FIXMEs..."
+          grep -rn "TODO\|FIXME\|XXX" server/ --include="*.js" | head -5
+          echo "Ignoring test files..."
+          grep -rn "TODO\|FIXME\|XXX" flutter_app/lib/ --include="*.dart" | head -5
+          if [ $? -eq 0 ]; then echo "⚠️  Found TODOs in main code. Review before merging."; fi

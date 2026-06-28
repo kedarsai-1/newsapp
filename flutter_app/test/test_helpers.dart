@@ -16,9 +16,22 @@ Future<void> initTestEnv() async {
       fileInput: '''
 APP_NAME=NewsNow
 API_BASE_URL=http://127.0.0.1:5001/api
+SHARE_WEB_BASE_URL=http://127.0.0.1:5001
 ''',
     );
   }
+}
+
+/// Avoid ink_sparkle.frag SkSL/Vulkan failures on headless Linux CI.
+Widget testMaterialApp(Widget child) {
+  return MaterialApp(
+    theme: ThemeData(
+      useMaterial3: true,
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+    ),
+    home: child,
+  );
 }
 
 /// Wraps screens that call [I18n.t] (requires [NewsProvider]).

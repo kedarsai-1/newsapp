@@ -52,6 +52,46 @@ let ollamaJobQueue = [];
 let ollamaJobRunning = false;
 let ollamaJobSeq = 0;
 
+/** Back off ingest Ollama after consecutive timeouts/aborts (shared instance overload). */
+let ollamaIngestCircuit = { failures: 0, openUntil: 0 };
+let ollamaCircuitHfBackupLoggedUntil = 0;
+
+function ollamaCircuitFailureThreshold() {
+  return Math.max(2, Number(process.env.OLLAMA_CIRCUIT_FAILURES || 3));
+}
+
+function ollamaCircuitCooldownMs() {
+  return Math.max(60_000, Number(process.env.OLLAMA_CIRCUIT_COOLDOWN_MS || 300_000));
+}
+
+function isOllamaIngestCircuitOpen() {
+  return Date.now() < ollamaIngestCircuit.openUntil;
+}
+
+function isOllamaUnderLoad() {
+  return ollamaJobRunning || ollamaJobQueue.length > 1;
+}
+
+function recordOllamaIngestFailure(err) {
+  if (isChatPriorityError(err)) return;
+  // Chat preempts ingest via abortActiveIngestInference — not an Ollama outage.
+  if (isOllamaAbortError(err) && hasPendingChatWork()) return;
+  ollamaIngestCircuit.failures += 1;
+  if (ollamaIngestCircuit.failures >= ollamaCircuitFailureThreshold()) {
+    ollamaIngestCircuit.openUntil = Date.now() + ollamaCircuitCooldownMs();
+    ollamaIngestCircuit.failures = 0;
+    console.warn(
+      `[ai] Ollama ingest circuit open for ${Math.round(ollamaCircuitCooldownMs() / 1000)}s `
+        + '— extractive summaries until cooldown',
+    );
+  }
+}
+
+function recordOllamaIngestSuccess() {
+  ollamaIngestCircuit.failures = 0;
+  ollamaIngestCircuit.openUntil = 0;
+}
+
 function drainOllamaJobQueue() {
   if (ollamaJobRunning || !ollamaJobQueue.length) return;
   ollamaJobRunning = true;
@@ -512,13 +552,25 @@ async function ollamaCompleteQueued(system, user, lang = 'en', timeoutMs = null,
 }
 
 async function ollamaCompleteForSummary(system, user, lang = 'en') {
-  return ollamaCompleteQueued(
-    system,
-    user,
-    lang,
-    ollamaSummaryTimeoutMs(),
-    ollamaSummaryMaxTokens(),
-  );
+  if (isOllamaIngestCircuitOpen()) {
+    throw new Error('OLLAMA_CIRCUIT_OPEN');
+  }
+  try {
+    const result = await ollamaCompleteQueued(
+      system,
+      user,
+      lang,
+      ollamaSummaryTimeoutMs(),
+      ollamaSummaryMaxTokens(),
+    );
+    recordOllamaIngestSuccess();
+    return result;
+  } catch (e) {
+    if (isOllamaAbortError(e) || isChatPriorityError(e)) {
+      recordOllamaIngestFailure(e);
+    }
+    throw e;
+  }
 }
 
 function parseHfSummarizationJson(result) {
@@ -613,7 +665,8 @@ async function summarize(text, targetLang = 'en') {
 
   // For English: Ollama primary (if enabled), HF backup
   if (lang === 'en') {
-    if (isOllamaProvider()) {
+    const circuitOpen = isOllamaProvider() && isOllamaIngestCircuitOpen();
+    if (isOllamaProvider() && !circuitOpen) {
       try {
         const model = ollamaModelForLanguage('en');
         const raw = await ollamaCompleteForSummary(
@@ -625,7 +678,25 @@ async function summarize(text, targetLang = 'en') {
         if (out) return out;
       } catch (e) {
         if (isChatPriorityError(e)) return '';
-        console.error(`[ai] English Ollama summarization failed: ${e.message}`);
+        const hasHf = Boolean(String(process.env.HF_TOKEN || '').trim());
+        if (isOllamaAbortError(e)) {
+          if (hasHf) {
+            console.warn(`[ai] Ollama summarization aborted: ${e.message}. Trying HF backup...`);
+          }
+        } else if (e.message !== 'OLLAMA_CIRCUIT_OPEN') {
+          console.error(`[ai] English Ollama summarization failed: ${e.message}`);
+        }
+      }
+    } else if (circuitOpen) {
+      const now = Date.now();
+      if (now >= ollamaCircuitHfBackupLoggedUntil) {
+        ollamaCircuitHfBackupLoggedUntil = ollamaIngestCircuit.openUntil;
+        const hasHf = Boolean(String(process.env.HF_TOKEN || '').trim());
+        console.warn(
+          hasHf
+            ? '[ai] Ollama ingest circuit open — trying HF backup for English summary'
+            : '[ai] Ollama ingest circuit open — extractive summaries until cooldown',
+        );
       }
     }
     const hasHfToken = Boolean(String(process.env.HF_TOKEN || '').trim());
@@ -653,8 +724,15 @@ async function summarize(text, targetLang = 'en') {
           `[ai] Ollama summary rejected (lang=${lang}, model=${model}). Trying HF backup...`,
         );
       } catch (e) {
-        if (isChatPriorityError(e)) return '';
-        console.error(`Ollama summarization failed: ${e.message || e}. Trying HF backup...`);
+        if (isChatPriorityError(e) || e.message === 'OLLAMA_CIRCUIT_OPEN') return '';
+        const hasHf = Boolean(String(process.env.HF_TOKEN || '').trim());
+        if (isOllamaAbortError(e)) {
+          if (hasHf) {
+            console.warn(`Ollama summarization aborted: ${e.message || e}. Trying HF backup...`);
+          }
+        } else {
+          console.error(`Ollama summarization failed: ${e.message || e}${hasHf ? '. Trying HF backup...' : ''}`);
+        }
       }
     }
     // Fallback/Backup to Hugging Face
@@ -1047,6 +1125,9 @@ function warmOllamaLanguages() {
 async function warmOllamaChatModels() {
   if (!isOllamaProvider()) return { ok: false, skipped: true };
   if (process.env.OLLAMA_WARM_ON_START === 'false') return { ok: false, skipped: true };
+  if (isOllamaIngestCircuitOpen() || isOllamaUnderLoad()) {
+    return { ok: false, skipped: true, reason: 'ollama_busy' };
+  }
 
   const warmTimeoutMs = Math.min(
     45000,
@@ -1074,7 +1155,9 @@ async function warmOllamaChatModels() {
       results[model] = 'ok';
     } catch (err) {
       results[model] = err?.message || String(err);
-      console.warn(`[ai] Ollama warm failed (${model}):`, results[model]);
+      if (!isOllamaAbortError(err)) {
+        console.warn(`[ai] Ollama warm failed (${model}):`, results[model]);
+      }
     }
   }
 
@@ -1130,6 +1213,7 @@ module.exports = {
   ollamaChatMaxTokens,
   ollamaSummaryTimeoutMs,
   isOllamaAbortError,
+  isOllamaIngestCircuitOpen,
   hasPendingChatWork,
   shouldYieldIngestToChat,
   withOllamaChatQueue,

@@ -94,7 +94,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> with SingleTickerProvider
                       parent: BouncingScrollPhysics(),
                     ),
                     itemCount: provider.myPosts.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => SizedBox(height: 10),
                     itemBuilder: (_, i) => _PostCard(
                       post: provider.myPosts[i],
                       fx: fx,
@@ -145,9 +145,9 @@ class _TabBarHeader extends SliverPersistentHeaderDelegate {
             labelColor: accent,
             unselectedLabelColor: subtitleColor,
             indicatorColor: accent,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+            labelStyle: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
             unselectedLabelStyle:
-                const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
             tabs: labels.map((l) => Tab(text: l)).toList(),
           ),
           Divider(height: 1, thickness: 1, color: divider),
@@ -173,7 +173,8 @@ class _PostCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = AppUtils.statusColor(post.status);
+    final fx = context.fx;
+    final statusColor = AppUtils.statusColor(post.status, context);
     return Container(
       decoration: BoxDecoration(
         color: fx.cardSurface,
@@ -192,7 +193,7 @@ class _PostCard extends StatelessWidget {
             child: Row(
               children: [
                 Icon(AppUtils.statusIcon(post.status), size: 14, color: statusColor),
-                const SizedBox(width: 6),
+                SizedBox(width: 6),
                 Text(
                   post.status.toUpperCase(),
                   style: TextStyle(
@@ -224,7 +225,7 @@ class _PostCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 Wrap(
                   spacing: 10,
                   children: [
@@ -244,25 +245,25 @@ class _PostCard extends StatelessWidget {
                   ],
                 ),
                 if (post.status == 'rejected' && post.rejectionReason != null) ...[
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
+                      color: fx.errorSurface,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFECACA)),
+                      border: Border.all(color: fx.errorBorder),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.info_outline, size: 14, color: Colors.red.shade600),
-                        const SizedBox(width: 6),
+                        Icon(Icons.info_outline, size: 14, color: fx.error),
+                        SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             post.rejectionReason!,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.red.shade700,
+                              color: fx.onErrorSurface,
                             ),
                           ),
                         ),
@@ -270,28 +271,28 @@ class _PostCard extends StatelessWidget {
                     ),
                   ),
                 ],
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Row(
                   children: [
                     if (post.status == 'approved') ...[
                       Icon(Icons.visibility_outlined, size: 13, color: fx.summary),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Text(
                         AppUtils.formatCount(post.views),
                         style: TextStyle(fontSize: 12, color: fx.summary),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Icon(Icons.favorite_border, size: 13, color: fx.summary),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Text(
                         AppUtils.formatCount(post.likes),
                         style: TextStyle(fontSize: 12, color: fx.summary),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                     ],
                     if (post.media.isNotEmpty) ...[
                       Icon(Icons.perm_media_outlined, size: 13, color: fx.summary),
-                      const SizedBox(width: 4),
+                      SizedBox(width: 4),
                       Text(
                         '${post.media.length} media',
                         style: TextStyle(fontSize: 12, color: fx.summary),

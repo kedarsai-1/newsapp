@@ -88,12 +88,19 @@ function getIngestBudgetMs(language) {
 
   let ms;
   if (raw === undefined || raw === '') {
-    ms = onRailway ? 6 * 60 * 1000 : 20 * 60 * 1000;
+    if (lang === 'hi') {
+      ms = onRailway ? 8 * 60 * 1000 : 45 * 60 * 1000;
+    } else {
+      ms = onRailway ? 6 * 60 * 1000 : 20 * 60 * 1000;
+    }
   } else {
     ms = Number(raw);
     if (onRailway && Number.isFinite(ms) && ms > 10 * 60 * 1000) {
       ms = 10 * 60 * 1000;
     }
+  }
+  if (lang === 'hi' && Number.isFinite(ms) && ms > 0 && ms < 45 * 60 * 1000 && !onRailway) {
+    ms = 45 * 60 * 1000;
   }
   return Number.isFinite(ms) && ms > 0 ? ms : null;
 }

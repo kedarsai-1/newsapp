@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'feed_xpresso_theme.dart';
+import '../../utils/feed_failed_image_cache.dart';
 
 export 'feed_xpresso_theme.dart' show FeedXpressoTheme, kFeedRowExtent;
 
@@ -81,7 +82,7 @@ class CompactNewsRow extends StatelessWidget {
                       onUnavailable: onImageUnavailable,
                     ),
                   if (url.isNotEmpty)
-                    const SizedBox(height: FeedXpressoTheme.imageToTitleGap),
+                    SizedBox(height: FeedXpressoTheme.imageToTitleGap),
                   Text(
                     title,
                     maxLines: titleMaxLines,
@@ -89,7 +90,7 @@ class CompactNewsRow extends StatelessWidget {
                     style: fx.titleStyle,
                   ),
                   if (hasSummary) ...[
-                    const SizedBox(height: 5),
+                    SizedBox(height: 5),
                     Text(
                       summary!.trim(),
                       maxLines: summaryMaxLines.clamp(1, 2),
@@ -151,6 +152,7 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final src = sourceName?.trim();
     final time = timeLabel?.trim();
     if (src != null && src.isNotEmpty) {
@@ -165,7 +167,7 @@ class _MetaRow extends StatelessWidget {
             ),
           ),
           if (showVerified) ...[
-            const SizedBox(width: 3),
+            SizedBox(width: 3),
             Icon(
               Icons.verified,
               size: 14,
@@ -252,6 +254,7 @@ class _HeroImageState extends State<_HeroImage> {
   void _reportUnavailable() {
     if (_failed) return;
     _failed = true;
+    FeedFailedImageCache.markFailed(widget.url);
     widget.onUnavailable?.call();
   }
 
@@ -275,7 +278,7 @@ class _HeroImageState extends State<_HeroImage> {
         imageUrl: url,
         fit: FeedXpressoTheme.imageFit,
         alignment: FeedXpressoTheme.imageAlignment,
-        memCacheWidth: kIsWeb ? null : widget.memCacheWidth,
+        memCacheWidth: widget.memCacheWidth,
         fadeInDuration: const Duration(milliseconds: 160),
         fadeOutDuration: Duration.zero,
         placeholder: (_, __) => AspectRatio(
@@ -310,9 +313,7 @@ class _HeroImageState extends State<_HeroImage> {
                       stops: const [0.55, 1.0],
                       colors: [
                         Colors.transparent,
-                        widget.fx.background.computeLuminance() < 0.2
-                            ? const Color(0x40000000)
-                            : const Color(0x26000000),
+                        fx.overlayScrim,
                       ],
                     ),
                   ),
@@ -322,7 +323,7 @@ class _HeroImageState extends State<_HeroImage> {
                     child: Icon(
                       Icons.play_circle_fill_rounded,
                       size: 56,
-                      color: Colors.white.withValues(alpha: 0.92),
+                      color: fx.onImage.withValues(alpha: 0.92),
                     ),
                   ),
               ],
@@ -348,14 +349,14 @@ Widget _imageFrame({required FeedXpressoPalette fx, required Widget child}) {
       boxShadow: isDark
           ? [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: fx.overlayScrim,
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
             ]
           : [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
+                color: fx.heroShadow,
                 blurRadius: 20,
                 offset: const Offset(0, 6),
               ),
@@ -413,7 +414,7 @@ class CompactFeedAction extends StatelessWidget {
             decoration: BoxDecoration(
               color: fx.background.computeLuminance() < 0.2
                   ? fx.iconSurface.withValues(alpha: 0.85)
-                  : Colors.white,
+                  : fx.surfaceElevated,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: fx.divider.withValues(alpha: 0.85),
@@ -423,7 +424,7 @@ class CompactFeedAction extends StatelessWidget {
                   ? null
                   : [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: fx.heroSurfaceSubtle,
                         blurRadius: 6,
                         offset: const Offset(0, 2),
                       ),
@@ -434,7 +435,7 @@ class CompactFeedAction extends StatelessWidget {
               children: [
                 Icon(icon, size: 17, color: color),
                 if (showCount) ...[
-                  const SizedBox(width: 5),
+                  SizedBox(width: 5),
                   Text(
                     label,
                     style: TextStyle(

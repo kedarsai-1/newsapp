@@ -86,4 +86,41 @@ describe('serializers', () => {
     assert.equal(post.reporter.name, 'Rep');
     assert.equal(post.reporter.email, undefined);
   });
+
+  it('serializeFeedPost maps ingestion bot reporter to publisherName', () => {
+    const post = serializeFeedPost({
+      id: 'p1',
+      title: 'Headline',
+      summary: 'Short summary',
+      status: 'approved',
+      sourceName: 'RSS · V6 Velugu',
+      sourceType: 'rss',
+      reporter: { id: 'u1', name: 'News Ingestion Bot', email: 'scraper@newsnow.local' },
+      category: { id: 'c1', name: 'General', slug: 'general' },
+      tags: ['news'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    assert.equal(post.publisherName, 'V6 Velugu');
+    assert.equal(post.reporter.name, 'V6 Velugu');
+    assert.equal(post.reporter.email, undefined);
+  });
+
+  it('serializeNewsPost exposes publisherName for YouTube ingests', () => {
+    const post = serializeNewsPost({
+      id: 'p2',
+      title: 'Video',
+      body: 'Body',
+      status: 'approved',
+      sourceName: 'YouTube · TV9 Telugu Live',
+      sourceType: 'youtube',
+      youtubeChannelTitle: 'TV9 Telugu Live',
+      reporter: { id: 'u1', name: 'News Ingestion Bot' },
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    assert.equal(post.publisherName, 'TV9 Telugu Live');
+    assert.equal(post.reporter.name, 'TV9 Telugu Live');
+  });
 });

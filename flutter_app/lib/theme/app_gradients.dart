@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_palette.dart';
+import '../widgets/feed/feed_xpresso_palette.dart';
 
 /// Reusable gradient tokens for backgrounds and accents.
 class AppGradients {
@@ -23,7 +24,7 @@ class AppGradients {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Colors.black.withValues(alpha: 0.55),
+          FeedXpressoPalette.dark.overlayScrim,
           Colors.transparent,
           Colors.black.withValues(alpha: 0.80),
         ],

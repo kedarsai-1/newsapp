@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants.dart';
 import '../utils/i18n.dart';
-import 'feed/feed_xpresso_theme.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 class EmptyState extends StatelessWidget {
   final IconData icon;
@@ -33,7 +33,7 @@ class EmptyState extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 44, color: fx.iconFgMuted),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Text(
                 title,
                 style: TextStyle(
@@ -44,7 +44,7 @@ class EmptyState extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               if (subtitle != null) ...[
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Text(
                   subtitle!,
                   style: TextStyle(
@@ -56,7 +56,7 @@ class EmptyState extends StatelessWidget {
                 ),
               ],
               if (buttonLabel != null && onButtonTap != null) ...[
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 TextButton(
                   onPressed: onButtonTap,
                   style: TextButton.styleFrom(
@@ -85,7 +85,7 @@ class EmptyState extends StatelessWidget {
             ),
             child: Icon(icon, size: 48, color: p.textHint),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Text(
             title,
             style: TextStyle(
@@ -96,7 +96,7 @@ class EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               subtitle!,
               style: TextStyle(fontSize: 14, color: p.textSecondary, height: 1.5),
@@ -104,7 +104,7 @@ class EmptyState extends StatelessWidget {
             ),
           ],
           if (buttonLabel != null && onButtonTap != null) ...[
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             ElevatedButton(onPressed: onButtonTap, child: Text(buttonLabel!)),
           ],
         ]),

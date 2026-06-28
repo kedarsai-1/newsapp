@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import '../models/models.dart';
 import '../constants.dart';
 import '../theme/app_palette.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 // Full-screen photo viewer
 class PhotoViewer extends StatelessWidget {
@@ -22,16 +23,17 @@ class PhotoViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, elevation: 0),
+      backgroundColor: fx.mediaViewerBackground,
+      appBar: AppBar(backgroundColor: fx.mediaViewerBackground, foregroundColor: fx.onImage, elevation: 0),
       body: Center(
         child: InteractiveViewer(
           child: CachedNetworkImage(
             imageUrl: AppConstants.resolveMediaUrl(imageUrl),
             fit: BoxFit.contain,
-            placeholder: (_, __) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-            errorWidget: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.white, size: 60),
+            placeholder: (_, __) => Center(child: CircularProgressIndicator(color: fx.onImage)),
+            errorWidget: (_, __, ___) => Icon(Icons.broken_image, color: fx.onImage, size: 60),
           ),
         ),
       ),
@@ -79,11 +81,12 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     if (_failed) {
       return Container(
         height: 220,
-        color: Colors.black,
+        color: fx.mediaViewerBackground,
         alignment: Alignment.center,
         child: Icon(Icons.videocam_off_outlined, color: p.textHint, size: 48),
       );
@@ -91,7 +94,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
     if (!_initialized) {
       return Container(
         height: 220,
-        color: Colors.black,
+        color: fx.mediaViewerBackground,
         alignment: Alignment.center,
         child: Icon(Icons.play_circle_outline, color: p.textHint, size: 48),
       );
@@ -116,7 +119,7 @@ class _InlineVideoPlayerState extends State<InlineVideoPlayer> {
                   color: Colors.black.withOpacity(0.5),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.play_arrow, color: Colors.white, size: 36),
+                child: Icon(Icons.play_arrow, color: fx.onImage, size: 36),
               ),
             ),
           ),
@@ -137,6 +140,7 @@ class MediaGallery extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (media.isEmpty) return const SizedBox.shrink();
 
     // Single image — full width
@@ -168,7 +172,7 @@ class MediaGallery extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: media.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => SizedBox(width: 8),
         itemBuilder: (context, i) {
           final item = media[i];
           final p = context.palette;
@@ -185,14 +189,14 @@ class MediaGallery extends StatelessWidget {
                     width: 200,
                     height: 200,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(width: 200, height: 200, color: const Color(0xFFF0F0F0)),
-                    errorWidget: (_, __, ___) => Container(width: 200, height: 200, color: const Color(0xFFF0F0F0), child: Icon(Icons.broken_image, color: p.textHint)),
+                    placeholder: (_, __) => Container(width: 200, height: 200, color: fx.imagePlaceholder),
+                    errorWidget: (_, __, ___) => Container(width: 200, height: 200, color: fx.imagePlaceholder, child: Icon(Icons.broken_image, color: p.textHint)),
                   ),
                   if (item.isVideo)
                     Positioned.fill(
                       child: Container(
-                        color: Colors.black26,
-                        child: const Center(child: Icon(Icons.play_circle_outline, color: Colors.white, size: 44)),
+                        color: fx.overlayScrim,
+                        child: Center(child: Icon(Icons.play_circle_outline, color: fx.onImage, size: 44)),
                       ),
                     ),
                 ],

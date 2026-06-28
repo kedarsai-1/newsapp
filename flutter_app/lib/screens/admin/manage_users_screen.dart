@@ -4,8 +4,7 @@ import '../../providers/admin_provider.dart';
 import '../../models/models.dart';
 import '../../widgets/shimmer_widgets.dart';
 import '../../utils/app_utils.dart';
-import '../../constants.dart';
-import '../../theme/app_palette.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 class ManageUsersScreen extends StatefulWidget {
   const ManageUsersScreen({super.key});
@@ -33,30 +32,30 @@ class _ManageUsersScreenState extends State<ManageUsersScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final fx = context.fx;
     final provider = context.watch<AdminProvider>();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Users'),
+        title: Text('Manage Users'),
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
-          labelColor: p.primary,
-          unselectedLabelColor: p.textHint,
-          indicatorColor: p.primary,
+          labelColor: fx.accent,
+          unselectedLabelColor: fx.textHint,
+          indicatorColor: fx.accent,
           tabs: _tabLabels.map((t) => Tab(text: t)).toList(),
         ),
       ),
       body: provider.loading
           ? ListView(padding: const EdgeInsets.all(12), children: List.generate(6, (_) => const UserRowShimmer()))
           : provider.users.isEmpty
-              ? Center(child: Text('No users found.', style: TextStyle(color: p.textSecondary)))
+              ? Center(child: Text('No users found.', style: TextStyle(color: fx.textSecondary)))
               : RefreshIndicator(
                   onRefresh: () => provider.loadUsers(role: _roleFilters[_tabs.index]),
                   child: ListView.separated(
                     padding: const EdgeInsets.all(12),
                     itemCount: provider.users.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => SizedBox(height: 8),
                     itemBuilder: (_, i) => _UserTile(
                       user: provider.users[i],
                       onChangeRole: (userId, role) async {
@@ -81,7 +80,7 @@ class _UserTile extends StatelessWidget {
   const _UserTile({required this.user, required this.onChangeRole, required this.onToggleActive});
 
   Future<void> _showRoleDialog(BuildContext context) async {
-    final pal = context.palette;
+    final fx = context.fx;
     final role = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
@@ -89,11 +88,11 @@ class _UserTile extends StatelessWidget {
         children: ['user', 'reporter', 'admin'].map((r) => SimpleDialogOption(
           onPressed: () => Navigator.pop(ctx, r),
           child: Row(children: [
-            Icon(AppUtils.roleIcon(r), size: 18, color: AppUtils.roleColor(r)),
-            const SizedBox(width: 10),
+            Icon(AppUtils.roleIcon(r), size: 18, color: AppUtils.roleColor(r, context)),
+            SizedBox(width: 10),
             Text(r[0].toUpperCase() + r.substring(1),
               style: TextStyle(fontWeight: user.role == r ? FontWeight.bold : FontWeight.normal)),
-            if (user.role == r) Text(' (current)', style: TextStyle(fontSize: 12, color: pal.textHint)),
+            if (user.role == r) Text(' (current)', style: TextStyle(fontSize: 12, color: fx.textHint)),
           ]),
         )).toList(),
       ),
@@ -102,25 +101,25 @@ class _UserTile extends StatelessWidget {
   }
 
   Future<void> _confirmToggle(BuildContext context) async {
-    final pal = context.palette;
+    final fx = context.fx;
     final ok = await AppUtils.confirm(context,
       title: user.isActive ? 'Suspend User' : 'Activate User',
       message: '${user.isActive ? 'Suspend' : 'Activate'} ${user.name}?',
       confirmLabel: user.isActive ? 'Suspend' : 'Activate',
-      confirmColor: user.isActive ? pal.error : pal.success,
+      confirmColor: user.isActive ? fx.error : fx.success,
     );
     if (ok) await onToggleActive(user.id);
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    final roleColor = AppUtils.roleColor(user.role);
+    final fx = context.fx;
+    final roleColor = AppUtils.roleColor(user.role, context);
     return Container(
       decoration: BoxDecoration(
-        color: p.glassSurface,
+        color: fx.glassSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: user.isActive ? p.cardBorder : const Color(0xFFFCEBEB), width: 0.5),
+        border: Border.all(color: user.isActive ? fx.glassBorder : fx.error.withValues(alpha: 0.35), width: 0.5),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -131,11 +130,11 @@ class _UserTile extends StatelessWidget {
             child: Text(AppUtils.initials(user.name), style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: roleColor)),
           ),
           if (!user.isActive)
-            Positioned(right: 0, bottom: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: p.error, shape: BoxShape.circle))),
+            Positioned(right: 0, bottom: 0, child: Container(width: 12, height: 12, decoration: BoxDecoration(color: fx.error, shape: BoxShape.circle))),
         ]),
         title: Row(children: [
-          Text(user.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
-          const SizedBox(width: 8),
+          Text(user.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fx.title)),
+          SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(color: roleColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
@@ -143,9 +142,9 @@ class _UserTile extends StatelessWidget {
           ),
         ]),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SizedBox(height: 2),
-          Text(user.email, style: TextStyle(fontSize: 12, color: p.textSecondary)),
-          if (!user.isActive) Text('Suspended', style: TextStyle(fontSize: 11, color: p.error, fontWeight: FontWeight.w500)),
+          SizedBox(height: 2),
+          Text(user.email, style: TextStyle(fontSize: 12, color: fx.textSecondary)),
+          if (!user.isActive) Text('Suspended', style: TextStyle(fontSize: 11, color: fx.error, fontWeight: FontWeight.w500)),
         ]),
         trailing: PopupMenuButton<String>(
           onSelected: (action) {
@@ -155,9 +154,9 @@ class _UserTile extends StatelessWidget {
           itemBuilder: (_) => [
             const PopupMenuItem(value: 'role', child: Row(children: [Icon(Icons.swap_horiz, size: 16), SizedBox(width: 8), Text('Change Role')])),
             PopupMenuItem(value: 'toggle', child: Row(children: [
-              Icon(user.isActive ? Icons.block : Icons.check_circle, size: 16, color: user.isActive ? p.error : p.success),
-              const SizedBox(width: 8),
-              Text(user.isActive ? 'Suspend' : 'Activate', style: TextStyle(color: user.isActive ? p.error : p.success)),
+              Icon(user.isActive ? Icons.block : Icons.check_circle, size: 16, color: user.isActive ? fx.error : fx.success),
+              SizedBox(width: 8),
+              Text(user.isActive ? 'Suspend' : 'Activate', style: TextStyle(color: user.isActive ? fx.error : fx.success)),
             ])),
           ],
         ),

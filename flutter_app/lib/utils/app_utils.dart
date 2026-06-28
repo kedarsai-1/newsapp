@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../constants.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 class AppUtils {
   static String formatCount(int count) {
@@ -26,42 +26,49 @@ class AppUtils {
   static String? validateMinLength(String? v, String field, int min) =>
       (v == null || v.trim().length < min) ? '$field must be at least $min characters' : null;
 
+  static FeedXpressoPalette _fx(BuildContext? context) =>
+      context != null ? FeedXpressoTheme.fx(context) : FeedXpressoPalette.dark;
+
   static void showSuccess(BuildContext context, String message) {
+    final fx = _fx(context);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
-        const Icon(Icons.check_circle, color: GlassColors.accentGreenLight, size: 18),
-        const SizedBox(width: 8),
-        Expanded(child: Text(message, style: const TextStyle(color: GlassColors.textPrimary))),
+        Icon(Icons.check_circle, color: fx.accentLight, size: 18),
+        SizedBox(width: 8),
+        Expanded(child: Text(message, style: TextStyle(color: fx.title))),
       ]),
     ));
   }
 
   static void showError(BuildContext context, String message) {
+    final fx = _fx(context);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Row(children: [
-        Icon(Icons.error_outline, color: GlassColors.error, size: 18),
-        const SizedBox(width: 8),
-        Expanded(child: Text(message, style: const TextStyle(color: GlassColors.textPrimary))),
+        Icon(Icons.error_outline, color: fx.error, size: 18),
+        SizedBox(width: 8),
+        Expanded(child: Text(message, style: TextStyle(color: fx.title))),
       ]),
     ));
   }
 
   static void showInfo(BuildContext context, String message) {
+    final fx = _fx(context);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message, style: const TextStyle(color: GlassColors.textPrimary)),
+      content: Text(message, style: TextStyle(color: fx.title)),
     ));
   }
 
   static Future<bool> confirm(BuildContext context, {required String title, required String message, String confirmLabel = 'Confirm', Color? confirmColor}) async {
+    final fx = _fx(context);
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: Text(message, style: const TextStyle(color: GlassColors.textSecondary)),
+        content: Text(message, style: TextStyle(color: fx.textSecondary)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: confirmColor ?? GlassColors.accentGreen),
+            style: ElevatedButton.styleFrom(backgroundColor: confirmColor ?? fx.accent),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(confirmLabel),
           ),
@@ -71,11 +78,12 @@ class AppUtils {
     return result ?? false;
   }
 
-  static Color roleColor(String role) {
+  static Color roleColor(String role, [BuildContext? context]) {
+    final fx = _fx(context);
     switch (role) {
-      case 'admin': return GlassColors.accentOrangeLight;
-      case 'reporter': return GlassColors.accentGreenLight;
-      default: return GlassColors.info;
+      case 'admin': return fx.accentSecondaryLight;
+      case 'reporter': return fx.accentLight;
+      default: return fx.info;
     }
   }
 
@@ -87,12 +95,13 @@ class AppUtils {
     }
   }
 
-  static Color statusColor(String status) {
+  static Color statusColor(String status, [BuildContext? context]) {
+    final fx = _fx(context);
     switch (status) {
-      case 'approved': return GlassColors.success;
-      case 'rejected': return GlassColors.error;
-      case 'pending': return GlassColors.warning;
-      default: return GlassColors.textHint;
+      case 'approved': return fx.success;
+      case 'rejected': return fx.error;
+      case 'pending': return fx.warning;
+      default: return fx.textHint;
     }
   }
 

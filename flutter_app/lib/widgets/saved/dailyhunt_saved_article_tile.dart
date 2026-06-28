@@ -19,10 +19,7 @@ class DailyhuntSavedArticleTile extends StatelessWidget {
     required this.onRemove,
   });
 
-  String get _source =>
-      (post.sourceName?.trim().isNotEmpty == true)
-          ? post.sourceName!.trim()
-          : (post.category?.name ?? 'News');
+  String get _source => post.displaySourceName;
 
   @override
   Widget build(BuildContext context) {

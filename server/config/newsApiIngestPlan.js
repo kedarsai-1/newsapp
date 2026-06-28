@@ -21,7 +21,9 @@ const NEWS_API_CATEGORY_BY_SLUG = {
 /**
  * One ingest pass per DB category so every tab gets API headlines (en/te/hi via GNEWS_INGEST_LANGS).
  */
-const newsApiIngestPlan = defaultCategories.map((cat) => ({
+const newsApiIngestPlan = defaultCategories
+  .filter((cat) => !['crime', 'weather'].includes(cat.slug))
+  .map((cat) => ({
   categorySlug: cat.slug,
   newsApiCategory: NEWS_API_CATEGORY_BY_SLUG[cat.slug] ?? null,
 }));

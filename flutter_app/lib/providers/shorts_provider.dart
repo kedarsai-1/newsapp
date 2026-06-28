@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../constants.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/shorts_cache.dart';
 import '../services/socket_service.dart';
 import '../utils/feed_language.dart';
 
@@ -42,13 +43,29 @@ class ShortsProvider extends ChangeNotifier {
   bool hasContentFor(String? language) =>
       _posts.isNotEmpty && languageMatches(language);
 
+  bool get hasStaleContent => _posts.isNotEmpty;
+
+  /// Hydrate from disk so Shorts tab opens instantly.
+  Future<void> warmFromDisk(String? language) async {
+    if (_posts.isNotEmpty && languageMatches(language)) return;
+    final cached = await ShortsCache.load(language);
+    if (cached == null || cached.isEmpty) return;
+    _posts = cached;
+    _loadedLanguageTag = _tag(language);
+    _error = null;
+    notifyListeners();
+  }
+
   /// Load Shorts for [language] when empty or language changed (e.g. feed preference).
   Future<void> ensureForLanguage(String? language, {bool force = false}) async {
     if (_busy) return;
     if (!force && languageMatches(language) && _posts.isNotEmpty) {
       return;
     }
-    await refresh(language: language);
+    if (_posts.isEmpty) {
+      await warmFromDisk(language);
+    }
+    await refresh(language: language, background: _posts.isNotEmpty);
   }
 
   void _wireRealtimeRefresh() {
@@ -58,22 +75,25 @@ class ShortsProvider extends ChangeNotifier {
     SocketService.onFeedUpdated((_) {
       if (_refreshing || _loading || _busy) return;
       final lang = _loadedLanguageTag == '__all__' ? null : _loadedLanguageTag;
-      refresh(language: lang);
+      refresh(language: lang, background: _posts.isNotEmpty);
     });
   }
 
-  Future<void> refresh({required String? language}) async {
+  Future<void> refresh({required String? language, bool background = false}) async {
     if (_busy) return;
+    final showOverlay = !background || _posts.isEmpty;
     _busy = true;
-    _refreshing = true;
-    _error = null;
-    _page = 1;
-    _hasMore = true;
-    notifyListeners();
+    if (showOverlay) {
+      _refreshing = true;
+      _error = null;
+      _page = 1;
+      _hasMore = true;
+      notifyListeners();
+    }
     try {
       await _fetch(reset: true, language: language);
     } finally {
-      _refreshing = false;
+      if (showOverlay) _refreshing = false;
       _busy = false;
       notifyListeners();
     }
@@ -92,10 +112,15 @@ class ShortsProvider extends ChangeNotifier {
     }
   }
 
+  static const int _initialPageSize = 12;
+
   Future<void> _fetch({required bool reset, required String? language}) async {
+    final hadPosts = _posts.isNotEmpty;
     try {
+      final pageSize = reset ? _initialPageSize : AppConstants.pageSize;
       final res = await ApiService.getFeed(
         page: reset ? 1 : _page,
+        limit: pageSize,
         categoryId: null,
         language: language,
         constituency: null,
@@ -105,19 +130,23 @@ class ShortsProvider extends ChangeNotifier {
         days: 30,
         sourceTypes: const ['youtube'],
         hasVideo: true,
+        memoryCacheTtl: const Duration(minutes: 2),
       );
       if (res['success'] == true && res['posts'] is List) {
         final raw = res['posts'] as List;
+        final rawMaps = <Map<String, dynamic>>[];
         final fetched = <NewsPost>[];
         for (final p in raw) {
           if (p is! Map) continue;
+          final map = Map<String, dynamic>.from(p);
           try {
-            final post = NewsPost.fromJson(Map<String, dynamic>.from(p));
+            final post = NewsPost.fromJson(map);
             if (!post.isYoutube) continue;
             final vid = post.youtube?.videoId ?? '';
             if (vid.isEmpty) continue;
             if (!postMatchesLanguage(post, language)) continue;
             fetched.add(post);
+            rawMaps.add(map);
           } catch (_) {
             // Skip malformed API rows.
           }
@@ -126,15 +155,18 @@ class ShortsProvider extends ChangeNotifier {
         if (reset) {
           _posts = fetched;
           _page = 2;
+          if (rawMaps.isNotEmpty) {
+            await ShortsCache.saveRaw(language, rawMaps);
+          }
         } else {
           _posts = [..._posts, ...fetched];
           _page++;
         }
-        _hasMore = fetched.length == AppConstants.pageSize;
+        _hasMore = fetched.length >= pageSize;
         _error = null;
         _loadedLanguageTag = _tag(language);
       } else {
-        if (reset) {
+        if (reset && !hadPosts) {
           _posts = [];
           _loadedLanguageTag = null;
         }
@@ -144,7 +176,7 @@ class ShortsProvider extends ChangeNotifier {
             : 'Could not load YouTube videos.';
       }
     } catch (e) {
-      if (reset) {
+      if (reset && !hadPosts) {
         _posts = [];
         _loadedLanguageTag = null;
       }

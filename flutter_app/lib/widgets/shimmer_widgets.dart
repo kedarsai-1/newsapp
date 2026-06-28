@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../constants.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 class _PaletteShimmer extends StatelessWidget {
   final double width;
@@ -11,15 +12,15 @@ class _PaletteShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final fx = context.fx;
     return Shimmer.fromColors(
-      baseColor: p.inputFill,
-      highlightColor: Color.lerp(p.surface, p.primary, 0.12)!,
+      baseColor: fx.surface,
+      highlightColor: Color.lerp(fx.surfaceElevated, fx.accent, 0.12)!,
       child: Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: p.inputFill,
+          color: fx.surface,
           borderRadius: BorderRadius.circular(radius),
         ),
       ),
@@ -32,29 +33,29 @@ class NewsCardShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final fx = context.fx;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: p.glassSurface,
+        color: fx.glassSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: p.cardBorder, width: 0.8),
+        border: Border.all(color: fx.glassBorder, width: 0.8),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _PaletteShimmer(width: double.infinity, height: 155, radius: 10),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         _PaletteShimmer(width: 70, height: 18, radius: 6),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         _PaletteShimmer(width: double.infinity, height: 14),
-        const SizedBox(height: 5),
+        SizedBox(height: 5),
         _PaletteShimmer(width: 200, height: 14),
-        const SizedBox(height: 10),
+        SizedBox(height: 10),
         Row(children: [
           _PaletteShimmer(width: 60, height: 11),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           _PaletteShimmer(width: 55, height: 11),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           _PaletteShimmer(width: 70, height: 11),
         ]),
       ]),
@@ -68,7 +69,7 @@ class FeedStoryShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final fx = context.fx;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
       child: Column(
@@ -81,35 +82,35 @@ class FeedStoryShimmer extends StatelessWidget {
                   width: double.infinity, height: double.infinity, radius: 22),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Expanded(
             flex: 52,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: p.surface,
+                color: fx.surface,
                 borderRadius:
                     const BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border.all(color: p.cardBorder),
+                border: Border.all(color: fx.glassBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _PaletteShimmer(width: 120, height: 8, radius: 4),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   _PaletteShimmer(
                       width: double.infinity, height: 22, radius: 8),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8),
                   _PaletteShimmer(
                       width: double.infinity, height: 22, radius: 8),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   _PaletteShimmer(
                       width: double.infinity, height: 14, radius: 6),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   _PaletteShimmer(
                       width: double.infinity, height: 14, radius: 6),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   _PaletteShimmer(width: 200, height: 14, radius: 6),
                 ],
               ),
@@ -127,14 +128,14 @@ class ArticleDetailShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
+    final fx = context.fx;
     return CustomScrollView(
       physics: const NeverScrollableScrollPhysics(),
       slivers: [
         SliverAppBar(
           expandedHeight: 200,
           pinned: true,
-          backgroundColor: p.surface,
+          backgroundColor: fx.surface,
           flexibleSpace: FlexibleSpaceBar(
             background: _PaletteShimmer(
               width: double.infinity,
@@ -152,21 +153,21 @@ class ArticleDetailShimmer extends StatelessWidget {
                 Row(
                   children: [
                     _PaletteShimmer(width: 72, height: 22, radius: 8),
-                    const SizedBox(width: 8),
+                    SizedBox(width: 8),
                     _PaletteShimmer(width: 88, height: 22, radius: 8),
                   ],
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 _PaletteShimmer(width: double.infinity, height: 26, radius: 8),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 _PaletteShimmer(width: double.infinity, height: 26, radius: 8),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 _PaletteShimmer(width: 140, height: 14, radius: 6),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _PaletteShimmer(width: double.infinity, height: 14, radius: 6),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 _PaletteShimmer(width: double.infinity, height: 14, radius: 6),
-                const SizedBox(height: 6),
+                SizedBox(height: 6),
                 _PaletteShimmer(width: 220, height: 14, radius: 6),
               ],
             ),
@@ -196,24 +197,25 @@ class UserRowShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: GlassColors.surfaceWhite,
+        color: fx.glassSurface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: GlassColors.borderWhite, width: 0.8),
+        border: Border.all(color: fx.glassBorder, width: 0.8),
       ),
       child: Row(
         children: [
           const _GlassShimmer(width: 44, height: 44, radius: 22),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const _GlassShimmer(width: 130, height: 13),
-                const SizedBox(height: 5),
+                SizedBox(height: 5),
                 const _GlassShimmer(width: 190, height: 11),
               ],
             ),
@@ -230,6 +232,7 @@ class StatsShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return GridView.count(
       crossAxisCount: 2,
       crossAxisSpacing: 10,
@@ -241,14 +244,14 @@ class StatsShimmer extends StatelessWidget {
         4,
         (_) => Container(
           decoration: BoxDecoration(
-            color: GlassColors.surfaceWhite,
+            color: fx.glassSurface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: GlassColors.borderWhite, width: 0.8),
+            border: Border.all(color: fx.glassBorder, width: 0.8),
           ),
           padding: const EdgeInsets.all(14),
           child: Shimmer.fromColors(
-            baseColor: GlassColors.surfaceWhite,
-            highlightColor: GlassColors.surfaceBright,
+            baseColor: fx.shimmerBase,
+            highlightColor: fx.shimmerHighlight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -256,7 +259,7 @@ class StatsShimmer extends StatelessWidget {
                   width: 22,
                   height: 22,
                   decoration: BoxDecoration(
-                    color: GlassColors.surfaceBright,
+                    color: fx.glassSurfaceBright,
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
@@ -265,16 +268,16 @@ class StatsShimmer extends StatelessWidget {
                   width: 55,
                   height: 22,
                   decoration: BoxDecoration(
-                    color: GlassColors.surfaceBright,
+                    color: fx.glassSurfaceBright,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4),
                 Container(
                   width: 85,
                   height: 11,
                   decoration: BoxDecoration(
-                    color: GlassColors.surfaceBright,
+                    color: fx.glassSurfaceBright,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -296,14 +299,15 @@ class _GlassShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Shimmer.fromColors(
-      baseColor: GlassColors.surfaceWhite,
-      highlightColor: GlassColors.surfaceBright,
+      baseColor: fx.shimmerBase,
+      highlightColor: fx.shimmerHighlight,
       child: Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
-          color: GlassColors.surfaceWhite,
+          color: fx.glassSurface,
           borderRadius: BorderRadius.circular(radius),
         ),
       ),

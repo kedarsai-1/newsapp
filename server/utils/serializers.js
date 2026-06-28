@@ -69,6 +69,8 @@ function serializeLocation(post) {
     longitude: post.locationLongitude,
     address: post.locationAddress,
     city: post.locationCity,
+    district: post.locationDistrict,
+    mandal: post.locationMandal,
     state: post.locationState,
     country: post.locationCountry || 'India',
     capturedAt: post.locationCapturedAt,
@@ -101,16 +103,66 @@ function serializeEntity(entity) {
   });
 }
 
+const SYSTEM_REPORTER_NAME = 'News Ingestion Bot';
+const INGEST_SOURCE_PREFIXES = ['RSS · ', 'YouTube · ', 'GNews · ', 'NewsAPI · '];
+
+/** Strip ingestion prefixes for display (RSS · NTV → NTV). */
+function cleanIngestSourceLabel(raw) {
+  const src = String(raw || '').trim();
+  if (!src) return null;
+  for (const prefix of INGEST_SOURCE_PREFIXES) {
+    if (src.startsWith(prefix)) return src.slice(prefix.length).trim();
+  }
+  return src;
+}
+
+/** Human-readable publisher/outlet for feeds and article detail. */
+function publisherNameFromPost(post) {
+  const cleaned = cleanIngestSourceLabel(post?.sourceName);
+  if (cleaned) return cleaned;
+  const ytTitle = post?.youtubeChannelTitle || post?.youtube?.channelTitle;
+  if (String(post?.sourceType || '').toLowerCase() === 'youtube' && ytTitle) {
+    return String(ytTitle).trim();
+  }
+  const reporterName = String(post?.reporter?.name || '').trim();
+  if (reporterName && reporterName !== SYSTEM_REPORTER_NAME) return reporterName;
+  const categoryName = String(post?.category?.name || '').trim();
+  if (categoryName) return categoryName;
+  return 'News';
+}
+
+function serializeReporterForPublic(post, { includePrivate = false, compact = false } = {}) {
+  if (!post?.reporter) return idOf(post?.reporterId);
+  const displayName = post.reporter.name === SYSTEM_REPORTER_NAME
+    ? publisherNameFromPost(post)
+    : post.reporter.name;
+  if (compact) {
+    return stripUndefined({
+      _id: idOf(post.reporter.id),
+      id: idOf(post.reporter.id),
+      name: displayName,
+      avatar: post.reporter.avatar,
+    });
+  }
+  const serialized = serializeUser(post.reporter, { includePrivate });
+  if (typeof serialized !== 'object' || serialized == null) return serialized;
+  if (serialized.name === SYSTEM_REPORTER_NAME) {
+    return { ...serialized, name: displayName };
+  }
+  return serialized;
+}
+
 function serializeNewsPost(post, options = {}) {
   if (!post) return post;
   const includePrivateUser = Boolean(options.includePrivateUser);
+  const publisherName = publisherNameFromPost(post);
   return stripUndefined({
     _id: idOf(post.id),
     id: idOf(post.id),
     title: post.title,
     body: post.body,
     summary: post.summary,
-    reporter: post.reporter ? serializeUser(post.reporter, { includePrivate: includePrivateUser }) : idOf(post.reporterId),
+    reporter: serializeReporterForPublic(post, { includePrivate: includePrivateUser }),
     category: post.category ? serializeCategory(post.category) : idOf(post.categoryId),
     media: Array.isArray(post.media) ? post.media.map(serializeMedia) : [],
     location: serializeLocation(post),
@@ -126,6 +178,7 @@ function serializeNewsPost(post, options = {}) {
     language: post.language,
     originalLanguage: post.originalLanguage,
     sourceName: post.sourceName,
+    publisherName,
     sourceUrl: post.sourceUrl,
     sourceUrlHash: post.sourceUrlHash,
     titleNormalized: post.titleNormalized,
@@ -136,6 +189,8 @@ function serializeNewsPost(post, options = {}) {
     youtube: serializeYoutube(post),
     politicsScope: post.politicsScope,
     constituency: post.constituency,
+    locationDistrict: post.locationDistrict,
+    locationMandal: post.locationMandal,
     entities: Array.isArray(post.entities) ? post.entities.map(serializeEntity) : [],
     scrapedAt: post.scrapedAt,
     scrapeConfidence: post.scrapeConfidence,
@@ -150,21 +205,14 @@ function serializeNewsPost(post, options = {}) {
 /** Compact feed-list payload — omits full body and admin/dedupe metadata. */
 function serializeFeedPost(post, options = {}) {
   if (!post) return post;
-  const reporter = post.reporter
-    ? stripUndefined({
-      _id: idOf(post.reporter.id),
-      id: idOf(post.reporter.id),
-      name: post.reporter.name,
-      avatar: post.reporter.avatar,
-    })
-    : idOf(post.reporterId);
+  const publisherName = publisherNameFromPost(post);
 
   return stripUndefined({
     _id: idOf(post.id),
     id: idOf(post.id),
     title: post.title,
     summary: post.summary,
-    reporter,
+    reporter: serializeReporterForPublic(post, { compact: true }),
     category: post.category ? serializeCategory(post.category) : idOf(post.categoryId),
     media: Array.isArray(post.media) ? post.media.map(serializeMedia) : [],
     location: serializeLocation(post),
@@ -177,12 +225,15 @@ function serializeFeedPost(post, options = {}) {
     language: post.language,
     originalLanguage: post.originalLanguage,
     sourceName: post.sourceName,
+    publisherName,
     sourceUrl: post.sourceUrl,
     sourcePublishedAt: post.sourcePublishedAt,
     sourceType: post.sourceType,
     youtube: serializeYoutube(post),
     politicsScope: post.politicsScope,
     constituency: post.constituency,
+    locationDistrict: post.locationDistrict,
+    locationMandal: post.locationMandal,
     videoCategory: post.videoCategory,
     videoClassificationMethod: post.videoClassificationMethod,
     videoClassificationScore: post.videoClassificationScore,
@@ -215,4 +266,6 @@ module.exports = {
   serializeNewsPost,
   serializeFeedPost,
   serializeComment,
+  publisherNameFromPost,
+  cleanIngestSourceLabel,
 };

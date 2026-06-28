@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'dart:ui';
 
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -11,14 +12,22 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../services/publisher_follow_service.dart';
+import '../../services/tts_service.dart';
+import '../../services/article_cache.dart';
 import '../../constants.dart';
 import '../../users/media_widgets.dart';
 import '../../widgets/location_label.dart';
 import '../../utils/article_detail_text.dart';
+import '../../utils/i18n.dart';
+import '../../utils/post_share.dart';
 import '../../utils/text_truncation.dart';
 import '../../providers/news_provider.dart';
 import '../../widgets/feed/article_youtube_player.dart';
 import '../../widgets/shimmer_widgets.dart';
+import '../../widgets/feed/feed_xpresso_palette.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
+import '../../widgets/empty_state.dart';
 
 /// Media shown below the byline — skip YouTube posts (handled by [ArticleYoutubePlayer]).
 List<MediaItem> _bodyMediaForGallery(NewsPost post) {
@@ -46,8 +55,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   NewsPost? _post;
   List<Comment> _comments = [];
   bool _loading = true;
+  String? _loadError;
+  bool _notFound = false;
   bool _liked = false;
   bool _bookmarked = false;
+  bool _followingPublisher = false;
+  bool _ttsSpeaking = false;
+  bool _isOffline = false;
   double _readScale = 1.0;
   final _commentCtrl = TextEditingController();
   final _commentFocus = FocusNode();
@@ -57,21 +71,46 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   @override
   void initState() {
     super.initState();
+    TtsService.instance.addListener(_onTtsStateChanged);
     _load();
   }
 
+  void _onTtsStateChanged() {
+    if (!mounted) return;
+    setState(() => _ttsSpeaking = TtsService.instance.isSpeaking);
+  }
+
   Future<void> _load() async {
-    final loggedIn = context.read<AuthProvider>().isLoggedIn;
-    final postRes = await ApiService.getPost(widget.postId);
-    final commentRes = await ApiService.getComments(widget.postId);
-    final guestLiked = await ApiService.isGuestLiked(widget.postId);
-    final guestBookmarked = await ApiService.isGuestBookmarked(widget.postId);
-    final guestComments = await ApiService.getGuestComments(widget.postId);
     if (mounted) {
       setState(() {
-        if (postRes['success'] == true) {
+        _loading = true;
+        _loadError = null;
+        _notFound = false;
+      });
+    }
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    try {
+      final postRes = await ApiService.getPost(widget.postId);
+      final commentRes = await ApiService.getComments(widget.postId);
+      final guestLiked = await ApiService.isGuestLiked(widget.postId);
+      final guestBookmarked = await ApiService.isGuestBookmarked(widget.postId);
+      final guestComments = await ApiService.getGuestComments(widget.postId);
+      if (!mounted) return;
+      setState(() {
+        if (postRes['success'] == true && postRes['post'] != null) {
           _post = NewsPost.fromJson(postRes['post']);
           context.read<NewsProvider>().markPostAsSeen(widget.postId);
+          _loadError = null;
+          _notFound = false;
+        } else {
+          _post = null;
+          final msg = postRes['message']?.toString().trim();
+          _notFound = msg != null && msg.toLowerCase().contains('not found');
+          _loadError = _notFound
+              ? null
+              : (msg?.isNotEmpty == true
+                  ? msg
+                  : 'Could not load this article. Check your connection and try again.');
         }
         if (commentRes['success'] == true) {
           _comments = (commentRes['comments'] as List)
@@ -85,6 +124,35 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         }
         _loading = false;
       });
+      if (_post != null) {
+        unawaited(_refreshFollowState(loggedIn));
+        // Cache the article for offline reading
+        await ArticleCache.save(_post!);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      // Try loading from offline cache when network fails
+      final cachedPost = await ArticleCache.load(widget.postId);
+      if (cachedPost != null && mounted) {
+        setState(() {
+          _post = cachedPost;
+          _isOffline = true;
+          _loading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Showing offline — ${I18n.t(context, 'feed_empty_subtitle')}'),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+          ),
+        );
+      } else {
+        setState(() {
+          _post = null;
+          _notFound = false;
+          _loadError = 'Could not load this article. Check your connection and try again.';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -101,36 +169,42 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
   Future<void> _toggleLike() async {
     final previous = _liked;
-    setState(() {
-      _liked = !previous;
-      if (_post != null) {
-        final likes =
-            _liked ? _post!.likes + 1 : (_post!.likes - 1).clamp(0, 1 << 30);
-        _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
-      }
-    });
+    final originalLikes = _post?.likes ?? 0;
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
+
     if (!loggedIn) {
+      setState(() => _liked = !previous);
       final liked = await ApiService.toggleGuestLike(widget.postId);
       if (!mounted) return;
       setState(() {
         _liked = liked;
         if (_post != null) {
-          final likes =
-              liked ? _post!.likes + 1 : (_post!.likes - 1).clamp(0, 1 << 30);
+          final likes = liked
+              ? originalLikes + 1
+              : (originalLikes - 1).clamp(0, 1 << 30);
           _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
         }
       });
       return;
     }
 
+    setState(() {
+      _liked = !previous;
+      if (_post != null) {
+        final likes =
+            _liked ? originalLikes + 1 : (originalLikes - 1).clamp(0, 1 << 30);
+        _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
+      }
+    });
+
     final res = await ApiService.toggleLike(widget.postId);
     if (res['success'] != true && mounted) {
       setState(() {
         _liked = previous;
         if (_post != null) {
-          final likes =
-              _liked ? _post!.likes + 1 : (_post!.likes - 1).clamp(0, 1 << 30);
+          final likes = previous
+              ? originalLikes + 1
+              : (originalLikes - 1).clamp(0, 1 << 30);
           _post = NewsPost.fromJson({..._post!.toJsonMap(), 'likes': likes});
         }
       });
@@ -178,49 +252,52 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
   Future<void> _shareArticle() async {
     if (_post == null) return;
-    final post = _post!;
-    final buf = StringBuffer();
-    buf.writeln(post.title);
-    buf.writeln();
-    final preview =
-        post.summary?.trim().isNotEmpty == true ? post.summary! : post.body;
-    final ex = truncateAtWordBoundary(
-      preview.replaceAll(RegExp(r'\s+'), ' ').trim(),
-      600,
+    await PostShare.sharePost(_post!, context: context);
+  }
+
+  static const _reportReasons = [
+    'Misinformation',
+    'Offensive content',
+    'Spam or clickbait',
+    'Copyright issue',
+    'Other',
+  ];
+
+  Future<void> _reportArticle() async {
+    if (_post == null) return;
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'Report this story',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+            for (final r in _reportReasons)
+              ListTile(
+                title: Text(r),
+                onTap: () => Navigator.pop(ctx, r),
+              ),
+          ],
+        ),
+      ),
     );
-    buf.writeln(ex);
-    if (post.sourceUrl?.trim().isNotEmpty == true) {
-      buf.writeln();
-      buf.writeln(post.sourceUrl);
-    }
-    final text = buf.toString();
-    try {
-      Rect? shareOrigin;
-      final ro = context.findRenderObject();
-      if (ro is RenderBox) {
-        final topLeft = ro.localToGlobal(Offset.zero);
-        shareOrigin = Rect.fromLTWH(
-          topLeft.dx,
-          topLeft.dy,
-          ro.size.width,
-          ro.size.height,
-        );
-      }
-      await Share.share(
-        text,
-        subject: post.title,
-        sharePositionOrigin: shareOrigin,
-      );
-    } catch (_) {
-      await Clipboard.setData(ClipboardData(text: text));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Article copied — paste anywhere to share'),
-          ),
-        );
-      }
-    }
+    if (reason == null || !mounted) return;
+    final res = await ApiService.reportPost(postId: widget.postId, reason: reason);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          res['message']?.toString() ?? 'Report submitted.',
+        ),
+      ),
+    );
   }
 
   Future<void> _submitComment() async {
@@ -267,6 +344,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   }
 
   Widget _commentComposer(BuildContext context, dynamic p) {
+    final fx = context.fx;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SafeArea(
@@ -276,15 +354,11 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         child: GlassCard(
           radius: 28,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          color: isDark
-              ? Colors.black.withOpacity(0.40)
-              : Colors.white.withOpacity(0.65),
-          borderColor: isDark
-              ? Colors.white.withOpacity(0.16)
-              : Colors.black.withOpacity(0.08),
+          color: fx.heroOverlay,
+          borderColor: fx.heroOverlayBorder,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: fx.heroShadow,
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
@@ -301,14 +375,14 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _submitComment(),
                   style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
+                    color: fx.heroActionFg,
                     fontSize: 14,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Write a comment…',
                     hintStyle: TextStyle(
                       fontSize: 14,
-                      color: isDark ? Colors.white.withOpacity(0.50) : p.textHint,
+                      color: fx.heroFgMuted,
                     ),
                     filled: false,
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
@@ -318,11 +392,11 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.s8),
+              SizedBox(width: AppSpacing.s8),
               _GlassActionIconButton(
                 icon: Icon(
                   Icons.send_rounded,
-                  color: isDark ? p.primary : p.primaryDark,
+                  color: fx.accent,
                   size: 18,
                 ),
                 onPressed: _submitComment,
@@ -335,8 +409,67 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     );
   }
 
+  Future<void> _refreshFollowState(bool loggedIn) async {
+    final post = _post;
+    if (post == null) return;
+    final following =
+        await PublisherFollowService.isFollowing(post, loggedIn: loggedIn);
+    if (mounted) setState(() => _followingPublisher = following);
+  }
+
+  Future<void> _toggleFollowPublisher() async {
+    final post = _post;
+    if (post == null) return;
+    if (PublisherFollowService.publisherKeyForPost(post).isEmpty) return;
+    final loggedIn = context.read<AuthProvider>().isLoggedIn;
+    final result = await PublisherFollowService.toggle(post, loggedIn: loggedIn);
+    if (!mounted) return;
+    if (!result.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.errorMessage ?? 'Could not update follow.',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _followingPublisher = result.following!);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          result.following!
+              ? '${I18n.t(context, 'publisher_followed')} ${post.displaySourceName}'
+              : I18n.t(context, 'publisher_unfollowed'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleListen() async {
+    final post = _post;
+    if (post == null) return;
+    if (!TtsService.instance.isSupported) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Listen is available in the mobile app.')),
+      );
+      return;
+    }
+    final lang = context.read<NewsProvider>().selectedLanguage;
+    final code = lang == 'all' ? post.language : lang;
+    final body = post.summary?.trim().isNotEmpty == true ? post.summary! : (post.body ?? '');
+    await TtsService.instance.toggle(
+      title: post.title,
+      body: body,
+      languageCode: code,
+    );
+  }
+
   @override
   void dispose() {
+    TtsService.instance.removeListener(_onTtsStateChanged);
+    TtsService.instance.stop();
     _commentCtrl.dispose();
     _commentFocus.dispose();
     _scrollCtrl.dispose();
@@ -377,7 +510,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
   List<Widget> _paragraphs(String text, TextStyle style, BuildContext context) {
     final p = context.palette;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fx = context.fx;
     final raw = text.replaceAll('\r\n', '\n');
     final parts = raw
         .split(RegExp(r'\n\s*\n+'))
@@ -385,17 +518,17 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         .where((pr) => pr.isNotEmpty)
         .toList();
     if (parts.isEmpty) {
-      return [_renderParagraph(text, style, p, isDark)];
+      return [_renderParagraph(text, style, p, fx)];
     }
     return [
       for (var i = 0; i < parts.length; i++) ...[
-        _renderParagraph(parts[i], style, p, isDark),
-        if (i != parts.length - 1) const SizedBox(height: AppSpacing.s16),
+        _renderParagraph(parts[i], style, p, fx),
+        if (i != parts.length - 1) SizedBox(height: AppSpacing.s16),
       ]
     ];
   }
 
-  Widget _renderParagraph(String paragraphText, TextStyle style, AppPalette p, bool isDark) {
+  Widget _renderParagraph(String paragraphText, TextStyle style, AppPalette p, FeedXpressoPalette fx) {
     final isQuote = paragraphText.startsWith('>') || paragraphText.startsWith('"') || paragraphText.startsWith('“');
     var cleanText = paragraphText;
     if (paragraphText.startsWith('>')) {
@@ -417,7 +550,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         child: Text(
           cleanText,
           style: style.copyWith(
-            color: isDark ? Colors.white.withOpacity(0.92) : p.textPrimary.withOpacity(0.85),
+            color: fx.heroFg,
             fontStyle: FontStyle.italic,
             fontSize: (style.fontSize ?? 15) + 1,
             height: 1.6,
@@ -430,7 +563,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       paragraphText,
       style: style.copyWith(
         letterSpacing: 0.15,
-        color: isDark ? Colors.white.withOpacity(0.88) : p.textPrimary.withOpacity(0.92),
+        color: fx.heroFg,
       ),
     );
   }
@@ -439,7 +572,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     required BuildContext context,
     required Widget child,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fx = context.fx;
     return ClipOval(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
@@ -448,19 +581,15 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           height: 38,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isDark
-                ? Colors.black.withOpacity(0.40)
-                : Colors.white.withOpacity(0.65),
+            color: fx.heroOverlay,
             shape: BoxShape.circle,
             border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.24)
-                  : Colors.black.withOpacity(0.12),
+              color: fx.heroOverlayBorder,
               width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: fx.heroShadow,
                 blurRadius: 6,
                 offset: const Offset(0, 3),
               ),
@@ -489,10 +618,11 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final overlayBase = isDark ? Colors.black : Colors.white;
-    final actionIconColor = isDark ? Colors.white : Colors.black;
+    final overlayBase = fx.heroOverlay;
+    final actionIconColor = fx.heroActionFg;
     if (_loading) {
       return GlassBackground(
         child: Scaffold(
@@ -502,10 +632,49 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       );
     }
     if (_post == null) {
-      return const GlassBackground(
+      if (_loadError != null) {
+        return GlassBackground(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorState(
+              message: _loadError!,
+              dark: isDark,
+              onRetry: _load,
+            ),
+          ),
+        );
+      }
+      return GlassBackground(
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: Center(child: Text('Article not found.')),
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/feed');
+                }
+              },
+            ),
+          ),
+          body: EmptyState(
+            icon: Icons.article_outlined,
+            title: 'Article not found',
+            subtitle: 'This story may have been removed or the link is invalid.',
+            buttonLabel: 'Go back',
+            onButtonTap: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/feed');
+              }
+            },
+            dark: isDark,
+          ),
         ),
       );
     }
@@ -534,7 +703,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
               pinned: true,
               backgroundColor:
                   showHeroImage ? p.surface.withValues(alpha: 0.62) : p.surface,
-              foregroundColor: Colors.white,
+              foregroundColor: fx.onImage,
               iconTheme: IconThemeData(color: actionIconColor),
               flexibleSpace: showHeroImage
                   ? FlexibleSpaceBar(
@@ -628,9 +797,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 right: 0,
                                 child: Container(
                                   height: 1,
-                                  color: isDark
-                                      ? Colors.white.withOpacity(0.15)
-                                      : Colors.black.withOpacity(0.08),
+                                  color: fx.heroOverlayBorder,
                                 ),
                               ),
                             ],
@@ -664,7 +831,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                 _glassActionIcon(
                   context: context,
                   icon: Icon(_liked ? Icons.favorite : Icons.favorite_border,
-                      color: _liked ? Colors.red : actionIconColor),
+                      color: _liked ? fx.liked : fx.heroActionFg),
                   onPressed: _toggleLike,
                 ),
                 _glassActionIcon(
@@ -678,6 +845,12 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   context: context,
                   icon: Icon(Icons.share_outlined, color: actionIconColor),
                   onPressed: _shareArticle,
+                ),
+                _glassActionIcon(
+                  context: context,
+                  tooltip: 'Report',
+                  icon: Icon(Icons.flag_outlined, color: actionIconColor),
+                  onPressed: _reportArticle,
                 ),
                 _glassActionIcon(
                   context: context,
@@ -707,8 +880,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                   ? '99+'
                                   : '${_comments.length}',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: fx.onImage,
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -733,19 +906,15 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                       children: [
                         if (post.isYoutube && (post.youtube?.videoId ?? '').isNotEmpty) ...[
                           ArticleYoutubePlayer(post: post),
-                          const SizedBox(height: 16),
+                          SizedBox(height: 16),
                         ],
                         // Title Editorial Card
                         GlassCard(
                           margin: const EdgeInsets.only(bottom: 24),
                           radius: 24,
                           padding: const EdgeInsets.all(20),
-                          borderColor: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : Colors.black.withValues(alpha: 0.08),
-                          color: isDark
-                              ? Colors.black.withValues(alpha: 0.25)
-                              : Colors.white.withValues(alpha: 0.50),
+                          borderColor: fx.heroSurfaceMuted,
+                          color: fx.heroOverlayBorder,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -761,10 +930,10 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                       decoration: BoxDecoration(
                                           color: p.breaking,
                                           borderRadius: BorderRadius.circular(10)),
-                                      child: const Text(
+                                      child: Text(
                                         'BREAKING',
                                         style: TextStyle(
-                                            color: Colors.white,
+                                            color: fx.onImage,
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
                                             letterSpacing: 0.2),
@@ -780,7 +949,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                       child: Text(
                                           '${post.category!.icon} ${post.category!.name}',
                                           style: TextStyle(
-                                              color: isDark ? p.primary : p.primaryDark,
+                                              color: fx.accent,
                                               fontSize: 10,
                                               fontWeight: FontWeight.w600)),
                                     ),
@@ -802,7 +971,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                     ),
                                 ],
                               ),
-                              const SizedBox(height: AppSpacing.s16),
+                              SizedBox(height: AppSpacing.s16),
 
                               // Title
                               Text(
@@ -815,77 +984,102 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                   color: p.textPrimary,
                                 ),
                               ),
-                              const SizedBox(height: AppSpacing.s16),
+                              SizedBox(height: AppSpacing.s16),
 
-                              // Meta (Reporter, time, location)
+                              // Meta (source, time)
                               Row(
                                 children: [
-                                  if (post.reporter != null) ...[
-                                    CircleAvatar(
-                                      radius: 14,
-                                      backgroundColor: p.primary,
-                                      child: Text(
-                                        post.reporter!.name[0].toUpperCase(),
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.s8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            post.reporter!.name,
-                                            style: context.subtitleText.copyWith(
-                                              color: p.textPrimary,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            timeago.format(post.displayTime),
-                                            style: context.metaText.copyWith(
-                                              color: p.textSecondary,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ] else ...[
-                                    Expanded(
-                                      child: Text(
-                                        timeago.format(post.displayTime),
-                                        style: context.metaText.copyWith(
-                                          color: p.textSecondary,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  if (post.location != null) ...[
-                                    const SizedBox(width: AppSpacing.s8),
-                                    LocationLabel(
-                                      location: post.location!,
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: p.primary,
+                                    child: Text(
+                                      post.displaySourceInitial,
                                       style: TextStyle(
-                                        fontSize: 12,
-                                        color: p.textSecondary,
-                                      ),
-                                      iconSize: 14,
+                                          color: fx.onImage,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold),
                                     ),
-                                  ],
+                                  ),
+                                  SizedBox(width: AppSpacing.s8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          post.displaySourceName,
+                                          style: context.subtitleText.copyWith(
+                                            color: p.textPrimary,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          timeago.format(post.displayTime),
+                                          style: context.metaText.copyWith(
+                                            color: p.textSecondary,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [
+                                  if (post.displaySourceName.trim().isNotEmpty)
+                                    ActionChip(
+                                      avatar: Icon(
+                                        _followingPublisher
+                                            ? Icons.notifications_active_rounded
+                                            : Icons.rss_feed_rounded,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        _followingPublisher
+                                            ? I18n.t(context, 'action_following')
+                                            : I18n.t(context, 'action_follow_publisher'),
+                                      ),
+                                      onPressed: _toggleFollowPublisher,
+                                    ),
+                                  if (TtsService.instance.isSupported)
+                                    ActionChip(
+                                      avatar: Icon(
+                                        _ttsSpeaking
+                                            ? Icons.stop_circle_outlined
+                                            : Icons.volume_up_rounded,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        _ttsSpeaking
+                                            ? I18n.t(context, 'action_stop_listen')
+                                            : I18n.t(context, 'action_listen'),
+                                      ),
+                                      onPressed: _toggleListen,
+                                    ),
+                                ],
+                              ),
+                              if (post.location != null) ...[
+                                SizedBox(height: AppSpacing.s8),
+                                LocationLabel(
+                                  location: post.location!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: p.textSecondary,
+                                  ),
+                                  iconSize: 14,
+                                ),
+                              ],
                             ],
                           ),
                         ),
 
                         if (_bodyMediaForGallery(post).isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.s16),
+                          SizedBox(height: AppSpacing.s16),
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child:
@@ -893,9 +1087,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           ),
                         ],
 
-                        const SizedBox(height: AppSpacing.s24),
+                        SizedBox(height: AppSpacing.s24),
                         Divider(height: 1, color: p.glassBorder),
-                        const SizedBox(height: AppSpacing.s16),
+                        SizedBox(height: AppSpacing.s16),
 
                         if (_bodyText(post) != null) ...[
                           ..._paragraphs(
@@ -916,7 +1110,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
 
                         // Tags
                         if (post.tags.isNotEmpty) ...[
-                          const SizedBox(height: AppSpacing.s24),
+                          SizedBox(height: AppSpacing.s24),
                           Wrap(
                             spacing: AppSpacing.s8,
                             runSpacing: AppSpacing.s8,
@@ -939,7 +1133,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                         ],
 
                         // Stats row
-                        const SizedBox(height: AppSpacing.s24),
+                        SizedBox(height: AppSpacing.s24),
                         Wrap(
                           spacing: AppSpacing.s12,
                           runSpacing: AppSpacing.s8,
@@ -948,27 +1142,23 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                             GlassCard(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                               radius: 12,
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.04)
-                                  : Colors.black.withOpacity(0.03),
-                              borderColor: isDark
-                                  ? Colors.white.withOpacity(0.10)
-                                  : Colors.black.withOpacity(0.06),
+                              color: fx.heroSurfaceSubtle,
+                              borderColor: fx.heroSurfaceMuted,
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.visibility_outlined,
                                     size: 15,
-                                    color: isDark ? Colors.white.withOpacity(0.70) : p.textSecondary,
+                                    color: fx.heroFgMuted,
                                   ),
-                                  const SizedBox(width: 6),
+                                  SizedBox(width: 6),
                                   Text(
                                     '${post.views} views',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? Colors.white.withOpacity(0.80) : p.textPrimary,
+                                      color: fx.heroFg,
                                     ),
                                   ),
                                 ],
@@ -980,12 +1170,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                               child: GlassCard(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 radius: 12,
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.04)
-                                    : Colors.black.withOpacity(0.03),
-                                borderColor: isDark
-                                    ? Colors.white.withOpacity(0.10)
-                                    : Colors.black.withOpacity(0.06),
+                                color: fx.heroSurfaceSubtle,
+                                borderColor: fx.heroSurfaceMuted,
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -993,16 +1179,16 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                       _liked ? Icons.favorite : Icons.favorite_border,
                                       size: 15,
                                       color: _liked
-                                          ? Colors.redAccent
-                                          : (isDark ? Colors.white.withOpacity(0.70) : p.textSecondary),
+                                          ? fx.liked
+                                          : (fx.heroFgMuted),
                                     ),
-                                    const SizedBox(width: 6),
+                                    SizedBox(width: 6),
                                     Text(
                                       '${post.likes} likes',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
-                                        color: isDark ? Colors.white.withOpacity(0.80) : p.textPrimary,
+                                        color: fx.heroFg,
                                       ),
                                     ),
                                   ],
@@ -1012,7 +1198,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           ],
                         ),
 
-                        const SizedBox(height: AppSpacing.s16),
+                        SizedBox(height: AppSpacing.s16),
                         GestureDetector(
                           onTap: _comments.isEmpty
                               ? _focusCommentField
@@ -1023,12 +1209,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                               vertical: AppSpacing.s12,
                             ),
                             radius: 16,
-                            color: isDark
-                                ? Colors.white.withOpacity(0.04)
-                                : Colors.black.withOpacity(0.03),
-                            borderColor: isDark
-                                ? Colors.white.withOpacity(0.10)
-                                : Colors.black.withOpacity(0.06),
+                            color: fx.heroSurfaceSubtle,
+                            borderColor: fx.heroSurfaceMuted,
                             child: Row(
                               children: [
                                 Icon(
@@ -1036,7 +1218,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                   size: 20,
                                   color: p.primary,
                                 ),
-                                const SizedBox(width: AppSpacing.s12),
+                                SizedBox(width: AppSpacing.s12),
                                 Expanded(
                                   child: Text(
                                     _comments.isEmpty
@@ -1045,7 +1227,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
-                                      color: isDark ? Colors.white.withOpacity(0.90) : p.textPrimary,
+                                      color: fx.heroFg,
                                     ),
                                   ),
                                 ),
@@ -1067,9 +1249,9 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           ),
                         ),
 
-                        const SizedBox(height: AppSpacing.s24),
+                        SizedBox(height: AppSpacing.s24),
                         Divider(height: 1, color: p.glassBorder),
-                        const SizedBox(height: AppSpacing.s16),
+                        SizedBox(height: AppSpacing.s16),
 
                         // Comments section
                         KeyedSubtree(
@@ -1083,7 +1265,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.s16),
+                        SizedBox(height: AppSpacing.s16),
 
                         if (_comments.isEmpty)
                           Padding(
@@ -1107,12 +1289,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                             child: GlassCard(
                               padding: const EdgeInsets.all(12),
                               radius: 16,
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.03)
-                                  : Colors.black.withOpacity(0.02),
-                              borderColor: isDark
-                                  ? Colors.white.withOpacity(0.08)
-                                  : Colors.black.withOpacity(0.04),
+                              color: fx.heroSurfaceSubtle,
+                              borderColor: fx.heroSurfaceMuted,
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1121,14 +1299,14 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                     backgroundColor: p.primary,
                                     child: Text(
                                       (c.user?.name ?? '?')[0].toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: fx.onImage,
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
+                                  SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1141,25 +1319,25 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                               style: TextStyle(
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w600,
-                                                color: isDark ? Colors.white : p.textPrimary,
+                                                color: fx.heroFg,
                                               ),
                                             ),
                                             Text(
                                               timeago.format(c.createdAt),
                                               style: TextStyle(
                                                 fontSize: 11,
-                                                color: isDark ? Colors.white.withOpacity(0.50) : p.textHint,
+                                                color: fx.heroFgMuted,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 6),
+                                        SizedBox(height: 6),
                                         Text(
                                           c.text,
                                           style: TextStyle(
                                             fontSize: 14,
                                             height: 1.4,
-                                            color: isDark ? Colors.white.withOpacity(0.90) : p.textPrimary,
+                                            color: fx.heroFg,
                                           ),
                                         ),
                                       ],
@@ -1171,7 +1349,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                           );
                         }),
 
-                        const SizedBox(height: 100),
+                        SizedBox(height: 100),
                       ],
                     ),
                   ),
@@ -1266,6 +1444,7 @@ class _GlassActionIconButtonState extends State<_GlassActionIconButton> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
@@ -1288,19 +1467,15 @@ class _GlassActionIconButtonState extends State<_GlassActionIconButton> {
                   height: 38,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.black.withOpacity(0.40)
-                        : Colors.white.withOpacity(0.65),
+                    color: fx.heroOverlay,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.24)
-                          : Colors.black.withOpacity(0.12),
+                      color: fx.heroOverlayBorder,
                       width: 1.0,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: fx.heroShadow,
                         blurRadius: 6,
                         offset: const Offset(0, 3),
                       ),

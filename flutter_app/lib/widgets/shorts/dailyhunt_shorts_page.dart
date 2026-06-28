@@ -9,6 +9,7 @@ import '../../providers/shorts_playback_controller.dart';
 import '../../theme/app_palette.dart';
 import 'shorts_feed_theme.dart';
 import 'shorts_media_layer.dart';
+import '../../widgets/feed/feed_xpresso_theme.dart';
 
 /// Dailyhunt-style Shorts card — video on top, metadata + actions below.
 class DailyhuntShortsPage extends StatefulWidget {
@@ -68,13 +69,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
     }
   }
 
-  String get _channelName {
-    final post = widget.post;
-    if (post.isYoutube) return post.youtubeChannelLabel;
-    return post.sourceName?.trim().isNotEmpty == true
-        ? post.sourceName!.trim()
-        : (post.category?.name ?? 'News');
-  }
+  String get _channelName => widget.post.displaySourceName;
 
   String get _timeLabel {
     final diff = DateTime.now().difference(widget.post.displayTime);
@@ -121,6 +116,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final p = context.palette;
     final st = ShortsFeedTheme.fx(context);
     final isYt = widget.post.isYoutube;
@@ -181,7 +177,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                       isActive: widget.isActive,
                                       immersive: false,
                                     ),
-                                    const IgnorePointer(
+                                    IgnorePointer(
                                       child: DecoratedBox(
                                         decoration: BoxDecoration(
                                           gradient: LinearGradient(
@@ -189,22 +185,22 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                             end: Alignment.bottomCenter,
                                             stops: [0.0, 0.4, 1.0],
                                             colors: [
-                                              Color(0x55000000),
+                                              fx.overlayScrim,
                                               Colors.transparent,
-                                              Color(0x77000000),
+                                              fx.overlayScrim,
                                             ],
                                           ),
                                         ),
                                       ),
                                     ),
                                     if (isYt)
-                                      const Positioned(
+                                      Positioned(
                                         top: 10,
                                         left: 10,
                                         child: _SourcePill(
                                           label: 'YouTube',
                                           icon: Icons.play_circle_filled,
-                                          iconColor: Color(0xFFFF0000),
+                                          iconColor: fx.liked,
                                         ),
                                       ),
                                     Positioned(
@@ -236,7 +232,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                         },
                                       ),
                                     if (!widget.isActive && isYt)
-                                      const Center(
+                                      Center(
                                         child: _InactivePlayBadge(),
                                       ),
                                   ],
@@ -262,12 +258,12 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                     style: st.titleStyle(),
                                   ),
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: 12),
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     _ChannelAvatar(label: _channelName),
-                                    const SizedBox(width: 10),
+                                    SizedBox(width: 10),
                                     Expanded(
                                       child: GestureDetector(
                                         onTap: isYt
@@ -297,16 +293,16 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                                   ),
                                                 ),
                                                 if (isYt) ...[
-                                                  const SizedBox(width: 4),
-                                                  const Icon(
+                                                  SizedBox(width: 4),
+                                                  Icon(
                                                     Icons.verified,
                                                     size: 14,
-                                                    color: Color(0xFFAAAAAA),
+                                                    color: fx.meta,
                                                   ),
                                                 ],
                                               ],
                                             ),
-                                            const SizedBox(height: 3),
+                                            SizedBox(height: 3),
                                             Text(
                                               ShortsFeedTheme.channelMeta(
                                                 views: widget.post.views,
@@ -334,7 +330,7 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: 12),
                                 SingleChildScrollView(
                                   scrollDirection: Axis.horizontal,
                                   physics: const BouncingScrollPhysics(),
@@ -349,20 +345,20 @@ class _DailyhuntShortsPageState extends State<DailyhuntShortsPage> {
                                         activeColor: p.primary,
                                         onTap: _handleLike,
                                       ),
-                                      const SizedBox(width: 8),
+                                      SizedBox(width: 8),
                                       _ActionChip(
                                         icon: Icons.chat_bubble_outline_rounded,
                                         label: 'Comment',
                                         onTap: _onComment,
                                       ),
-                                      const SizedBox(width: 8),
+                                      SizedBox(width: 8),
                                       _ActionChip(
                                         icon: Icons.share_outlined,
                                         label: 'Share',
-                                        iconColor: const Color(0xFF25D366),
+                                        iconColor: fx.shareAccent,
                                         onTap: widget.onShare,
                                       ),
-                                      const SizedBox(width: 8),
+                                      SizedBox(width: 8),
                                       _ActionChip(
                                         icon: _saved
                                             ? Icons.bookmark_rounded
@@ -403,17 +399,18 @@ class _InactivePlayBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
+        color: fx.overlayScrim,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white30, width: 1.5),
+        border: Border.all(color: fx.onVideoMuted, width: 1.5),
       ),
-      child: const Icon(
+      child: Icon(
         Icons.play_arrow_rounded,
-        color: Colors.white,
+        color: fx.onImage,
         size: 36,
       ),
     );
@@ -428,6 +425,7 @@ class _DurationViewsPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     final parts = <String>[
       if (duration != null && duration!.isNotEmpty) duration!,
       if (views.isNotEmpty) views,
@@ -437,7 +435,7 @@ class _DurationViewsPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.62),
+        color: fx.overlayScrim,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -446,16 +444,16 @@ class _DurationViewsPill extends StatelessWidget {
           Text(
             parts.join(' · '),
             style: ShortsFeedTheme.metaStyle.copyWith(
-              color: Colors.white,
+              color: fx.onImage,
               fontWeight: FontWeight.w600,
             ),
           ),
           if (views.isNotEmpty) ...[
-            const SizedBox(width: 6),
+            SizedBox(width: 6),
             Icon(
               Icons.remove_red_eye_outlined,
               size: 14,
-              color: Colors.white.withValues(alpha: 0.9),
+              color: fx.onImage.withValues(alpha: 0.9),
             ),
           ],
         ],
@@ -552,21 +550,22 @@ class _SourcePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: fx.overlayScrim,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 14, color: iconColor),
-          const SizedBox(width: 5),
+          SizedBox(width: 5),
           Text(
             label,
             style: ShortsFeedTheme.actionLabelStyle.copyWith(
-              color: Colors.white,
+              color: fx.onImage,
               fontSize: 11,
             ),
           ),
@@ -584,17 +583,18 @@ class _MuteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Listener(
       onPointerDown: (_) => onTap(),
       child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
+        color: fx.overlayScrim,
         elevation: 4,
         shape: const CircleBorder(),
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Icon(
             muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-            color: Colors.white,
+            color: fx.onImage,
             size: 20,
           ),
         ),
@@ -638,7 +638,7 @@ class _ActionChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, color: color, size: 18),
-              const SizedBox(width: 5),
+              SizedBox(width: 5),
               Text(
                 label,
                 style: st.actionLabelStyle().copyWith(

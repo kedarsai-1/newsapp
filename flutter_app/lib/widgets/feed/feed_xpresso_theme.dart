@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_palette.dart';
+import '../../theme/indic_fonts.dart';
 import 'feed_xpresso_palette.dart';
 
 export 'feed_xpresso_palette.dart';
+
+extension FeedXpressoContext on BuildContext {
+  FeedXpressoPalette get fx => FeedXpressoTheme.fx(this);
+}
 
 /// Dailyhunt Xpresso design tokens + global Material theme (light & dark).
 abstract final class FeedXpressoTheme {
@@ -69,7 +74,8 @@ abstract final class FeedXpressoTheme {
   static const double cardRadius = 10;
   static const BorderRadius cardBorderRadius = BorderRadius.all(Radius.circular(cardRadius));
   static const BorderRadius imageBorderRadius = BorderRadius.all(Radius.circular(cardRadius));
-  static const Color cardBorder = Color(0xFF1C1C1C);
+
+  static Color cardBorder(BuildContext context) => fx(context).divider;
 
   /// Horizontal gutter; divider separates cards.
   static const EdgeInsets cardMargin = EdgeInsets.fromLTRB(14, 12, 14, 12);
@@ -149,7 +155,7 @@ abstract final class FeedXpressoTheme {
             surfaceContainer: palette.surface,
             outline: palette.divider,
             outlineVariant: palette.divider,
-            error: const Color(0xFF9E9E9E),
+            error: palette.error,
             onError: palette.title,
           );
 
@@ -166,29 +172,7 @@ abstract final class FeedXpressoTheme {
       colorScheme: scheme,
       iconTheme: IconThemeData(color: palette.iconFg),
       primaryIconTheme: IconThemeData(color: palette.iconFg),
-      textTheme: TextTheme(
-        displaySmall: palette.screenTitleStyle,
-        titleLarge: TextStyle(
-          fontWeight: FontWeight.w800,
-          fontSize: 17,
-          color: palette.title,
-        ),
-        titleMedium: palette.titleStyle,
-        titleSmall: TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-          color: palette.title,
-        ),
-        bodyLarge: TextStyle(color: palette.title, fontSize: 15),
-        bodyMedium: TextStyle(color: palette.summary, fontSize: 14),
-        bodySmall: TextStyle(color: palette.meta, fontSize: 12),
-        labelMedium: TextStyle(
-          color: palette.meta,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
-        ),
-      ),
+      textTheme: IndicFonts.textThemeFor(palette),
       appBarTheme: AppBarTheme(
         backgroundColor: palette.background,
         foregroundColor: palette.title,

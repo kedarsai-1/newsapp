@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants.dart';
@@ -13,6 +12,7 @@ import '../../providers/shorts_playback_controller.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
 import '../../utils/i18n.dart';
+import '../../utils/post_share.dart';
 import '../../widgets/dailyhunt/xpresso_side_menu.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 import '../../widgets/shorts/dailyhunt_shorts_page.dart';
@@ -163,8 +163,7 @@ class _PoliticalReelsScreenState extends State<PoliticalReelsScreen>
   }
 
   Future<void> _share(NewsPost post) async {
-    final link = post.youtubeWatchUrl ?? post.sourceUrl ?? '';
-    await Share.share('${post.title}\n\n$link', subject: post.title);
+    await PostShare.sharePost(post, context: context);
   }
 
   void _openArticle(NewsPost post) {

@@ -8,6 +8,7 @@ import '../../providers/onboarding_draft_provider.dart';
 import '../../providers/reporter_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/auth_provider.dart';
+import '../../services/push_notifications.dart';
 import '../../utils/app_utils.dart';
 import '../../utils/i18n.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
@@ -57,6 +58,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     'business',
     'entertainment',
     'health',
+    'agriculture',
+    'jobs',
     'local',
   ];
 
@@ -70,17 +73,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final updated = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Edit profile'),
+        title: Text('Edit profile'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(labelText: 'Display name'),
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Save'),
+            child: Text('Save'),
           ),
         ],
       ),
@@ -91,6 +94,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok ? 'Profile updated' : 'Could not update profile'),
+      ),
+    );
+  }
+
+  Future<void> _syncPushTopics() async {
+    final lang = context.read<NewsProvider>().selectedLanguage;
+    await PushNotifications.applyTopics(
+      PushNotifications.topicsForLanguage(
+        lang,
+        dailyDigest: _dailyDigest,
+        breakingAlerts: _breakingAlerts,
       ),
     );
   }
@@ -237,11 +251,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           SegmentedButton<AppLayoutMode>(
                             segments: const [
                               ButtonSegment(
-                                value: AppLayoutMode.dualDeck,
-                                label: Text('Dual-Deck'),
-                                icon: Icon(Icons.swap_horiz_rounded, size: 16),
-                              ),
-                              ButtonSegment(
                                 value: AppLayoutMode.carouselWheel,
                                 label: Text('Carousel'),
                                 icon: Icon(Icons.view_carousel_rounded, size: 16),
@@ -252,18 +261,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 icon: Icon(Icons.view_sidebar_rounded, size: 16),
                               ),
                             ],
-                            selected: {news.layoutMode},
+                            selected: {news.layoutMode == AppLayoutMode.dualDeck
+                                ? AppLayoutMode.carouselWheel
+                                : news.layoutMode},
                             onSelectionChanged: (modes) {
                               news.setLayoutMode(modes.first);
                             },
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: 6),
                           Text(
-                            news.layoutMode == AppLayoutMode.dualDeck
-                                ? 'Swipe horizontally to discover categories.'
-                                : news.layoutMode == AppLayoutMode.carouselWheel
-                                    ? 'Scroll categories in a 3D dial wheel at the top.'
-                                    : 'Categories slide out from the left sidebar panel.',
+                            news.layoutMode == AppLayoutMode.carouselWheel ||
+                                    news.layoutMode == AppLayoutMode.dualDeck
+                                ? 'Scroll categories in a dial at the top of your feed.'
+                                : 'Filter topics from a slide-out panel on the feed.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 10,
@@ -327,12 +337,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           _CompactSwitchRow(
                             label: I18n.t(context, 'notif_breaking'),
                             value: _breakingAlerts,
-                            onChanged: (v) => setState(() => _breakingAlerts = v),
+                            onChanged: (v) async {
+                              setState(() => _breakingAlerts = v);
+                              await _syncPushTopics();
+                            },
                           ),
                           _CompactSwitchRow(
                             label: I18n.t(context, 'notif_daily_digest'),
                             value: _dailyDigest,
-                            onChanged: (v) => setState(() => _dailyDigest = v),
+                            onChanged: (v) async {
+                              setState(() => _dailyDigest = v);
+                              await _syncPushTopics();
+                            },
                           ),
                           _CompactSwitchRow(
                             label: I18n.t(context, 'notif_recommended'),
@@ -386,7 +402,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onTap: () => context.push('/register?role=reporter'),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: 12),
                     ],
                     if (user == null)
                       DailyhuntPrimaryButton(
@@ -470,7 +486,7 @@ class _UserIdentity extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -486,7 +502,7 @@ class _UserIdentity extends StatelessWidget {
                     color: fx.title,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   userEmail,
                   maxLines: 1,
@@ -528,7 +544,7 @@ class _GuestIdentity extends StatelessWidget {
               color: fx.iconFg,
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -541,7 +557,7 @@ class _GuestIdentity extends StatelessWidget {
                     color: fx.title,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   I18n.t(context, 'profile_guest_subtitle'),
                   style: TextStyle(

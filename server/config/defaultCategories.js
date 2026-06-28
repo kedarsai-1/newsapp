@@ -11,6 +11,8 @@ const defaultCategories = [
   { name: 'Local', slug: 'local', icon: '📍', color: '#A32D2D', order: 8 },
   { name: 'Crime', slug: 'crime', icon: '🚨', color: '#993C1D', order: 9 },
   { name: 'Weather', slug: 'weather', icon: '🌦️', color: '#378ADD', order: 10 },
+  { name: 'Agriculture', slug: 'agriculture', icon: '🌾', color: '#5C7A29', order: 11 },
+  { name: 'Jobs & Exams', slug: 'jobs', icon: '💼', color: '#6B4C9A', order: 12 },
 ];
 
 module.exports = { defaultCategories };

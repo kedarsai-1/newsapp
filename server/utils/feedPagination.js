@@ -12,10 +12,17 @@ function parseFeedPagination(page, limit) {
 
 /** Pagination meta compatible with Flutter (_hasMore = apiPage < apiPages). */
 function buildFeedPaginationResponse(pageNum, limitNum, postsLength, hasMore) {
+  const safePage = Math.max(1, pageNum);
+  let pages = hasMore ? safePage + 1 : safePage;
+  let total = (safePage - 1) * limitNum + postsLength;
+  if (postsLength === 0 && safePage > 1) {
+    pages = safePage;
+    total = (safePage - 1) * limitNum;
+  }
   return {
-    page: pageNum,
-    pages: hasMore ? pageNum + 1 : Math.max(pageNum, 1),
-    total: (pageNum - 1) * limitNum + postsLength,
+    page: safePage,
+    pages,
+    total,
     hasMore,
   };
 }

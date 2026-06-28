@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../constants.dart';
+import '../widgets/feed/feed_xpresso_theme.dart';
 
 /// 6-box OTP input widget with glass styling.
 /// Usage:
@@ -50,7 +50,6 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
   }
 
   void _onChanged(int index, String value) {
-    // Handle paste — if user pastes all 6 digits at once
     if (value.length == widget.length) {
       for (int i = 0; i < widget.length; i++) {
         _controllers[i].text = value[i];
@@ -64,7 +63,6 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
       return;
     }
 
-    // Single digit entry
     if (value.isEmpty) {
       _values[index] = '';
       widget.onChanged?.call(_values.join());
@@ -72,9 +70,9 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
       return;
     }
 
-    final digit = value[value.length - 1]; // take last char (handles overwrites)
+    final digit = value[value.length - 1];
     if (!RegExp(r'^\d$').hasMatch(digit)) {
-      _controllers[index].text = _values[index]; // revert
+      _controllers[index].text = _values[index];
       return;
     }
 
@@ -83,7 +81,6 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
         TextPosition(offset: 1));
     _values[index] = digit;
 
-    // Advance focus
     if (index < widget.length - 1) {
       _focusNodes[index + 1].requestFocus();
     } else {
@@ -111,7 +108,6 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
     }
   }
 
-  /// Clear all boxes programmatically
   void clear() {
     for (int i = 0; i < widget.length; i++) {
       _controllers[i].clear();
@@ -123,6 +119,7 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(widget.length, (i) {
@@ -133,16 +130,14 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
           margin: EdgeInsets.symmetric(
               horizontal: widget.length <= 6 ? 5 : 3),
           decoration: BoxDecoration(
-            color: filled
-                ? GlassColors.accentGreenSurface
-                : GlassColors.surfaceWhite,
+            color: filled ? fx.accentSurface : fx.glassSurface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: focused
-                  ? GlassColors.accentGreen
+                  ? fx.accent
                   : filled
-                      ? GlassColors.accentGreenBorder
-                      : GlassColors.borderWhite,
+                      ? fx.accentBorder
+                      : fx.glassBorder,
               width: focused ? 1.5 : 0.8,
             ),
           ),
@@ -156,12 +151,12 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(widget.length), // allow paste
+                LengthLimitingTextInputFormatter(widget.length),
               ],
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
-                color: filled ? GlassColors.accentGreenLight : GlassColors.textPrimary,
+                color: filled ? fx.accentLight : fx.title,
                 letterSpacing: 0,
               ),
               decoration: const InputDecoration(
@@ -181,7 +176,6 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
   }
 }
 
-/// Resend OTP button with a countdown timer
 class ResendOtpButton extends StatefulWidget {
   final Future<void> Function() onResend;
   final int cooldownSeconds;
@@ -228,24 +222,25 @@ class _ResendOtpButtonState extends State<ResendOtpButton> {
 
   @override
   Widget build(BuildContext context) {
+    final fx = context.fx;
     if (_loading) {
-      return const SizedBox(
+      return SizedBox(
         height: 20, width: 20,
         child: CircularProgressIndicator(
-            strokeWidth: 2, color: GlassColors.accentGreenLight),
+            strokeWidth: 2, color: fx.accentLight),
       );
     }
 
     if (_seconds > 0) {
       return RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 13, color: GlassColors.textTertiary),
+          style: TextStyle(fontSize: 13, color: fx.textTertiary),
           children: [
             const TextSpan(text: 'Resend code in '),
             TextSpan(
               text: '$_seconds s',
-              style: const TextStyle(
-                  color: GlassColors.accentGreenLight, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                  color: fx.accentLight, fontWeight: FontWeight.w700),
             ),
           ],
         ),
@@ -254,14 +249,14 @@ class _ResendOtpButtonState extends State<ResendOtpButton> {
 
     return GestureDetector(
       onTap: _resend,
-      child: const Text(
+      child: Text(
         'Resend OTP',
         style: TextStyle(
           fontSize: 13,
-          color: GlassColors.accentGreenLight,
+          color: fx.accentLight,
           fontWeight: FontWeight.w700,
           decoration: TextDecoration.underline,
-          decorationColor: GlassColors.accentGreenLight,
+          decorationColor: fx.accentLight,
         ),
       ),
     );

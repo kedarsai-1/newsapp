@@ -14,6 +14,15 @@ abstract final class ShortsFeedTuning {
 
   static const scrollPhysics = _ShortsSnapScrollPhysics();
 
+  /// Prefetch thumbnails for the first cards (instant paint on tab open).
+  static void precacheInitialBatch(BuildContext context, List<NewsPost> posts) {
+    if (posts.isEmpty) return;
+    final count = posts.length.clamp(0, 5);
+    for (var i = 0; i < count; i++) {
+      precacheThumbnails(context, posts, i);
+    }
+  }
+
   static void precacheThumbnails(
     BuildContext context,
     List<NewsPost> posts,

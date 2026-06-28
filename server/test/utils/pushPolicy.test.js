@@ -69,6 +69,16 @@ describe('pushPolicy', () => {
     assert.match(buildIngestNotification(4).body, /4 new stories/i);
   });
 
+  it('uses article headline as notification title when provided', () => {
+    const one = buildIngestNotification(1, { headline: 'Election results announced' });
+    assert.equal(one.title, 'Election results announced');
+    assert.match(one.body, /Tap to read/i);
+
+    const many = buildIngestNotification(5, { headline: 'Market hits record high' });
+    assert.equal(many.title, 'Market hits record high');
+    assert.match(many.body, /4 more new stories/i);
+  });
+
   it('truncates long notification text', () => {
     const long = 'x'.repeat(300);
     const out = truncatePushText(long, 240);

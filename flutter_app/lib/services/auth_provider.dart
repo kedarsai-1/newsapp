@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
+import '../services/publisher_follow_service.dart';
 import '../services/push_notifications.dart';
 import '../constants.dart';
 
@@ -68,6 +69,7 @@ class AuthProvider extends ChangeNotifier {
         await ApiService.saveToken(res['token']);
         _user = User.fromJson(res['user']);
         await _saveUser(_user!);
+        await PublisherFollowService.migrateGuestFollowsToServer();
         await PushNotifications.syncAfterLogin();
         _loading = false;
         notifyListeners();
@@ -105,6 +107,7 @@ class AuthProvider extends ChangeNotifier {
         await ApiService.saveToken(res['token']);
         _user = User.fromJson(res['user']);
         await _saveUser(_user!);
+        await PublisherFollowService.migrateGuestFollowsToServer();
         await PushNotifications.syncAfterLogin();
         _loading = false;
         notifyListeners();
@@ -166,6 +169,7 @@ class AuthProvider extends ChangeNotifier {
     _error = null;
     _loading = false;
     await _saveUser(_user!);
+    await PublisherFollowService.migrateGuestFollowsToServer();
     await PushNotifications.syncAfterLogin();
     notifyListeners();
   }

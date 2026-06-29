@@ -70,7 +70,7 @@ const {
   hindiScopeTitleOrClause,
 } = require('../config/hindiRegionalScopes');
 
-const VALID_FEED_LANGUAGES = new Set(['en', 'hi', 'te']);
+const VALID_FEED_LANGUAGES = new Set(['en', 'hi', 'te', 'ta', 'kn', 'bn', 'ml']);
 const VALID_POLITICS_SCOPES = new Set([
   'andhra', 'telangana', 'india', 'international', 'north', 'states', 'delhi', 'all',
   ...HINDI_SCOPE_KEYS,
@@ -185,8 +185,8 @@ function languageWhere(langParam) {
     return {
       language: 'en',
       AND: [
-        { NOT: { language: { in: ['hi', 'te'] } } },
-        allowOriginalLanguages(['hin', 'tel', 'hi', 'te']),
+        { NOT: { language: { in: ['hi', 'te', 'ta', 'kn', 'bn', 'ml'] } } },
+        allowOriginalLanguages(['hin', 'tel', 'tam', 'kan', 'ben', 'mal', 'hi', 'te', 'ta', 'kn', 'bn', 'ml']),
         {
           NOT: {
             OR: [
@@ -211,6 +211,20 @@ function languageWhere(langParam) {
               { sourceName: containsInsensitive('the print hindi') },
               { sourceName: containsInsensitive('bbc hindi') },
               { sourceName: containsInsensitive('print hindi') },
+              { sourceName: containsInsensitive('bbc tamil') },
+              { sourceName: containsInsensitive('dinamani') },
+              { sourceName: containsInsensitive('oneindia tamil') },
+              { sourceName: containsInsensitive('the hindu tamil') },
+              { sourceName: containsInsensitive('prajavani') },
+              { sourceName: containsInsensitive('vijaya karnataka') },
+              { sourceName: containsInsensitive('udayavani') },
+              { sourceName: containsInsensitive('kannada prabha') },
+              { sourceName: containsInsensitive('vartha bharati') },
+              { sourceName: containsInsensitive('hosa digantha') },
+              { sourceName: containsInsensitive('bbc bangla') },
+              { sourceName: containsInsensitive('anandabazar') },
+              { sourceName: containsInsensitive('ebela') },
+              { sourceName: containsInsensitive('oneindia bengali') },
             ],
           },
         },
@@ -244,6 +258,56 @@ function languageWhere(langParam) {
       ],
     };
   }
+  if (lang === 'ta') {
+    return {
+      OR: [
+        { language: 'ta' },
+        { originalLanguage: 'tam' },
+        { sourceName: containsInsensitive('bbc tamil') },
+        { sourceName: containsInsensitive('dinamani') },
+        { sourceName: containsInsensitive('oneindia tamil') },
+        { sourceName: containsInsensitive('the hindu tamil') },
+      ],
+    };
+  }
+  if (lang === 'kn') {
+    return {
+      OR: [
+        { language: 'kn' },
+        { originalLanguage: 'kan' },
+        { sourceName: containsInsensitive('prajavani') },
+        { sourceName: containsInsensitive('vijaya karnataka') },
+        { sourceName: containsInsensitive('udayavani') },
+        { sourceName: containsInsensitive('kannada prabha') },
+        { sourceName: containsInsensitive('vartha bharati') },
+        { sourceName: containsInsensitive('hosa digantha') },
+      ],
+    };
+  }
+  if (lang === 'bn') {
+    return {
+      OR: [
+        { language: 'bn' },
+        { originalLanguage: 'ben' },
+        { sourceName: containsInsensitive('bbc bangla') },
+        { sourceName: containsInsensitive('anandabazar') },
+        { sourceName: containsInsensitive('ebela') },
+        { sourceName: containsInsensitive('oneindia bengali') },
+      ],
+    };
+  }
+  if (lang === 'ml') {
+    return {
+      OR: [
+        { language: 'ml' },
+        { originalLanguage: 'mal' },
+        { sourceName: containsInsensitive('bbc malayalam') },
+        { sourceName: containsInsensitive('mathrubhumi') },
+        { sourceName: containsInsensitive('manorama') },
+        { sourceName: containsInsensitive('madhyamam') },
+      ],
+    };
+  }
   return null;
 }
 
@@ -264,18 +328,32 @@ function politicsScopeAllowedForLanguage(scope, langParam) {
   const teScopes = new Set(['andhra', 'telangana', 'india', 'international']);
   const hiScopes = new Set(['india', 'international', ...HINDI_POLITICS_SCOPE_VALUES]);
   const enHiScopes = new Set(['india', 'international']);
+  const taScopes = new Set(['india', 'international', 'tamilnadu']);
+  const knScopes = new Set(['india', 'international', 'karnataka']);
+  const bnScopes = new Set(['india', 'international', 'westbengal']);
+  const mlScopes = new Set(['india', 'international', 'kerala']);
   if (langParam === 'te') return teScopes.has(ps);
   if (langParam === 'hi') return hiScopes.has(ps);
   if (langParam === 'en') return enHiScopes.has(ps);
+  if (langParam === 'ta') return taScopes.has(ps);
+  if (langParam === 'kn') return knScopes.has(ps);
+  if (langParam === 'bn') return bnScopes.has(ps);
+  if (langParam === 'ml') return mlScopes.has(ps);
   return true;
 }
 
 function applyEnglishScriptFilter(posts) {
   const hasDevanagari = (str) => /[\u0900-\u097F]/.test(str);
   const hasTelugu = (str) => /[\u0C00-\u0C7F]/.test(str);
+  const hasTamil = (str) => /[\u0B80-\u0BFF]/.test(str);
+  const hasKannada = (str) => /[\u0C80-\u0CFF]/.test(str);
+  const hasBengali = (str) => /[\u0980-\u09FF]/.test(str);
+  const hasMalayalam = (str) => /[\u0D00-\u0D7F]/.test(str);
   return posts.filter((p) => {
     const titleStr = p.title || '';
-    return !hasDevanagari(titleStr) && !hasTelugu(titleStr);
+    return !hasDevanagari(titleStr) && !hasTelugu(titleStr)
+      && !hasTamil(titleStr) && !hasKannada(titleStr)
+      && !hasBengali(titleStr) && !hasMalayalam(titleStr);
   });
 }
 
@@ -570,7 +648,7 @@ const getFeed = async (req, res) => {
     if (langParam && !VALID_FEED_LANGUAGES.has(langParam)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid language. Use en, hi, te, or all.',
+        message: 'Invalid language. Use en, hi, te, ta, kn, bn, ml, or all.',
       });
     }
 

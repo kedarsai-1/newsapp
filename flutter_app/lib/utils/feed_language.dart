@@ -13,6 +13,14 @@ bool postMatchesFeedLanguage(NewsPost post, String language) {
       return lang == 'te' || orig == 'tel' || _looksTelugu(post);
     case 'hi':
       return lang == 'hi' || orig == 'hin' || _looksHindi(post);
+    case 'ta':
+      return lang == 'ta' || orig == 'tam' || _looksTamil(post);
+    case 'kn':
+      return lang == 'kn' || orig == 'kan' || _looksKannada(post);
+    case 'bn':
+      return lang == 'bn' || orig == 'ben' || _looksBengali(post);
+    case 'ml':
+      return lang == 'ml' || orig == 'mal' || _looksMalayalam(post);
     case 'en':
       return lang == 'en' || lang.isEmpty || orig == 'eng';
     default:
@@ -22,10 +30,30 @@ bool postMatchesFeedLanguage(NewsPost post, String language) {
 
 bool _looksTelugu(NewsPost post) {
   final t = '${post.title} ${post.summary ?? ''}';
-  return RegExp(r'[\u0C00-\u0C7F]').hasMatch(t);
+  return RegExp(r'[ఀ-౿]').hasMatch(t);
 }
 
 bool _looksHindi(NewsPost post) {
   final t = '${post.title} ${post.summary ?? ''}';
-  return RegExp(r'[\u0900-\u097F]').hasMatch(t);
+  return RegExp(r'[ऀ-ॿ]').hasMatch(t);
+}
+
+bool _looksTamil(NewsPost post) {
+  final t = '${post.title} ${post.summary ?? ''}';
+  return RegExp(r'[஀-௿]').hasMatch(t);
+}
+
+bool _looksKannada(NewsPost post) {
+  final t = '${post.title} ${post.summary ?? ''}';
+  return RegExp(r'[ಀ-೿]').hasMatch(t);
+}
+
+bool _looksBengali(NewsPost post) {
+  final t = '${post.title} ${post.summary ?? ''}';
+  return RegExp(r'[ঀ-৿]').hasMatch(t);
+}
+
+bool _looksMalayalam(NewsPost post) {
+  final t = '${post.title} ${post.summary ?? ''}';
+  return RegExp(r'[ഀ-ൿ]').hasMatch(t);
 }

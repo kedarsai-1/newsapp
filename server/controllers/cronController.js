@@ -156,7 +156,7 @@ const runLanguageIngestionCron = async (req, res) => {
     if (!lang) {
       return res.status(400).json({
         success: false,
-        message: 'Provide lang query/path: en, hi, or te — or enable INGEST_PER_LANGUAGE + INGEST_PARALLEL_LANGUAGES.',
+        message: 'Provide lang query/path: en, hi, te, ta, kn, bn, or ml — or enable INGEST_PER_LANGUAGE + INGEST_PARALLEL_LANGUAGES.',
       });
     }
 

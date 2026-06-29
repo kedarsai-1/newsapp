@@ -169,6 +169,49 @@ const baseRssFeeds = [
   // Category URLs can change; keep only confirmed-working endpoints.
   { name: '123Telugu', url: 'https://www.123telugu.com/feed', categorySlug: 'general', language: 'te', ogImageFallback: true },
   { name: '123Telugu - Movies', url: 'https://www.123telugu.com/category/mnews/feed', categorySlug: 'entertainment', language: 'te', ogImageFallback: true },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAMIL - Working feeds
+  // ═══════════════════════════════════════════════════════════════════════════
+  { name: 'BBC Tamil', url: 'https://feeds.bbci.co.uk/tamil/rss.xml', categorySlug: 'general', language: 'ta', ogImageFallback: true },
+  { name: 'BBC Tamil - India', url: 'https://feeds.bbci.co.uk/tamil/india/rss.xml', categorySlug: 'politics', language: 'ta', politicsScope: 'india', ogImageFallback: true },
+  { name: 'BBC Tamil - World', url: 'https://feeds.bbci.co.uk/tamil/world/rss.xml', categorySlug: 'politics', language: 'ta', politicsScope: 'international', ogImageFallback: true },
+  { name: 'Dinamani', url: 'https://www.dinamani.com/rssfeed.asp', categorySlug: 'general', language: 'ta', ogImageFallback: true },
+  { name: 'Dinamani - Tamil Nadu', url: 'https://www.dinamani.com/tamilnadu/rssfeed.asp', categorySlug: 'local', language: 'ta', politicsScope: 'tamilnadu', locationState: 'Tamil Nadu', ogImageFallback: true },
+  { name: 'OneIndia Tamil', url: 'https://tamil.oneindia.com/rssfeed.xml', categorySlug: 'general', language: 'ta', ogImageFallback: true },
+  { name: 'The Hindu - Tamil', url: 'https://www.thehindu.com/tamilnadu/feeder/default.rss', categorySlug: 'general', language: 'ta', ogImageFallback: true },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // KANNADA - Working feeds
+  // ═══════════════════════════════════════════════════════════════════════════
+  { name: 'Prajavani Kannada', url: 'https://www.prajavani.com/feed', categorySlug: 'general', language: 'kn', ogImageFallback: true },
+  { name: 'Vijaya Karnataka', url: 'https://vijaykarnataka.com/rss/feed/', categorySlug: 'general', language: 'kn', ogImageFallback: true },
+  { name: 'Udayavani', url: 'https://www.udayavani.com/feed', categorySlug: 'general', language: 'kn', ogImageFallback: true },
+  { name: 'Kannada Prabha', url: 'https://www.kannadaprabha.com/feed', categorySlug: 'general', language: 'kn', ogImageFallback: true },
+  { name: 'Vartha Bharati', url: 'https://varthabharati.com/feed', categorySlug: 'general', language: 'kn', ogImageFallback: true },
+  { name: 'Hosa Digantha', url: 'https://www.hosadigantha.com/feed', categorySlug: 'general', language: 'kn', ogImageFallback: true },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MALAYALAM - Working feeds
+  // ═══════════════════════════════════════════════════════════════════════════
+  { name: 'BBC Malayalam', url: 'https://feeds.bbci.co.uk/malayalam/rss.xml', categorySlug: 'general', language: 'ml', ogImageFallback: true },
+  { name: 'Mathrubhumi', url: 'https://www.mathrubhumi.com/rss/news/malayalam.xml', categorySlug: 'general', language: 'ml', ogImageFallback: true },
+  { name: 'Manorama Online', url: 'https://www.manoramaonline.com/rss/news/malayalam.xml', categorySlug: 'general', language: 'ml', ogImageFallback: true },
+  { name: 'Madhyamam', url: 'https://www.madhyamam.com/rss/malayalam.xml', categorySlug: 'general', language: 'ml', ogImageFallback: true },
+  { name: 'Reporter Malayalam', url: 'https://www.reporterlive.com/rss/feed', categorySlug: 'general', language: 'ml', ogImageFallback: true },
+  { name: 'Asianet News Malayalam', url: 'https://www.asianetnews.tv/feed', categorySlug: 'general', language: 'ml', ogImageFallback: true },
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BENGALI - Working feeds
+  // ═══════════════════════════════════════════════════════════════════════════
+  { name: 'BBC Bangla', url: 'https://feeds.bbci.co.uk/bengali/rss.xml', categorySlug: 'general', language: 'bn', ogImageFallback: true },
+  { name: 'BBC Bangla - India', url: 'https://feeds.bbci.co.uk/bengali/india/rss.xml', categorySlug: 'politics', language: 'bn', politicsScope: 'india', ogImageFallback: true },
+  { name: 'BBC Bangla - World', url: 'https://feeds.bbci.co.uk/bengali/world/rss.xml', categorySlug: 'politics', language: 'bn', politicsScope: 'international', ogImageFallback: true },
+  { name: 'Anandabazar', url: 'https://www.anandabazar.com/rss/feed/', categorySlug: 'general', language: 'bn', ogImageFallback: true },
+  { name: 'EBela', url: 'https://ebela.in/rss.xml', categorySlug: 'general', language: 'bn', ogImageFallback: true },
+  { name: 'The Hindu - Bengali', url: 'https://www.thehindu.com/bengal/feeder/default.rss', categorySlug: 'general', language: 'bn', ogImageFallback: true },
+  { name: 'OneIndia Bengali', url: 'https://bengali.oneindia.com/rssfeed.xml', categorySlug: 'general', language: 'bn', ogImageFallback: true },
+
   // Weather alerts & forecast news (IMD / global humanitarian alerts)
   { name: 'ReliefWeb - India Weather', url: 'https://reliefweb.int/country/ind/feed.xml?format=atom&theme=Environment%20and%20Climate', categorySlug: 'weather', language: 'en', ogImageFallback: true },
   { name: 'BBC Weather', url: 'https://feeds.bbci.co.uk/weather/feeds/rss.xml', categorySlug: 'weather', language: 'en' },

@@ -16,6 +16,7 @@ class OnboardingLanguageScreen extends StatelessWidget {
     (code: 'ta', native: 'தமிழ்', english: 'Tamil'),
     (code: 'kn', native: 'ಕನ್ನಡ', english: 'Kannada'),
     (code: 'ml', native: 'മലയാളം', english: 'Malayalam'),
+    (code: 'bn', native: 'বাংলা', english: 'Bengali'),
   ];
 
   @override

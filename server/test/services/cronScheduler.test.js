@@ -61,6 +61,13 @@ describe('cronScheduler', () => {
     originalEnv = {
       SCRAPER_ENABLED: process.env.SCRAPER_ENABLED,
       SCRAPER_CRON: process.env.SCRAPER_CRON,
+      SCRAPER_CRON_EN: process.env.SCRAPER_CRON_EN,
+      SCRAPER_CRON_HI: process.env.SCRAPER_CRON_HI,
+      SCRAPER_CRON_TE: process.env.SCRAPER_CRON_TE,
+      SCRAPER_CRON_TA: process.env.SCRAPER_CRON_TA,
+      SCRAPER_CRON_KN: process.env.SCRAPER_CRON_KN,
+      SCRAPER_CRON_BN: process.env.SCRAPER_CRON_BN,
+      SCRAPER_CRON_ML: process.env.SCRAPER_CRON_ML,
       SCRAPER_RUN_ON_START: process.env.SCRAPER_RUN_ON_START,
       YOUTUBE_ENABLED: process.env.YOUTUBE_ENABLED,
       YOUTUBE_CRON: process.env.YOUTUBE_CRON,
@@ -92,13 +99,10 @@ describe('cronScheduler', () => {
 
   beforeEach(() => {
     scheduledJobs = [];
-    
-    // Clear the internal 'started' flag inside cronScheduler.js module state by altering cache or using a custom reset
-    // Wait, cronScheduler exports startCronScheduler, but doesn't export the 'started' variable.
-    // In Node.js, we can delete the module from require cache and re-require it to reset its local state!
+
+    // Delete module from cache so 'started' flag resets to false on re-require.
     const modulePath = require.resolve('../../services/cronScheduler');
     delete require.cache[modulePath];
-    // Re-require
     cronSchedulerStateReset = require('../../services/cronScheduler');
 
     // Default env setup for testing (Legacy mode)
@@ -117,6 +121,15 @@ describe('cronScheduler', () => {
     process.env.RETENTION_RUN_ON_START = 'false';
     process.env.INGEST_PER_LANGUAGE = 'false';
     process.env.INGEST_PARALLEL_LANGUAGES = 'false';
+
+    // Clear per-language cron env vars that other tests may have set
+    delete process.env.SCRAPER_CRON_EN;
+    delete process.env.SCRAPER_CRON_HI;
+    delete process.env.SCRAPER_CRON_TE;
+    delete process.env.SCRAPER_CRON_TA;
+    delete process.env.SCRAPER_CRON_KN;
+    delete process.env.SCRAPER_CRON_BN;
+    delete process.env.SCRAPER_CRON_ML;
 
     // Mock functions resets
     mockRunIngestion = async () => ({ success: true, stats: {} });
@@ -203,23 +216,33 @@ describe('cronScheduler', () => {
   });
 
   it('per-language mode (staggered): schedules separate staggered crons per language', () => {
+    // Previous test sets SCRAPER_ENABLED='false'; re-enable for this test
+    process.env.SCRAPER_ENABLED = 'true';
     process.env.INGEST_PER_LANGUAGE = 'true';
     process.env.INGEST_PARALLEL_LANGUAGES = 'false'; // staggered
 
     cronSchedulerStateReset.startCronScheduler();
 
-    // 1. Staggered lang crons: en, hi, te
+    // 1. Staggered lang crons: en, hi, te, ta, kn, bn, ml (7 pipelines)
     // 2. Retention: 10 3 * * *
     // 3. Morning brief: 30 1 * * *
-    assert.equal(scheduledJobs.length, 5);
-    
-    // Staggered expressions (15-min offset per language)
+    assert.equal(scheduledJobs.length, 9);
+
+    // Staggered expressions (15-min offset per language, per defaultNewsCronForLanguage).
+    // Note: en falls back to process.env.SCRAPER_CRON (set to '*/5 * * * *' in this test file).
     const expressions = scheduledJobs.map(j => j.expression);
-    assert.ok(expressions.includes('*/15 * * * *') || expressions.includes('*/5 * * * *')); // English
-    assert.ok(expressions.includes('5-59/15 * * * *') || expressions.includes('1-59/5 * * * *')); // Hindi
-    assert.ok(expressions.includes('10-59/15 * * * *') || expressions.includes('2-59/5 * * * *')); // Telugu
-    assert.ok(expressions.includes('10 3 * * *')); // Retention
-    assert.ok(expressions.includes('30 1 * * *')); // Morning brief
+    assert.ok(
+      expressions.includes('*/15 * * * *') || expressions.includes('*/5 * * * *'),
+      `en cron missing. Got: ${expressions.join(', ')}`,
+    );
+    assert.ok(expressions.includes('5-59/15 * * * *'), 'hi cron missing'); // hi :05
+    assert.ok(expressions.includes('10-59/15 * * * *'), 'te cron missing'); // te :10
+    assert.ok(expressions.includes('3-59/15 * * * *'), 'ta cron missing'); // ta :03
+    assert.ok(expressions.includes('8-59/15 * * * *'), 'kn cron missing'); // kn :08
+    assert.ok(expressions.includes('13-59/15 * * * *'), 'bn cron missing'); // bn :13
+    assert.ok(expressions.includes('18-59/15 * * * *'), 'ml cron missing'); // ml :18
+    assert.ok(expressions.includes('10 3 * * *'), 'retention cron missing');
+    assert.ok(expressions.includes('30 1 * * *'), 'morning brief cron missing');
   });
 
   it('disabled scheduler flags suppress respective cron schedules', () => {

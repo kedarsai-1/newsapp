@@ -17,7 +17,10 @@ describe('ingestLanguages', () => {
 
   it('lockKeyForLanguages uses single lang or global', () => {
     assert.equal(lockKeyForLanguages(['te']), 'te');
-    assert.equal(lockKeyForLanguages(['en', 'hi', 'te']), 'global');
+    // 'global' only when all 7 INGEST_LANGS are present
+    assert.equal(lockKeyForLanguages(['en', 'hi', 'te', 'ta', 'kn', 'bn', 'ml']), 'global');
+    // Partial list returns sorted join
+    assert.equal(lockKeyForLanguages(['en', 'hi', 'te']), 'en+hi+te');
   });
 
   it('filterByLanguages filters channel list', () => {

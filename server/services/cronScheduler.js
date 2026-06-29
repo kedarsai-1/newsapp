@@ -118,7 +118,7 @@ function scheduleParallelLanguagePipelines(isRailway, langs) {
   });
   console.log(
     `[ingest] parallel pipeline scheduler active cron="${cronExpr}" `
-      + `langs=${langs.join(',')} (en + hi + te run together each tick)`,
+      + `langs=${langs.join(',')} (all configured languages run together each tick)`,
   );
 
   if (runOnStart) {
@@ -313,7 +313,7 @@ function startCronScheduler() {
     console.log(
       `[ingest] per-language mode ON — workers: ${getWorkerLanguages().join(', ')} `
         + `parallel=${isParallelLanguageIngestEnabled() ? 'yes' : 'no (staggered crons)'} `
-        + `(set INGEST_WORKER_LANG=en|hi|te for single-language deployment)`,
+        + `(set INGEST_WORKER_LANG=en|hi|te|ta|kn|bn|ml for single-language deployment)`,
     );
     if (process.env.SCRAPER_ENABLED !== 'false') {
       schedulePerLanguagePipelines(isRailway);

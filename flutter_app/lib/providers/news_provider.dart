@@ -184,16 +184,11 @@ class NewsProvider extends ChangeNotifier {
 
   SavedLocalPlace? get activeSavedLocation => savedLocationAt(_activeLocationSlot);
 
-  /// Maps onboarding picks (Tamil/Kannada/Malayalam) to a feed language the API supports.
+  /// Maps onboarding picks (Tamil/Kannada/Malayalam/Bengali) to a feed language the API supports.
   static String feedLanguageFromUiChoice(String uiCode) {
-    switch (uiCode.toLowerCase()) {
-      case 'ta':
-      case 'kn':
-      case 'ml':
-        return 'all';
-      default:
-        return uiCode.toLowerCase();
-    }
+    final normalized = uiCode.trim().toLowerCase();
+    if (normalized.isEmpty) return 'all';
+    return normalized;
   }
 
   void _applyActiveSavedLocation({bool notify = true}) {
@@ -857,9 +852,7 @@ class NewsProvider extends ChangeNotifier {
     _hasStoredFeedLanguagePreference = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_languagePrefKey, languageCode);
-    if (languageCode == 'en' ||
-        languageCode == 'te' ||
-        languageCode == 'hi') {
+    if (['en', 'te', 'hi', 'ta', 'kn', 'bn', 'ml'].contains(languageCode)) {
       _onboardingUiLanguage = languageCode;
       await prefs.setString(_onboardingUiLangKey, languageCode);
     }
@@ -929,14 +922,12 @@ class NewsProvider extends ChangeNotifier {
 
   bool get shouldShowPoliticalScopeDropdown {
     if (!isPoliticsMode) return false;
-    return selectedLanguage == 'te' ||
-        selectedLanguage == 'hi' ||
-        selectedLanguage == 'en';
+    return ['en', 'hi', 'te', 'ta', 'kn', 'bn', 'ml'].contains(selectedLanguage);
   }
 
   bool get shouldShowLocalScopeDropdown {
     if (!isLocalMode) return false;
-    return selectedLanguage == 'te' || selectedLanguage == 'hi';
+    return ['en', 'hi', 'te', 'ta', 'kn', 'bn', 'ml'].contains(selectedLanguage);
   }
 
   List<String> get availablePoliticalConstituencies {

@@ -1,5 +1,5 @@
 /**
- * YouTube search queries mapped to app category slugs + language (te / hi / en).
+ * YouTube search queries mapped to app category slugs + language (en / hi / te / ta / kn / bn / ml).
  * Override via YOUTUBE_SEARCH_JSON env if needed.
  */
 const youtubeSearchPlan = [
@@ -30,6 +30,34 @@ const youtubeSearchPlan = [
   { categorySlug: 'business', query: 'hindi business news', language: 'hi' },
   { categorySlug: 'entertainment', query: 'hindi entertainment news', language: 'hi' },
   { categorySlug: 'technology', query: 'hindi technology news', language: 'hi' },
+  // Tamil
+  { categorySlug: 'general', query: 'tamil news today', language: 'ta' },
+  { categorySlug: 'general', query: '#shorts tamil news', language: 'ta' },
+  { categorySlug: 'politics', query: 'tamil politics news', language: 'ta' },
+  { categorySlug: 'sports', query: 'tamil sports news', language: 'ta' },
+  { categorySlug: 'entertainment', query: 'tamil cinema news', language: 'ta' },
+  { categorySlug: 'technology', query: 'tamil technology news', language: 'ta' },
+  // Kannada
+  { categorySlug: 'general', query: 'kannada news today', language: 'kn' },
+  { categorySlug: 'general', query: '#shorts kannada news', language: 'kn' },
+  { categorySlug: 'politics', query: 'kannada politics news', language: 'kn' },
+  { categorySlug: 'sports', query: 'kannada sports news', language: 'kn' },
+  { categorySlug: 'entertainment', query: 'kannada cinema news', language: 'kn' },
+  { categorySlug: 'technology', query: 'kannada technology news', language: 'kn' },
+  // Bengali
+  { categorySlug: 'general', query: 'bengali news today', language: 'bn' },
+  { categorySlug: 'general', query: '#shorts bengali news', language: 'bn' },
+  { categorySlug: 'politics', query: 'bengali politics news', language: 'bn' },
+  { categorySlug: 'sports', query: 'bengali sports news', language: 'bn' },
+  { categorySlug: 'entertainment', query: 'bengali entertainment news', language: 'bn' },
+  { categorySlug: 'technology', query: 'bengali technology news', language: 'bn' },
+  // Malayalam
+  { categorySlug: 'general', query: 'malayalam news today', language: 'ml' },
+  { categorySlug: 'general', query: '#shorts malayalam news', language: 'ml' },
+  { categorySlug: 'politics', query: 'malayalam politics news', language: 'ml' },
+  { categorySlug: 'sports', query: 'malayalam sports news', language: 'ml' },
+  { categorySlug: 'entertainment', query: 'malayalam cinema news', language: 'ml' },
+  { categorySlug: 'technology', query: 'malayalam technology news', language: 'ml' },
 ];
 
 function parseChannelIds(raw) {
@@ -71,10 +99,27 @@ const defaultYoutubeChannels = [
   { channelId: 'UCPXTXMecYqnRKNdqdVOGSFg', language: 'te', categorySlug: 'general' },
   { channelId: 'UCwqusr8YDwM-3mEYTDeJHzw', language: 'en', categorySlug: 'general' },
   { channelId: 'UCt4t-jeY85JegMlZ-E5UWtA', language: 'hi', categorySlug: 'general' },
+  // Tamil channels
+  { channelId: 'UCV89v___FDmzRfLU2Oz5YvA', language: 'ta', categorySlug: 'general' },
+  { channelId: 'UCFNWpAhjCH98PV6sify5KBQ', language: 'ta', categorySlug: 'general' },
+  { channelId: 'UCKMYktpmV0Cd-p99c1g0WjQ', language: 'ta', categorySlug: 'general' },
+  // Kannada channels
+  { channelId: 'UCI3tKqpCZBeDmZIg_FTCXDQ', language: 'kn', categorySlug: 'general' },
+  { channelId: 'UCJ5OPjf3buHlJaPMIlpqkrg', language: 'kn', categorySlug: 'general' },
+  { channelId: 'UCNNjc-6MfgZW5Z4RQbD61bw', language: 'kn', categorySlug: 'general' },
+  // Bengali channels
+  { channelId: 'UC2NKRsJGvWqorl7qRFhCiqg', language: 'bn', categorySlug: 'general' },
+  { channelId: 'UCMi-U96VoC1GusKpP_KnYQA', language: 'bn', categorySlug: 'general' },
+  { channelId: 'UCv8jY9q4Zv0xMpRdZ0xSQg', language: 'bn', categorySlug: 'general' },
+  // Malayalam channels
+  { channelId: 'UCWL95J7bR25nz8DUqmISfWA', language: 'ml', categorySlug: 'general' },
+  { channelId: 'UCqC5V2u6p0x1H0XoS4xT6w', language: 'ml', categorySlug: 'general' },
+  { channelId: 'UCgG3M_mJwB8tMF3vDal_CKg', language: 'ml', categorySlug: 'general' },
 ];
 
 /**
- * Channel IDs per language — set YOUTUBE_CHANNEL_IDS_TE / _HI / _EN (or YOUTUBE_CHANNEL_IDS → en).
+ * Channel IDs per language — set YOUTUBE_CHANNEL_IDS_TE / _HI / _EN / _TA / _KN / _BN / _ML
+ * (or YOUTUBE_CHANNEL_IDS → en).
  */
 function getYoutubeChannelsByLanguage() {
   const seen = new Set();
@@ -99,6 +144,10 @@ function getYoutubeChannelsByLanguage() {
   addFromEnv('YOUTUBE_CHANNEL_IDS_TE', 'te');
   addFromEnv('YOUTUBE_CHANNEL_IDS_HI', 'hi');
   addFromEnv('YOUTUBE_CHANNEL_IDS_EN', 'en');
+  addFromEnv('YOUTUBE_CHANNEL_IDS_TA', 'ta');
+  addFromEnv('YOUTUBE_CHANNEL_IDS_KN', 'kn');
+  addFromEnv('YOUTUBE_CHANNEL_IDS_BN', 'bn');
+  addFromEnv('YOUTUBE_CHANNEL_IDS_ML', 'ml');
   if (out.length === 0) {
     addFromEnv('YOUTUBE_CHANNEL_IDS', 'en');
   }

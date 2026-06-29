@@ -1,12 +1,12 @@
 /**
- * Production language-scoped ingestion (en / hi / te).
+ * Production language-scoped ingestion (en / hi / te / ta / kn / bn / ml).
  *
  * Modes:
  * - INGEST_PER_LANGUAGE=true — cron runs separate pipelines per language (staggered).
  * - INGEST_WORKER_LANG=te — single-language worker (e.g. dedicated Railway service).
  */
 
-const INGEST_LANGS = ['en', 'hi', 'te'];
+const INGEST_LANGS = ['en', 'hi', 'te', 'ta', 'kn', 'bn', 'ml'];
 
 function normalizeLanguage(lang) {
   return String(lang || '').trim().toLowerCase();
@@ -25,7 +25,7 @@ function isPerLanguageIngestEnabled() {
     || Boolean(process.env.INGEST_WORKER_LANG?.trim());
 }
 
-/** Run en/hi/te pipelines concurrently (default on when per-language mode). */
+/** Run en/hi/te/ta/kn/bn/ml pipelines concurrently (default on when per-language mode). */
 function isParallelLanguageIngestEnabled() {
   if (process.env.INGEST_PARALLEL_LANGUAGES === 'false') return false;
   if (process.env.INGEST_PARALLEL_LANGUAGES === 'true') return true;
@@ -107,20 +107,20 @@ function getIngestBudgetMs(language) {
 
 /** Default staggered news cron per language (offsets avoid Ollama/API pile-up). */
 function defaultNewsCronForLanguage(language) {
-  const offsets = { en: 0, hi: 5, te: 10 };
+  const offsets = { en: 0, hi: 5, te: 10, ta: 3, kn: 8, bn: 13, ml: 18 };
   const offset = offsets[normalizeLanguage(language)] ?? 0;
   if (offset === 0) return process.env.SCRAPER_CRON || '*/15 * * * *';
   return `${offset}-59/15 * * * *`;
 }
 
 function defaultYoutubeCronForLanguage(language) {
-  const offsets = { en: 0, hi: 20, te: 40 };
+  const offsets = { en: 0, hi: 20, te: 40, ta: 10, kn: 50, bn: 30, ml: 55 };
   const offset = offsets[normalizeLanguage(language)] ?? 0;
   return `${offset} */6 * * *`;
 }
 
 function defaultPoliticalCronForLanguage(language) {
-  const offsets = { en: 0, hi: 5, te: 10 };
+  const offsets = { en: 0, hi: 5, te: 10, ta: 2, kn: 7, bn: 12, ml: 17 };
   const offset = offsets[normalizeLanguage(language)] ?? 0;
   return `${offset},${offset + 15},${offset + 30},${offset + 45} * * * *`;
 }

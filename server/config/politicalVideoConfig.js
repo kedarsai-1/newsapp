@@ -42,6 +42,34 @@ const POLITICAL_KEYWORDS = {
     'दिल्ली', 'उत्तर प्रदेश', 'बिहार', 'महाराष्ट्र', 'राजनेता',
     'मतदान', 'वोट', 'चुनावी', 'घोषणापत्र', 'आरोप',
   ],
+  ta: [
+    // Tamil script political terms
+    'முதல்வர்', 'அமைச்சர்', 'சட்டமன்ற', 'தேர்தல்', 'நாடாளுமன்ற', 'நேர்காணல்',
+    'கட்சி', 'பத்திரிகை', 'மாநாடு', 'அரசியல்', 'பிரச்சாரம்', 'வாக்கெடுப்பு',
+    'தமிழக', 'சென்னை', 'மு.க.ஸ்டாலின்', 'எடப்பாடி', 'பழனிசாமி',
+    'டிஎம்கே', 'அதிமுக', 'காங்கிரஸ்', 'பாஜக', 'மார்க்சிஸ்ட்',
+  ],
+  kn: [
+    // Kannada script political terms
+    'ಮುಖ್ಯಮಂತ್ರಿ', 'ಸಚಿವ', 'ವಿಧಾನಸಭೆ', 'ಚುನಾವಣೆ', 'ಸಂಸತ್ತು', 'ಸಂದರ್ಶನ',
+    'ಪಕ್ಷ', 'ಪತ್ರಿಕಾ ಸಮ್ಮೇಳನ', 'ರಾಜಕೀಯ', 'ಪ್ರಚಾರ', 'ಮತದಾನ',
+    'ಕರ್ನಾಟಕ', 'ಬೆಂಗಳೂರು', 'ಸಿದ್ದರಾಮಯ್ಯ', 'ಯಡಿಯೂರಪ್ಪ',
+    'ಕಾಂಗ್ರೆಸ್', 'ಬಿಜೆಪಿ', 'ಜೆಡಿಎಸ್', 'ಎಐಸಿಡಿ',
+  ],
+  bn: [
+    // Bengali script political terms
+    'মুখ্যমন্ত্রী', 'মন্ত্রী', 'বিধানসভা', 'নির্বাচন', 'সংসদ', 'সাক্ষাৎকার',
+    'দল', 'সাংবাদিক সম্মেলন', 'রাজনীতি', 'প্রচার', 'ভোট',
+    'পশ্চিমবঙ্গ', 'কলকাতা', 'মমতা', 'শেখ হাসিনা', 'বিজেপি', 'কংগ্রেস',
+    'তৃণমূল', 'সিপিএম', 'আইএসএফ',
+  ],
+  ml: [
+    // Malayalam script political terms
+    'മുഖ്യമന്ത്രി', 'മന്ത്രി', 'നിയമസഭ', 'തെരഞ്ഞെടുപ്പ്', 'പാര്‍ലമെന്റ്', 'അഭിമുഖം',
+    'പാര്‍ട്ടി', 'വാര്‍ത്താ സമ്മേളനം', 'രാഷ്ട്രീയം', 'പ്രചാരണം', 'വോട്ട്',
+    'കേരളം', 'തിരുവനന്തപുരം', 'പിണറായി', 'ചിദംബരന്‍', 'ഉമ്മന്‍ ചാണ്ടി',
+    'കോണ്‍ഗ്രസ്', 'ബിജെപി', 'സിപിഎം', 'എല്‍ഡിഎഫ്', 'യുഡിഎഫ്',
+  ],
 };
 
 const BLACKLIST_KEYWORDS = [
@@ -102,6 +130,18 @@ const defaultPoliticalChannels = [
   { channelId: 'UCZFMm1mMw0F81Z37aaEzTUA', language: 'en', name: 'English Political 2' },
   { channelId: 'UCt4t-jeY85JegMlZ-E5UWtA', language: 'hi', name: 'Hindi Political 1' },
   { channelId: 'UC7wXt18f2iA3EDXeqAVuKng', language: 'hi', name: 'Hindi Political 2' },
+  // Tamil political channels
+  { channelId: 'UCV89v___FDmzRfLU2Oz5YvA', language: 'ta', name: 'Tamil Political 1' },
+  { channelId: 'UCFNWpAhjCH98PV6sify5KBQ', language: 'ta', name: 'Tamil Political 2' },
+  // Kannada political channels
+  { channelId: 'UCI3tKqpCZBeDmZIg_FTCXDQ', language: 'kn', name: 'Kannada Political 1' },
+  { channelId: 'UCJ5OPjf3buHlJaPMIlpqkrg', language: 'kn', name: 'Kannada Political 2' },
+  // Bengali political channels
+  { channelId: 'UC2NKRsJGvWqorl7qRFhCiqg', language: 'bn', name: 'Bengali Political 1' },
+  { channelId: 'UCMi-U96VoC1GusKpP_KnYQA', language: 'bn', name: 'Bengali Political 2' },
+  // Malayalam political channels
+  { channelId: 'UCWL95J7bR25nz8DUqmISfWA', language: 'ml', name: 'Malayalam Political 1' },
+  { channelId: 'UCgG3M_mJwB8tMF3vDal_CKg', language: 'ml', name: 'Malayalam Political 2' },
 ];
 
 function channelsFromCommaEnv(envKey, language) {
@@ -143,13 +183,21 @@ function getPoliticalYoutubeChannels() {
   const te = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_TE', 'te');
   const hi = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_HI', 'hi');
   const en = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_EN', 'en');
+  const ta = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_TA', 'ta');
+  const kn = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_KN', 'kn');
+  const bn = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_BN', 'bn');
+  const ml = channelsFromCommaEnv('POLITICAL_YOUTUBE_CHANNEL_IDS_ML', 'ml');
 
-  if (te.length || hi.length || en.length) {
+  const hasAny = te.length || hi.length || en.length || ta.length || kn.length || bn.length || ml.length;
+  if (hasAny) {
     const pick = (lang, fromEnv) =>
       fromEnv.length
         ? fromEnv
         : defaultPoliticalChannels.filter((c) => c.language === lang);
-    return [...pick('te', te), ...pick('hi', hi), ...pick('en', en)];
+    return [
+      ...pick('te', te), ...pick('hi', hi), ...pick('en', en),
+      ...pick('ta', ta), ...pick('kn', kn), ...pick('bn', bn), ...pick('ml', ml),
+    ];
   }
 
   return defaultPoliticalChannels;

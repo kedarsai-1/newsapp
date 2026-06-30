@@ -172,10 +172,15 @@ class _SportsHomeScreenState extends State<SportsHomeScreen> {
               showBack: true,
               onBack: _handleBack,
               actions: [
-                IconButton(
-                  tooltip: I18n.t(context, 'sports_leaderboard_tooltip'),
-                  onPressed: () => context.push('/sports/leaderboard'),
-                  icon: const Icon(Icons.emoji_events_outlined),
+                Semantics(
+                  label: I18n.t(context, 'sports_leaderboard_tooltip'),
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: IconButton(
+                    tooltip: I18n.t(context, 'sports_leaderboard_tooltip'),
+                    onPressed: () => context.push('/sports/leaderboard'),
+                    icon: const Icon(Icons.emoji_events_outlined),
+                  ),
                 ),
               ],
             ),

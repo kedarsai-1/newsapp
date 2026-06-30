@@ -71,7 +71,12 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
 
   static String? _countLabel(int n) {
     if (n <= 0) return null;
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) {
+      final k = n / 1000;
+      // Show "1k" not "1.0k"
+      return k == k.roundToDouble() ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
+    }
     return '$n';
   }
 
@@ -90,6 +95,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   }
 
   Future<void> _handleLike() async {
+    if (!mounted) return;
     setState(() => _liked = !_liked);
     final ok = await widget.onLike();
     if (!mounted || ok) return;
@@ -97,6 +103,7 @@ class _DailyhuntFeedArticleCardState extends State<DailyhuntFeedArticleCard> {
   }
 
   Future<void> _handleBookmark() async {
+    if (!mounted) return;
     setState(() => _saved = !_saved);
     final ok = await widget.onBookmark();
     if (!mounted || ok) return;

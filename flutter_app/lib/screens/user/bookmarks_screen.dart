@@ -105,7 +105,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     int removed = 0;
 
     for (final id in toRemove) {
-      final post = _bookmarks.firstWhere((p) => p.id == id);
+      final matches = _bookmarks.where((p) => p.id == id);
+      if (matches.isEmpty) continue;
+      final post = matches.first;
       if (loggedIn) {
         await ApiService.toggleBookmark(id);
       } else {
@@ -166,7 +168,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       if (diff.inMinutes < 60 && post.displayTime.day == now.day &&
           post.displayTime.month == now.month && post.displayTime.year == now.year) {
         key = 'Today';
-      } else if (diff.inHours < 48 && post.displayTime.day == now.day - 1 ||
+      } else if ((diff.inHours < 48 && post.displayTime.day == now.day - 1) ||
           (now.day == 1 && _isYesterday(post.displayTime, now))) {
         key = 'Yesterday';
       } else if (diff.inDays < 7) {
@@ -231,12 +233,16 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
               elevation: 0,
               foregroundColor: fx.title,
               leading: _selectMode
-                  ? IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => setState(() {
-                        _selectMode = false;
-                        _selectedIds.clear();
-                      }),
+                  ? Semantics(
+                      label: 'Exit selection mode',
+                      button: true,
+                      child: IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => setState(() {
+                          _selectMode = false;
+                          _selectedIds.clear();
+                        }),
+                      ),
                     )
                   : null,
               title: _selectMode
@@ -259,31 +265,43 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     ),
               actions: _selectMode
                   ? [
-                      IconButton(
-                        icon: const Icon(Icons.select_all_rounded),
-                        tooltip: 'Select all',
-                        onPressed: _selectAll,
+                      Semantics(
+                        label: 'Select all articles',
+                        button: true,
+                        child: IconButton(
+                          icon: const Icon(Icons.select_all_rounded),
+                          tooltip: 'Select all',
+                          onPressed: _selectAll,
+                        ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline_rounded, color: fx.error),
-                        tooltip: 'Remove selected',
-                        onPressed: _selectedIds.isNotEmpty ? _removeSelected : null,
+                      Semantics(
+                        label: 'Remove selected articles',
+                        button: true,
+                        child: IconButton(
+                          icon: Icon(Icons.delete_outline_rounded, color: fx.error),
+                          tooltip: 'Remove selected',
+                          onPressed: _selectedIds.isNotEmpty ? _removeSelected : null,
+                        ),
                       ),
                     ]
                   : [
-                      IconButton(
-                        icon: Icon(
-                          _viewMode == _ViewMode.list
-                              ? Icons.grid_view_rounded
-                              : Icons.view_list_rounded,
-                          color: fx.iconFg,
+                      Semantics(
+                        label: _viewMode == _ViewMode.list ? 'Switch to grid view' : 'Switch to list view',
+                        button: true,
+                        child: IconButton(
+                          icon: Icon(
+                            _viewMode == _ViewMode.list
+                                ? Icons.grid_view_rounded
+                                : Icons.view_list_rounded,
+                            color: fx.iconFg,
+                          ),
+                          tooltip: _viewMode == _ViewMode.list ? 'Grid view' : 'List view',
+                          onPressed: () => setState(() {
+                            _viewMode = _viewMode == _ViewMode.list
+                                ? _ViewMode.grid
+                                : _ViewMode.list;
+                          }),
                         ),
-                        tooltip: _viewMode == _ViewMode.list ? 'Grid view' : 'List view',
-                        onPressed: () => setState(() {
-                          _viewMode = _viewMode == _ViewMode.list
-                              ? _ViewMode.grid
-                              : _ViewMode.list;
-                        }),
                       ),
                     ],
               bottom: PreferredSize(
@@ -331,13 +349,17 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                         prefixIcon: Icon(Icons.search_rounded,
                             color: fx.textTertiary, size: 20),
                         suffixIcon: _searchQuery.isNotEmpty
-                            ? IconButton(
-                                icon: Icon(Icons.close_rounded,
-                                    color: fx.textTertiary, size: 18),
-                                onPressed: () {
-                                  _searchController.clear();
-                                  setState(() => _searchQuery = '');
-                                },
+                            ? Semantics(
+                                label: 'Clear search',
+                                button: true,
+                                child: IconButton(
+                                  icon: Icon(Icons.close_rounded,
+                                      color: fx.textTertiary, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                ),
                               )
                             : null,
                         border: InputBorder.none,
@@ -416,18 +438,18 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
             // ── Article Lists ────────────────────────────────────────
             else if (_viewMode == _ViewMode.list ||
                 (_searchQuery.isNotEmpty || _selectedCategoryId != null))
-              _buildGroupedList(horizontal, bottomInset, fx)
+              ..._buildGroupedList(horizontal, bottomInset, fx)
 
             // ── Grid ────────────────────────────────────────────────
             else
-              _buildGrid(horizontal, bottomInset, fx),
+              ..._buildGrid(horizontal, bottomInset, fx),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGroupedList(double horizontal, double bottomInset, dynamic fx) {
+  List<Widget> _buildGroupedList(double horizontal, double bottomInset, dynamic fx) {
     final groups = _groupByDate(_filtered);
     final sectionOrder = ['Today', 'Yesterday', 'This Week', 'Older'];
     final items = <Widget>[];
@@ -520,12 +542,10 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       child: SizedBox(height: bottomInset + 20),
     ));
 
-    return SliverList(
-      delegate: SliverChildListDelegate(items),
-    );
+    return items;
   }
 
-  Widget _buildGrid(double horizontal, double bottomInset, dynamic fx) {
+  List<Widget> _buildGrid(double horizontal, double bottomInset, dynamic fx) {
     final groups = _groupByDate(_filtered);
     final sectionOrder = ['Today', 'Yesterday', 'This Week', 'Older'];
     final items = <Widget>[];
@@ -585,9 +605,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       child: SizedBox(height: bottomInset + 20),
     ));
 
-    return SliverList(
-      delegate: SliverChildListDelegate(items),
-    );
+    return items;
   }
 }
 
@@ -705,44 +723,48 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? fx.accent : fx.glassSurface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? fx.accent : fx.glassBorder,
-            width: selected ? 1.5 : 1,
-          ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: fx.accent.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (emoji.isNotEmpty) ...[
-              Text(emoji, style: const TextStyle(fontSize: 14)),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: GoogleFonts.notoSans(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: selected ? Colors.white : fx.textSecondary,
-              ),
+    return Semantics(
+      button: true,
+      label: 'Filter by ${label.toLowerCase()}',
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? fx.accent : fx.glassSurface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? fx.accent : fx.glassBorder,
+              width: selected ? 1.5 : 1,
             ),
-          ],
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: fx.accent.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (emoji.isNotEmpty) ...[
+                Text(emoji, style: const TextStyle(fontSize: 14)),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: GoogleFonts.notoSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : fx.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -848,9 +870,13 @@ class _SavedListTile extends StatelessWidget {
         ),
         child: Icon(Icons.delete_outline_rounded, color: fx.error, size: 24),
       ),
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
+      child: Semantics(
+        label: 'Saved article: ${post.title}',
+        button: true,
+        onDismiss: () => onRemove(),
+        child: GestureDetector(
+          onTap: onTap,
+          onLongPress: onLongPress,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -876,8 +902,11 @@ class _SavedListTile extends StatelessWidget {
               if (selectMode)
                 Padding(
                   padding: const EdgeInsets.only(left: 12),
-                  child: GestureDetector(
-                    onTap: onToggleSelect,
+                  child: Semantics(
+                    button: true,
+                    label: '${selected ? 'Deselect' : 'Select'} article',
+                    child: GestureDetector(
+                      onTap: onToggleSelect,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: 22,
@@ -896,6 +925,7 @@ class _SavedListTile extends StatelessWidget {
                           : null,
                     ),
                   ),
+                ),
                 ),
 
               // Thumbnail
@@ -1002,13 +1032,16 @@ class _SavedListTile extends StatelessWidget {
               if (!selectMode)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints(minWidth: 32, minHeight: 32),
-                    tooltip: 'Remove',
-                    onPressed: onRemove,
+                  child: Semantics(
+                    label: 'Remove saved article',
+                    button: true,
+                    child: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 32, minHeight: 32),
+                      tooltip: 'Remove',
+                      onPressed: onRemove,
                     icon: Icon(
                       Icons.bookmark_remove_rounded,
                       size: 20,
@@ -1021,6 +1054,7 @@ class _SavedListTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -1052,10 +1086,13 @@ class _SavedGridCard extends StatelessWidget {
     final imgUrl = premiumImageUrl(post);
     final accent = fx.accent;
 
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
+    return Semantics(
+      label: 'Saved article: ${post.title}',
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
         decoration: BoxDecoration(
           color: fx.surfaceElevated,
           borderRadius: BorderRadius.circular(18),
@@ -1195,9 +1232,12 @@ class _SavedGridCard extends StatelessWidget {
                         ),
                       ),
                       if (!selectMode)
-                        GestureDetector(
-                          onTap: onRemove,
-                          child: Container(
+                        Semantics(
+                          label: 'Remove saved article',
+                          button: true,
+                          child: GestureDetector(
+                            onTap: onRemove,
+                            child: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.3),
@@ -1205,6 +1245,7 @@ class _SavedGridCard extends StatelessWidget {
                             ),
                             child: const Icon(Icons.bookmark_remove_rounded,
                                 color: Colors.white, size: 14),
+                            ),
                           ),
                         ),
                     ],
@@ -1214,6 +1255,7 @@ class _SavedGridCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1275,9 +1317,12 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
-            GestureDetector(
-              onTap: onExplore,
-              child: Container(
+            Semantics(
+              label: 'Explore feed',
+              button: true,
+              child: GestureDetector(
+                onTap: onExplore,
+                child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -1309,6 +1354,7 @@ class _EmptyState extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
                 ),
               ),
             ),

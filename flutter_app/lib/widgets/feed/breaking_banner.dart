@@ -4,6 +4,7 @@ import '../../models/models.dart';
 import '../../utils/i18n.dart';
 import '../../theme/app_palette.dart';
 import 'feed_xpresso_theme.dart';
+import 'breaking_banner_shared.dart';
 
 /// Persistent breaking news banner at the top of the feed
 /// Shows breaking headlines with auto-scrolling ticker
@@ -118,7 +119,7 @@ class _BreakingBannerState extends State<BreakingBanner>
                   ),
                 ),
                 const SizedBox(width: 6),
-                _LiveIndicator(color: Colors.white),
+                PulsingDot(color: Colors.white, size: 8),
               ],
             ),
           ),
@@ -177,58 +178,6 @@ class _BreakingBannerState extends State<BreakingBanner>
             ),
         ],
       ),
-    );
-  }
-}
-
-/// Pulsing live indicator dot
-class _LiveIndicator extends StatefulWidget {
-  final Color color;
-
-  const _LiveIndicator({required this.color});
-
-  @override
-  State<_LiveIndicator> createState() => _LiveIndicatorState();
-}
-
-class _LiveIndicatorState extends State<_LiveIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-    _controller.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: widget.color.withValues(alpha: _animation.value),
-            shape: BoxShape.circle,
-          ),
-        );
-      },
     );
   }
 }

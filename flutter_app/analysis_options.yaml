@@ -21,8 +21,28 @@ linter:
   # `// ignore_for_file: name_of_lint` syntax on the line or in the file
   # producing the lint.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    prefer_single_quotes: true
+    avoid_print: false  # Allow print statements for debug logging
+    prefer_final_locals: true  # Encourage using final for local variables
+
+    # Accessibility and inclusive naming rules
+    # Ensure all interactive widgets have proper semantics
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - sized_box_for_whitespace
+    - avoid_unnecessary_containers
+    - use_build_context_synchronously
+
+    # Additional rules that help with code quality
+    - avoid_web_libraries_in_mobile
+    - await_only_futures
+    - cancel_subscriptions
+    - close_sinks
+    - no_logic_in_create_state
+    - prefer_adjacent_string_concatenation
+    - prefer_if_null_operators
+    - prefer_is_not_empty
+    - use_colored_box
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

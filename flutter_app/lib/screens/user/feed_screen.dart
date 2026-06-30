@@ -412,17 +412,21 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          GestureDetector(
-            onTap: () async {
-              await news.selectCategory(null);
-            },
-            child: Container(
+          Semantics(
+            label: 'Clear topic filter',
+            button: true,
+            child: GestureDetector(
+              onTap: () async {
+                await news.selectCategory(null);
+              },
+              child: Container(
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: style.$2[0].withOpacity(0.20),
               ),
               child: Icon(Icons.close_rounded, size: 12, color: style.$2[0]),
+              ),
             ),
           ),
         ],
@@ -442,9 +446,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     final style = _categoryStyle(slug);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: GestureDetector(
-        onTap: () => onTap(),
-        child: Container(
+      child: Semantics(
+        label: '$label category',
+        button: true,
+        child: GestureDetector(
+          onTap: () => onTap(),
+          child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isSelected ? style.$2[0].withOpacity(0.15) : Colors.transparent,
@@ -475,6 +482,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   color: style.$2[0],
                 ),
             ],
+          ),
           ),
         ),
       ),
@@ -543,8 +551,11 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: GestureDetector(
-                    onTap: () async {
+                  child: Semantics(
+                    label: '${cat.name} category',
+                    button: true,
+                    child: GestureDetector(
+                      onTap: () async {
                       final slug = cat.slug.toLowerCase();
                       if (slug == 'sports' || slug == 'weather') {
                         setState(() => _sidebarOpen = false);
@@ -556,7 +567,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       _scrollFeedToTop();
                       setState(() => _sidebarOpen = false);
                     },
-                    child: Container(
+                      child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
                         color: isSelected
@@ -591,6 +602,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                               color: style.$2[0],
                             ),
                         ],
+                      ),
                       ),
                     ),
                   ),
@@ -816,13 +828,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               width: 260,
               child: ClipRRect(
                 child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: fx.overlayScrim,
+                      color: fx.background.withOpacity(0.85),
                       border: Border(
                         right: BorderSide(
-                          color: fx.onImage.withOpacity(0.08),
+                          color: fx.divider.withOpacity(0.5),
                           width: 0.8,
                         ),
                       ),
@@ -983,16 +995,19 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                       ..scale(scale)
                       ..rotateY(rotation),
                     alignment: Alignment.center,
-                    child: GestureDetector(
-                      onTap: () {
-                        _pageController.animateToPage(
-                          index,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOutCubic,
-                        );
-                        widget.onSelected(item.$2);
-                      },
-                      child: Container(
+                    child: Semantics(
+                      label: '${item.$1} category',
+                      button: true,
+                      child: GestureDetector(
+                        onTap: () {
+                          _pageController.animateToPage(
+                            index,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                          );
+                          widget.onSelected(item.$2);
+                        },
+                        child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
                           color: isSelected
@@ -1033,6 +1048,7 @@ class _CategoryCarouselWheelState extends State<CategoryCarouselWheel> {
                               ),
                             ),
                           ],
+                        ),
                         ),
                       ),
                     ),
@@ -1130,35 +1146,41 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
                   children: [
-                    IconButton(
-                      tooltip: onMenuPressed != null
+                    Semantics(
+                      label: onMenuPressed != null
                           ? I18n.t(context, 'feed_filter_topics')
-                          : 'Menu',
-                      onPressed: onMenuPressed ?? () => XpressoSideMenu.open(context),
-                      icon: onMenuPressed != null
-                          ? Icon(
-                              Icons.menu_open_rounded,
-                              size: 24,
-                              color: fx.accent,
-                            )
-                          : Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: fx.divider.withValues(alpha: 0.8),
-                                  width: 0.5,
+                          : 'Open profile menu',
+                      button: true,
+                      child: IconButton(
+                        tooltip: onMenuPressed != null
+                            ? I18n.t(context, 'feed_filter_topics')
+                            : 'Menu',
+                        onPressed: onMenuPressed ?? () => XpressoSideMenu.open(context),
+                        icon: onMenuPressed != null
+                            ? Icon(
+                                Icons.menu_open_rounded,
+                                size: 24,
+                                color: fx.accent,
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: fx.divider.withValues(alpha: 0.8),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: CircleAvatar(
+                                  radius: 17,
+                                  backgroundColor: fx.iconSurface,
+                                  child: Icon(
+                                    Icons.person_rounded,
+                                    size: 19,
+                                    color: fx.iconFg,
+                                  ),
                                 ),
                               ),
-                              child: CircleAvatar(
-                                radius: 17,
-                                backgroundColor: fx.iconSurface,
-                                child: Icon(
-                                  Icons.person_rounded,
-                                  size: 19,
-                                  color: fx.iconFg,
-                                ),
-                              ),
-                            ),
+                      ),
                     ),
                     Expanded(
                       child: FittedBox(
@@ -1207,29 +1229,37 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                         ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'AI News Assistant',
-                      onPressed: () => context.push('/ai-chat'),
-                      icon: Icon(
-                        Icons.auto_awesome_rounded,
-                        color: fx.accent,
+                    Semantics(
+                      label: 'Open AI news assistant',
+                      button: true,
+                      child: IconButton(
+                        tooltip: 'AI News Assistant',
+                        onPressed: () => context.push('/ai-chat'),
+                        icon: Icon(
+                          Icons.auto_awesome_rounded,
+                          color: fx.accent,
+                        ),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Notifications',
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('No new notifications'),
-                            duration: Duration(milliseconds: 1200),
-                            behavior: SnackBarBehavior.floating,
-                            width: 300,
-                          ),
-                        );
-                      },
-                      icon: Icon(
-                        Icons.notifications_none_rounded,
-                        color: fx.iconFg,
+                    Semantics(
+                      label: 'Open notifications',
+                      button: true,
+                      child: IconButton(
+                        tooltip: 'Notifications',
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('No new notifications'),
+                              duration: Duration(milliseconds: 1200),
+                              behavior: SnackBarBehavior.floating,
+                              width: 300,
+                            ),
+                          );
+                        },
+                        icon: Icon(
+                          Icons.notifications_none_rounded,
+                          color: fx.iconFg,
+                        ),
                       ),
                     ),
                   ],
@@ -1434,27 +1464,31 @@ class _PoliticalReelsEntry extends StatelessWidget {
       child: Material(
         color: fx.surface,
         borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => context.push('/political-reels'),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                Icon(Icons.play_circle_outline_rounded, color: fx.accent, size: 22),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Political interviews & debates',
-                    style: TextStyle(
-                      color: fx.title,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
+        child: Semantics(
+          label: 'Open political interviews and debates',
+          button: true,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => context.push('/political-reels'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.play_circle_outline_rounded, color: fx.accent, size: 22),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Political interviews & debates',
+                      style: TextStyle(
+                        color: fx.title,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: fx.iconFgMuted, size: 22),
-              ],
+                  Icon(Icons.chevron_right_rounded, color: fx.iconFgMuted, size: 22),
+                ],
+              ),
             ),
           ),
         ),

@@ -132,22 +132,29 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) {
-        setState(() => _isPressed = true);
-        _controller.forward();
-        HapticFeedback.selectionClick();
-      },
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        _controller.reverse();
-      },
-      onTapCancel: () {
-        setState(() => _isPressed = false);
-        _controller.reverse();
-      },
-      onTap: widget.onTap,
-      child: AnimatedBuilder(
+    return Semantics(
+      button: true,
+      label: '${widget.label} tab',
+      hint: widget.isSelected
+          ? 'Currently selected'
+          : 'Double tap to navigate to ${widget.label}',
+      selected: widget.isSelected,
+      child: GestureDetector(
+        onTapDown: (_) {
+          setState(() => _isPressed = true);
+          _controller.forward();
+          HapticFeedback.selectionClick();
+        },
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          _controller.reverse();
+        },
+        onTapCancel: () {
+          setState(() => _isPressed = false);
+          _controller.reverse();
+        },
+        onTap: widget.onTap,
+        child: AnimatedBuilder(
         animation: _scaleAnimation,
         builder: (context, child) {
           return Transform.scale(

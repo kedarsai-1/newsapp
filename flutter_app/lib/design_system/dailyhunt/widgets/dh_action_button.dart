@@ -106,7 +106,7 @@ class DhActionButton extends StatelessWidget {
       case DhActionStyle.glassDark:
         return ClipOval(
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: Container(
               width: 46,
               height: 46,

@@ -89,7 +89,7 @@ class _GlassOtpInputState extends State<GlassOtpInput> {
 
     final code = _values.join();
     widget.onChanged?.call(code);
-    if (code.length == widget.length && !code.contains('')) {
+    if (code.length == widget.length) {
       widget.onCompleted(code);
     }
     setState(() {});

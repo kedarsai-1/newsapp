@@ -177,27 +177,51 @@ class _LocalLocationPickerSheetState extends State<LocalLocationPickerSheet> {
           ],
           const SizedBox(height: 8),
           if (_loading) const LinearProgressIndicator(minHeight: 2),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _results.length,
-              itemBuilder: (context, index) {
-                final row = _results[index];
-                final name = row['name']?.toString() ?? '';
-                final district = row['district']?.toString() ?? '';
-                final state = row['state']?.toString() ?? '';
-                final selected = _selected?['name'] == name &&
-                    _selected?['district'] == district;
-                return ListTile(
-                  dense: true,
-                  selected: selected,
-                  title: Text(name),
-                  subtitle: Text('$district · $state'),
-                  onTap: () => setState(() => _selected = row),
-                );
-              },
+          if (_results.isEmpty && !_loading) ...[
+            const SizedBox(height: 40),
+            Icon(Icons.search_off, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
+            Text(
+              'No locations found',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
             ),
-          ),
+            const SizedBox(height: 8),
+            Text(
+              'Try searching with a different keyword or check the spelling.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ] else ...[
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _results.length,
+                itemBuilder: (context, index) {
+                  final row = _results[index];
+                  final name = row['name']?.toString() ?? '';
+                  final district = row['district']?.toString() ?? '';
+                  final state = row['state']?.toString() ?? '';
+                  final selected = _selected?['name'] == name &&
+                      _selected?['district'] == district;
+                  return ListTile(
+                    dense: true,
+                    selected: selected,
+                    title: Text(name),
+                    subtitle: Text('$district · $state'),
+                    onTap: () => setState(() => _selected = row),
+                  );
+                },
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           if (widget.initial != null && !widget.initial!.isEmpty)
             OutlinedButton(

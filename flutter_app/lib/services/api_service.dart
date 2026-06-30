@@ -4,11 +4,43 @@ import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants.dart';
 import '../models/models.dart';
 import '../models/saved_local_place.dart';
 import '../utils/api_memory_cache.dart';
+
+/// Secure storage for sensitive data (auth tokens).
+/// Falls back to in-memory only on web where flutter_secure_storage is limited.
+class _SecureStorage {
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  static Future<String?> read(String key) async {
+    if (kIsWeb) return null; // Tokens stay in memory on web
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> write(String key, String value) async {
+    if (kIsWeb) return;
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (_) {}
+  }
+
+  static Future<void> delete(String key) async {
+    if (kIsWeb) return;
+    try {
+      await _storage.delete(key: key);
+    } catch (_) {}
+  }
+}
 
 class ApiService {
   /// Render / free tiers can cold-start; keep this generous.
@@ -16,23 +48,21 @@ class ApiService {
 
   static String? _token;
   static bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+  /// Exposed for other services (e.g. SportsApiService) to reuse the same token.
+  static String? get token => _token;
 
   static Future<void> loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString(AppConstants.tokenKey);
+    _token = await _SecureStorage.read(AppConstants.tokenKey);
   }
 
   static Future<void> saveToken(String token) async {
     _token = token;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.tokenKey, token);
+    await _SecureStorage.write(AppConstants.tokenKey, token);
   }
 
   static Future<void> clearToken() async {
     _token = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(AppConstants.tokenKey);
-    await prefs.remove(AppConstants.userKey);
+    await _SecureStorage.delete(AppConstants.tokenKey);
   }
 
   static Map<String, String> get _headers => {
@@ -40,13 +70,40 @@ class ApiService {
         if (_token != null) 'Authorization': 'Bearer $_token',
       };
 
-  /// GET requests: no `Content-Type` so unauthenticated calls are browser "simple"
+  /// GET headers omit Content-Type so unauthenticated calls are browser "simple"
   /// requests (fewer CORS preflight failures on Flutter web).
   static Map<String, String> get _getHeaders => {
         'Accept': 'application/json',
         if (_token != null && _token!.isNotEmpty)
           'Authorization': 'Bearer $_token',
       };
+
+  /// Retry helper for network-level failures only (SocketException, TimeoutException).
+  /// Does NOT retry on application-level HTTP errors (4xx/5xx) or success==false responses.
+  static Future<Map<String, dynamic>> _retry(
+    Future<Map<String, dynamic>> Function() attempt, {
+    int maxRetries = 3,
+  }) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        return await attempt();
+      } catch (e) {
+        final isNetworkError = e is TimeoutException ||
+            e.toString().contains('SocketException') ||
+            e.toString().contains('Failed to fetch') ||
+            e.toString().contains('Network is unreachable');
+        if (!isNetworkError || i == maxRetries - 1) {
+          // Non-network error (e.g. 400/500 JSON response) — do not retry.
+          // Last retry exhausted — return immediately.
+          return {'success': false, 'message': _friendlyNetworkMessage(e)};
+        }
+      }
+      if (i < maxRetries - 1) {
+        await Future.delayed(Duration(seconds: 1 << i)); // 1, 2, 4 seconds
+      }
+    }
+    return {'success': false, 'message': 'Failed after $maxRetries attempts. Please try again.'};
+  }
 
   static String _friendlyNetworkMessage(Object e) {
     final raw = e.toString();
@@ -98,7 +155,7 @@ class ApiService {
         'success': false,
         'statusCode': res.statusCode,
         'message': res.statusCode == 404
-            ? 'Political videos API is not on this server yet. Deploy the latest backend or use http://127.0.0.1:5001/api locally.'
+            ? 'Political videos feature is not available. Please update the app.'
             : 'Server returned HTML instead of JSON.',
       };
     }
@@ -110,28 +167,19 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> _get(String path) async {
-    try {
-      final res = await http
-          .get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _getHeaders)
-          .timeout(_httpTimeout);
-      return _decodeGetResponse(res);
-    } on TimeoutException {
-      return {
-        'success': false,
-        'message':
-            'Request timed out. The API may be waking up — pull to refresh in a moment.',
-      };
-    } on FormatException {
-      return {
-        'success': false,
-        'message': 'Could not read data from the server (invalid JSON).',
-      };
-    } catch (e) {
-      return {
-        'success': false,
-        'message': _friendlyNetworkMessage(e),
-      };
-    }
+    return _retry(() async {
+      try {
+        final res = await http
+            .get(Uri.parse('${AppConstants.baseUrl}$path'), headers: _getHeaders)
+            .timeout(_httpTimeout);
+        return _decodeGetResponse(res);
+      } on TimeoutException {
+        throw TimeoutException('Request timed out.');
+      } catch (e) {
+        // SocketException, FormatException, etc. — retryable network failures.
+        throw Exception(_friendlyNetworkMessage(e));
+      }
+    });
   }
 
   static String _queryCacheKey(String path, Map<String, String> queryParams) {
@@ -185,44 +233,40 @@ class ApiService {
 
   static Future<Map<String, dynamic>> _post(
       String path, Map<String, dynamic> body) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse('${AppConstants.baseUrl}$path'),
-            headers: _headers,
-            body: jsonEncode(body),
-          )
-          .timeout(_httpTimeout);
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        Map<String, dynamic>? serverBody;
-        final raw = res.body.trim();
-        if (raw.isNotEmpty && raw.startsWith('{')) {
-          try {
-            final decoded = jsonDecode(raw);
-            if (decoded is Map<String, dynamic>) serverBody = decoded;
-          } catch (_) {}
+    return _retry(() async {
+      try {
+        final res = await http
+            .post(
+              Uri.parse('${AppConstants.baseUrl}$path'),
+              headers: _headers,
+              body: jsonEncode(body),
+            )
+            .timeout(_httpTimeout);
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          Map<String, dynamic>? serverBody;
+          final raw = res.body.trim();
+          if (raw.isNotEmpty && raw.startsWith('{')) {
+            try {
+              final decoded = jsonDecode(raw);
+              if (decoded is Map<String, dynamic>) serverBody = decoded;
+            } catch (_) {}
+          }
+          return {
+            'success': false,
+            'statusCode': res.statusCode,
+            'message': serverBody?['message']?.toString() ??
+                'Request failed (${res.statusCode}).',
+          };
         }
-        return {
-          'success': false,
-          'statusCode': res.statusCode,
-          'message': serverBody?['message']?.toString() ??
-              'Request failed (${res.statusCode}).',
-        };
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map<String, dynamic>) return decoded;
+        return {'success': false, 'message': 'Invalid server response.'};
+      } on TimeoutException {
+        throw TimeoutException('Request timed out.');
+      } catch (e) {
+        throw Exception(_friendlyNetworkMessage(e));
       }
-      final decoded = jsonDecode(res.body);
-      if (decoded is Map<String, dynamic>) return decoded;
-      return {'success': false, 'message': 'Invalid server response.'};
-    } on TimeoutException {
-      return {
-        'success': false,
-        'message': 'Request timed out. Try again in a few seconds.',
-      };
-    } catch (e) {
-      return {
-        'success': false,
-        'message': _friendlyNetworkMessage(e),
-      };
-    }
+    });
   }
 
   static Future<Map<String, dynamic>> _put(
@@ -574,6 +618,7 @@ class ApiService {
     double? lat,
     double? lng,
     bool refresh = false,
+    Duration? memoryCacheTtl,
   }) async {
     final params = <String, String>{
       if (city != null && city.trim().isNotEmpty) 'city': city.trim(),
@@ -586,7 +631,8 @@ class ApiService {
     return _getQuery(
       '/weather',
       params,
-      memoryCacheTtl: refresh ? null : const Duration(minutes: 10),
+      memoryCacheTtl:
+          refresh ? null : (memoryCacheTtl ?? const Duration(minutes: 10)),
     );
   }
 

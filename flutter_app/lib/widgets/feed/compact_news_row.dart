@@ -1,14 +1,15 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'feed_xpresso_theme.dart';
 import '../../utils/feed_failed_image_cache.dart';
 
 export 'feed_xpresso_theme.dart' show FeedXpressoTheme, kFeedRowExtent;
 
-/// Dailyhunt-style feed row — flat on black, image on top, headline, meta + actions.
-class CompactNewsRow extends StatelessWidget {
+/// Dailyhunt-style feed row — redesigned with modern glass morphism effects.
+class CompactNewsRow extends StatefulWidget {
   final String title;
   final String? summary;
   final String? imageUrl;
@@ -47,90 +48,133 @@ class CompactNewsRow extends StatelessWidget {
   });
 
   @override
+  State<CompactNewsRow> createState() => _CompactNewsRowState();
+}
+
+class _CompactNewsRowState extends State<CompactNewsRow> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final memW = (MediaQuery.sizeOf(context).width * dpr).round().clamp(480, 1400);
-    final url = imageUrl?.trim() ?? '';
+    final url = widget.imageUrl?.trim() ?? '';
     final hasSummary =
-        showSummary && summary != null && summary!.trim().isNotEmpty;
-    final actions = footerActions;
+        widget.showSummary && widget.summary != null && widget.summary!.trim().isNotEmpty;
+    final actions = widget.footerActions;
     final hasActions = actions != null && actions.isNotEmpty;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: FeedXpressoTheme.cardMargin,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: FeedXpressoTheme.cardBorderRadius,
-              splashColor: fx.accent.withValues(alpha: 0.1),
-              highlightColor: fx.accent.withValues(alpha: 0.05),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (url.isNotEmpty)
-                    _HeroImage(
-                      fx: fx,
-                      url: url,
-                      memCacheWidth: memW,
-                      showPlayOverlay: showPlayOverlay,
-                      onUnavailable: onImageUnavailable,
-                    ),
-                  if (url.isNotEmpty)
-                    SizedBox(height: FeedXpressoTheme.imageToTitleGap),
-                  Text(
-                    title,
-                    maxLines: titleMaxLines,
-                    overflow: TextOverflow.ellipsis,
-                    style: fx.titleStyle,
-                  ),
-                  if (hasSummary) ...[
-                    SizedBox(height: 5),
-                    Text(
-                      summary!.trim(),
-                      maxLines: summaryMaxLines.clamp(1, 2),
-                      overflow: TextOverflow.ellipsis,
-                      style: fx.summaryStyle,
-                    ),
-                  ],
-                  SizedBox(height: hasSummary ? 10 : 9),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: _MetaRow(
-                          fx: fx,
-                          metaLine: metaLine,
-                          sourceName: sourceName,
-                          timeLabel: timeLabel,
-                          showVerified: showVerified,
-                        ),
-                      ),
-                      if (hasActions)
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: actions,
-                        )
-                      else if (trailing != null)
-                        trailing!,
-                    ],
+    return Semantics(
+      button: true,
+      label: widget.title,
+      hint: 'Double tap to read the full article',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
+        child: GestureDetector(
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          onTap: widget.onTap,
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 100),
+            scale: _pressed ? 0.98 : 1.0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 100),
+              decoration: BoxDecoration(
+                color: _pressed
+                    ? fx.glassSurface.withValues(alpha: 0.8)
+                    : fx.glassSurface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: _pressed
+                      ? fx.accent.withValues(alpha: 0.3)
+                      : fx.glassBorder,
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: fx.accent.withValues(alpha: _pressed ? 0.08 : 0.04),
+                    blurRadius: _pressed ? 12 : 8,
+                    offset: Offset(0, _pressed ? 6 : 4),
                   ),
                 ],
               ),
+              child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (url.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    child: _HeroImage(
+                      fx: fx,
+                      url: url,
+                      memCacheWidth: memW,
+                      showPlayOverlay: widget.showPlayOverlay,
+                      onUnavailable: widget.onImageUnavailable,
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        widget.title,
+                        maxLines: widget.titleMaxLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.notoSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                          letterSpacing: -0.3,
+                          color: fx.title,
+                        ),
+                      ),
+                      if (hasSummary) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.summary!.trim(),
+                          maxLines: widget.summaryMaxLines.clamp(1, 2),
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.notoSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            height: 1.4,
+                            color: fx.summary,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: _MetaRow(
+                              fx: fx,
+                              metaLine: widget.metaLine,
+                              sourceName: widget.sourceName,
+                              timeLabel: widget.timeLabel,
+                              showVerified: widget.showVerified,
+                            ),
+                          ),
+                          if (hasActions)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions,
+                            )
+                          else if (widget.trailing != null)
+                            widget.trailing!,
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        if (showDivider)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Divider(height: 1, thickness: 1, color: fx.divider),
-          ),
-      ],
+      ),
     );
   }
 }
@@ -152,45 +196,75 @@ class _MetaRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fx = context.fx;
     final src = sourceName?.trim();
     final time = timeLabel?.trim();
     if (src != null && src.isNotEmpty) {
       return Row(
         children: [
           Flexible(
-            child: Text(
-              src,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: fx.sourceStyle,
-            ),
-          ),
-          if (showVerified) ...[
-            SizedBox(width: 3),
-            Icon(
-              Icons.verified,
-              size: 14,
-              color: fx.verifiedBadge,
-            ),
-          ],
-          if (time != null && time.isNotEmpty) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 5),
-              child: Text(
-                '·',
-                style: fx.metaStyle.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    fx.accent.withValues(alpha: 0.15),
+                    fx.accentTertiary.withValues(alpha: 0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: fx.accent.withValues(alpha: 0.2),
+                  width: 0.5,
                 ),
               ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      src,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.notoSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: fx.accent,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                  if (showVerified) ...[
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.verified,
+                      size: 12,
+                      color: fx.verifiedBadge,
+                    ),
+                  ],
+                ],
+              ),
             ),
+          ),
+          if (time != null && time.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Icon(
+              Icons.access_time_rounded,
+              size: 12,
+              color: fx.meta,
+            ),
+            const SizedBox(width: 4),
             Flexible(
               child: Text(
                 time,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: fx.metaStyle,
+                style: GoogleFonts.notoSans(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: fx.meta,
+                ),
               ),
             ),
           ],
@@ -201,7 +275,11 @@ class _MetaRow extends StatelessWidget {
       metaLine,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: fx.metaStyle,
+      style: GoogleFonts.notoSans(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: fx.meta,
+      ),
     );
   }
 }
@@ -267,7 +345,16 @@ class _HeroImageState extends State<_HeroImage> {
         fx: widget.fx,
         child: AspectRatio(
           aspectRatio: FeedXpressoTheme.imageAspectRatio,
-          child: ColoredBox(color: fx.imagePlaceholder),
+          child: ColoredBox(
+            color: fx.imagePlaceholder,
+            child: const Center(
+              child: Icon(
+                Icons.image_not_supported_outlined,
+                size: 32,
+                color: Colors.white38,
+              ),
+            ),
+          ),
         ),
       );
     }
@@ -340,32 +427,17 @@ Widget _imageFrame({required FeedXpressoPalette fx, required Widget child}) {
   return DecoratedBox(
     decoration: BoxDecoration(
       borderRadius: FeedXpressoTheme.imageBorderRadius,
-      border: isDark
-          ? null
-          : Border.all(
-              color: fx.divider.withValues(alpha: 0.9),
-              width: 0.5,
-            ),
-      boxShadow: isDark
-          ? [
-              BoxShadow(
-                color: fx.overlayScrim,
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ]
-          : [
-              BoxShadow(
-                color: fx.heroShadow,
-                blurRadius: 20,
-                offset: const Offset(0, 6),
-              ),
-              BoxShadow(
-                color: fx.accent.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-            ],
+      border: Border.all(
+        color: fx.glassBorder.withValues(alpha: 0.8),
+        width: 0.5,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: fx.accent.withValues(alpha: isDark ? 0.15 : 0.08),
+          blurRadius: 16,
+          offset: const Offset(0, 6),
+        ),
+      ],
     ),
     child: ClipRRect(
       borderRadius: FeedXpressoTheme.imageBorderRadius,
@@ -374,12 +446,14 @@ Widget _imageFrame({required FeedXpressoPalette fx, required Widget child}) {
   );
 }
 
-/// Engagement action — icon with optional count (Dailyhunt comment / share style).
-class CompactFeedAction extends StatelessWidget {
+/// Engagement action — icon with optional count, modern glass morphism style.
+class CompactFeedAction extends StatefulWidget {
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
   final String? count;
+  /// Accessibility label describing what this action does.
+  final String? semanticLabel;
 
   const CompactFeedAction({
     super.key,
@@ -387,6 +461,7 @@ class CompactFeedAction extends StatelessWidget {
     required this.color,
     this.onTap,
     this.count,
+    this.semanticLabel,
   });
 
   static Color muted(BuildContext context) =>
@@ -397,60 +472,78 @@ class CompactFeedAction extends StatelessWidget {
       FeedXpressoTheme.fx(context).shareAccent;
 
   @override
+  State<CompactFeedAction> createState() => _CompactFeedActionState();
+}
+
+class _CompactFeedActionState extends State<CompactFeedAction> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    final label = count?.trim();
+    final label = widget.count?.trim();
     final showCount = label != null && label.isNotEmpty;
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 10),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: fx.background.computeLuminance() < 0.2
-                  ? fx.iconSurface.withValues(alpha: 0.85)
-                  : fx.surfaceElevated,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: fx.divider.withValues(alpha: 0.85),
-                width: 0.5,
+    return Semantics(
+      button: true,
+      label: widget.semanticLabel ?? 'Action button',
+      hint: widget.onTap != null ? 'Double tap to activate' : null,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+        duration: const Duration(milliseconds: 100),
+        scale: _pressed ? 0.92 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: _pressed
+                ? widget.color.withValues(alpha: 0.15)
+                : fx.glassSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _pressed
+                  ? widget.color.withValues(alpha: 0.3)
+                  : fx.glassBorder,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: _pressed ? 0.12 : 0.05),
+                blurRadius: _pressed ? 6 : 4,
+                offset: Offset(0, _pressed ? 3 : 2),
               ),
-              boxShadow: fx.background.computeLuminance() < 0.2
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: fx.heroSurfaceSubtle,
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 17, color: color),
-                if (showCount) ...[
-                  SizedBox(width: 5),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                      height: 1,
-                    ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.icon,
+                size: 16,
+                color: _pressed ? widget.color : widget.color.withValues(alpha: 0.85),
+              ),
+              if (showCount) ...[
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: GoogleFonts.notoSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _pressed ? widget.color : widget.color.withValues(alpha: 0.85),
+                    height: 1,
                   ),
-                ],
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
+  }
+}
   }
 }

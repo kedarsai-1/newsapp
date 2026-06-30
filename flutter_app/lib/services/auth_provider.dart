@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 import '../services/publisher_follow_service.dart';
@@ -8,25 +9,56 @@ import '../services/bookmark_migration_service.dart';
 import '../services/push_notifications.dart';
 import '../constants.dart';
 
+/// Secure storage for sensitive user data.
+/// Falls back to in-memory only on web.
+class _SecureStorage {
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+  );
+
+  static Future<String?> read(String key) async {
+    if (kIsWeb) return null;
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> write(String key, String value) async {
+    if (kIsWeb) return;
+    try {
+      await _storage.write(key: key, value: value);
+    } catch (_) {}
+  }
+
+  static Future<void> delete(String key) async {
+    if (kIsWeb) return;
+    try {
+      await _storage.delete(key: key);
+    } catch (_) {}
+  }
+}
+
 class AuthProvider extends ChangeNotifier {
   User? _user;
   bool _loading = false;
-  bool _initialized = false; // NEW: tracks whether init() has completed
+  bool _initialized = false;
   String? _error;
 
   User? get user => _user;
   bool get loading => _loading;
-  bool get initialized => _initialized; // NEW: router waits for this
+  bool get initialized => _initialized;
   String? get error => _error;
   bool get isLoggedIn => _user != null;
   bool get isAdmin => _user?.isAdmin ?? false;
   bool get isReporter => _user?.isReporter ?? false;
 
-  // Called once at app start — reads cached user from SharedPreferences
+  // Called once at app start — reads cached user from secure storage
   Future<void> init() async {
     await ApiService.loadToken();
-    final prefs = await SharedPreferences.getInstance();
-    final userData = prefs.getString(AppConstants.userKey);
+    final userData = await _SecureStorage.read(AppConstants.userKey);
     if (userData != null) {
       try {
         _user = User.fromJson(jsonDecode(userData));
@@ -187,8 +219,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> _saveUser(User user) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.userKey, jsonEncode({
+    await _SecureStorage.write(AppConstants.userKey, jsonEncode({
       '_id': user.id,
       'name': user.name,
       'email': user.email,

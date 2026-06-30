@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/models.dart';
 import '../../widgets/feed/feed_xpresso_palette_enhanced.dart';
+import 'breaking_banner_shared.dart';
 
 /// Enhanced breaking news banner with modern design, smooth animations, and glass morphism effects.
 class EnhancedBreakingBanner extends StatefulWidget {
@@ -59,7 +60,7 @@ class _EnhancedBreakingBannerState extends State<EnhancedBreakingBanner>
               },
               itemCount: posts.length,
               itemBuilder: (context, index) {
-                final gradient = _getGradientForIndex(index);
+                final gradient = BreakingGradients.forIndex(index);
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 500),
                   decoration: BoxDecoration(
@@ -169,14 +170,7 @@ class _EnhancedBreakingBannerState extends State<EnhancedBreakingBanner>
   }
 
   List<Color> _getGradientForIndex(int index) {
-    final gradients = [
-      [const Color(0xFFFF6B6B), const Color(0xFFFF8E53)],
-      [const Color(0xFF8B5CF6), const Color(0xFF6366F1)],
-      [const Color(0xFF14B8A6), const Color(0xFF06B6D4)],
-      [const Color(0xFFF59E0B), const Color(0xFFEF4444)],
-      [const Color(0xFF10B981), const Color(0xFF3B82F6)],
-    ];
-    return gradients[index % gradients.length];
+    return BreakingGradients.forIndex(index);
   }
 }
 
@@ -439,14 +433,7 @@ class _TrendingRail extends StatelessWidget {
   }
 
   List<Color> _getGradientForIndex(int index) {
-    final gradients = [
-      [const Color(0xFF8B5CF6), const Color(0xFF6366F1)],
-      [const Color(0xFF14B8A6), const Color(0xFF06B6D4)],
-      [const Color(0xFFF59E0B), const Color(0xFFEF4444)],
-      [const Color(0xFF10B981), const Color(0xFF3B82F6)],
-      [const Color(0xFFFF6B6B), const Color(0xFFFF8E53)],
-    ];
-    return gradients[index % gradients.length];
+    return BreakingGradients.trendingForIndex(index);
   }
 }
 

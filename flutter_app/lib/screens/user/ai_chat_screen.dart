@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/news_provider.dart';
@@ -8,6 +9,7 @@ import '../../utils/ai_chat_response.dart';
 import '../../utils/i18n.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
 
+/// AI Chat screen with modern glass morphism design.
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
 
@@ -124,77 +126,221 @@ class _AiChatScreenState extends State<AiChatScreen> {
         if (!didPop) _handleBack();
       },
       child: Scaffold(
-      backgroundColor: fx.background,
-      appBar: AppBar(
         backgroundColor: fx.background,
-        foregroundColor: fx.iconFg,
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(I18n.t(context, 'ai_chat_title'), style: fx.screenTitleStyle.copyWith(fontSize: 17)),
-            Text(
-              I18n.t(context, 'ai_chat_subtitle'),
-              style: TextStyle(
-                fontSize: 12,
-                color: fx.actionMuted,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded),
-          onPressed: _handleBack,
-        ),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? _EmptyPrompt(onTap: _send)
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                    itemCount: _messages.length + (_loading ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= _messages.length) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
+        body: SafeArea(
+          child: Column(
+            children: [
+              // ── Modern Header ──────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 12),
+                decoration: BoxDecoration(
+                  color: fx.background,
+                  border: Border(
+                    bottom: BorderSide(color: fx.divider, width: 1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.arrow_back_rounded, color: fx.iconFg),
+                      onPressed: _handleBack,
+                    ),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            fx.accent,
+                            fx.accentTertiary,
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: fx.accent.withValues(alpha: 0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            I18n.t(context, 'ai_chat_title'),
+                            style: GoogleFonts.notoSans(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: fx.title,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          Row(
                             children: [
-                              SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: fx.accent,
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: fx.success,
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                              SizedBox(width: 10),
+                              const SizedBox(width: 5),
                               Text(
-                                I18n.t(context, 'ai_chat_thinking'),
-                                style: TextStyle(color: fx.actionMuted, fontSize: 13),
+                                'AI Assistant',
+                                style: GoogleFonts.notoSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: fx.actionMuted,
+                                ),
                               ),
                             ],
                           ),
-                        );
-                      }
-                      return _MessageBubble(
-                        message: _messages[index],
-                        onOpenArticle: (id) => context.push('/article/$id'),
-                      );
-                    },
-                  ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Messages ──────────────────────────────────────
+              Expanded(
+                child: _messages.isEmpty
+                    ? _EmptyPrompt(onTap: _send)
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                        itemCount: _messages.length + (_loading ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index >= _messages.length) {
+                            return _TypingIndicator(fx: fx);
+                          }
+                          return _MessageBubble(
+                            message: _messages[index],
+                            onOpenArticle: (id) => context.push('/article/$id'),
+                          );
+                        },
+                      ),
+              ),
+
+              // ── Input Bar ──────────────────────────────────────
+              _InputBar(
+                controller: _inputController,
+                loading: _loading,
+                onSend: () => _send(),
+              ),
+            ],
           ),
-          _InputBar(
-            controller: _inputController,
-            loading: _loading,
-            onSend: () => _send(),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypingIndicator extends StatelessWidget {
+  final dynamic fx;
+
+  const _TypingIndicator({required this.fx});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: fx.iconSurface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: fx.glassBorder),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _Dot(color: fx.accent, delay: 0),
+                const SizedBox(width: 4),
+                _Dot(color: fx.accent, delay: 0.2),
+                const SizedBox(width: 4),
+                _Dot(color: fx.accent, delay: 0.4),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            I18n.t(context, 'ai_chat_thinking'),
+            style: GoogleFonts.notoSans(
+              color: fx.actionMuted,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),
-    ),
+    );
+  }
+}
+
+class _Dot extends StatefulWidget {
+  final dynamic color;
+  final double delay;
+
+  const _Dot({required this.color, required this.delay});
+
+  @override
+  State<_Dot> createState() => _DotState();
+}
+
+class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _anim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+    Future.delayed(Duration(milliseconds: (widget.delay * 1000).toInt()), () {
+      if (mounted) {
+        _ctrl.repeat(reverse: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(
+          color: widget.color.withValues(alpha: 0.4 + (_anim.value * 0.6)),
+          shape: BoxShape.circle,
+        ),
+      ),
     );
   }
 }
@@ -227,37 +373,209 @@ class _EmptyPrompt extends StatelessWidget {
       I18n.t(context, 'ai_chat_prompt_weather'),
     ];
 
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        Icon(Icons.auto_awesome_rounded, size: 42, color: fx.accent),
-        SizedBox(height: 12),
-        Text(
-          I18n.t(context, 'ai_chat_empty_title'),
-          style: fx.screenTitleStyle.copyWith(fontSize: 20),
-        ),
-        SizedBox(height: 8),
-        Text(
-          I18n.t(context, 'ai_chat_empty_subtitle'),
-          style: TextStyle(color: fx.actionMuted, height: 1.4),
-        ),
-        SizedBox(height: 20),
-        ...prompts.map(
-          (p) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: fx.iconFg,
-                side: BorderSide(color: fx.divider),
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          const SizedBox(height: 40),
+          // Hero illustration
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  fx.accent.withValues(alpha: 0.15),
+                  fx.accentTertiary.withValues(alpha: 0.15),
+                ],
               ),
-              onPressed: () => onTap(p),
-              child: Text(p),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: fx.accent.withValues(alpha: 0.15),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 48,
+                  color: fx.accent,
+                ),
+                Positioned(
+                  right: 18,
+                  top: 18,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: fx.accent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: fx.accent.withValues(alpha: 0.4),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.chat_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 28),
+          Text(
+            I18n.t(context, 'ai_chat_empty_title'),
+            style: GoogleFonts.notoSans(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: fx.title,
+              letterSpacing: -0.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            I18n.t(context, 'ai_chat_empty_subtitle'),
+            style: GoogleFonts.notoSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: fx.textSecondary,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+          // Prompt suggestions
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: fx.glassSurface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: fx.glassBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline_rounded,
+                      size: 18,
+                      color: fx.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Try asking',
+                      style: GoogleFonts.notoSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: fx.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                ...prompts.map(
+                  (p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _PromptChip(
+                      label: p,
+                      icon: _iconForPrompt(p),
+                      onTap: () => onTap(p),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForPrompt(String prompt) {
+    final lower = prompt.toLowerCase();
+    if (lower.contains('headline')) return Icons.newspaper_rounded;
+    if (lower.contains('sport')) return Icons.sports_cricket_rounded;
+    if (lower.contains('weather')) return Icons.wb_sunny_rounded;
+    return Icons.search_rounded;
+  }
+}
+
+class _PromptChip extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _PromptChip({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  State<_PromptChip> createState() => _PromptChipState();
+}
+
+class _PromptChipState extends State<_PromptChip> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: fx.iconSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: fx.divider),
+          ),
+          child: Row(
+            children: [
+              Icon(widget.icon, size: 18, color: fx.accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: GoogleFonts.notoSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: fx.iconFg,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: fx.actionMuted,
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -274,68 +592,237 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    final align = message.isUser ? Alignment.centerRight : Alignment.centerLeft;
-    final bg = message.isUser
-        ? fx.accent.withValues(alpha: 0.18)
-        : message.isError
-            ? fx.errorSurface
-            : fx.iconSurface;
-    final fg = message.isError ? fx.error : fx.iconFg;
+    final isUser = message.isUser;
+    final isError = message.isError;
 
-    return Align(
-      alignment: align,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.86,
-        ),
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: fx.divider.withValues(alpha: 0.5)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(message.text, style: TextStyle(color: fg, height: 1.45)),
-            if (message.relatedArticles.isNotEmpty) ...[
-              SizedBox(height: 10),
-              Text(
-                I18n.t(context, 'ai_chat_related_stories'),
-                style: TextStyle(
-                  color: fx.actionMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isUser) ...[
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [fx.accent, fx.accentTertiary],
                 ),
+                borderRadius: BorderRadius.circular(10),
               ),
-              SizedBox(height: 6),
-              ...message.relatedArticles.take(3).map(
-                    (a) => TextButton(
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        alignment: Alignment.centerLeft,
-                      ),
-                      onPressed: a.id.isEmpty ? null : () => onOpenArticle(a.id),
-                      child: Text(
-                        a.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: fx.accent, fontSize: 13),
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: isUser
+                    ? fx.accent.withValues(alpha: 0.15)
+                    : isError
+                        ? fx.errorSurface
+                        : fx.glassSurface,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: Radius.circular(isUser ? 20 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
+                ),
+                border: Border.all(
+                  color: isUser
+                      ? fx.accent.withValues(alpha: 0.2)
+                      : fx.glassBorder,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: fx.heroShadow,
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!isUser)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: fx.success,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'AI Assistant',
+                            style: GoogleFonts.notoSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: fx.accent,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                  Text(
+                    message.text,
+                    style: GoogleFonts.notoSans(
+                      color: isError ? fx.error : fx.iconFg,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
                   ),
-            ],
+                  if (message.relatedArticles.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Divider(height: 1, color: fx.divider),
+                    const SizedBox(height: 12),
+                    Text(
+                      I18n.t(context, 'ai_chat_related_stories'),
+                      style: GoogleFonts.notoSans(
+                        color: fx.actionMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ...message.relatedArticles.take(3).map(
+                          (a) => _RelatedArticleTile(
+                            article: a,
+                            onTap: () => onOpenArticle(a.id),
+                          ),
+                        ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (isUser) ...[
+            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: fx.accent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.person_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RelatedArticleTile extends StatefulWidget {
+  final AiChatRelatedArticle article;
+  final VoidCallback onTap;
+
+  const _RelatedArticleTile({
+    required this.article,
+    required this.onTap,
+  });
+
+  @override
+  State<_RelatedArticleTile> createState() => _RelatedArticleTileState();
+}
+
+class _RelatedArticleTileState extends State<_RelatedArticleTile> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fx = FeedXpressoTheme.fx(context);
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: fx.iconSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: fx.divider),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.article.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.notoSans(
+                        color: fx.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (widget.article.sourceName != null &&
+                        widget.article.sourceName!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.article.sourceName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.notoSans(
+                          color: fx.actionMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: fx.actionMuted,
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _InputBar extends StatelessWidget {
+class _InputBar extends StatefulWidget {
   final TextEditingController controller;
   final bool loading;
   final VoidCallback onSend;
@@ -347,42 +834,146 @@ class _InputBar extends StatelessWidget {
   });
 
   @override
+  State<_InputBar> createState() => _InputBarState();
+}
+
+class _InputBarState extends State<_InputBar> {
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() => _hasText = hasText);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: fx.background,
+        border: Border(
+          top: BorderSide(color: fx.divider, width: 1),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
-                decoration: InputDecoration(
-                  hintText: I18n.t(context, 'ai_chat_input_hint'),
-                  filled: true,
-                  fillColor: fx.iconSurface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide(color: fx.divider),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                decoration: BoxDecoration(
+                  color: fx.glassSurface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: fx.glassBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: fx.heroShadow,
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: widget.controller,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => widget.onSend(),
+                  style: GoogleFonts.notoSans(
+                    fontSize: 14,
+                    color: fx.iconFg,
+                    fontWeight: FontWeight.w500,
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide(color: fx.divider),
+                  decoration: InputDecoration(
+                    hintText: I18n.t(context, 'ai_chat_input_hint'),
+                    hintStyle: GoogleFonts.notoSans(
+                      fontSize: 14,
+                      color: fx.actionMuted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    filled: false,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),
-            SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: loading ? null : onSend,
-              icon: Icon(Icons.send_rounded),
+            const SizedBox(width: 10),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 48,
+              height: 48,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: widget.loading || !_hasText ? null : widget.onSend,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      gradient: _hasText && !widget.loading
+                          ? LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [fx.accent, fx.accentTertiary],
+                            )
+                          : null,
+                      color: !_hasText || widget.loading
+                          ? fx.iconSurface
+                          : null,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: _hasText && !widget.loading
+                          ? [
+                              BoxShadow(
+                                color: fx.accent.withValues(alpha: 0.35),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Center(
+                      child: widget.loading
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: fx.actionMuted,
+                              ),
+                            )
+                          : Icon(
+                              Icons.send_rounded,
+                              color: _hasText
+                                  ? Colors.white
+                                  : fx.actionMuted,
+                              size: 22,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),

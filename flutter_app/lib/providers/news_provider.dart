@@ -1029,6 +1029,23 @@ class NewsProvider extends ChangeNotifier {
     return 'all';
   }
 
+  /// Simple exponential back-off retry wrapper: 1s, 2s, 4s delays, up to 3 tries.
+  Future<Map<String, dynamic>> _retryWithBackoff(
+    Future<Map<String, dynamic>> Function() attempt, {
+    int maxRetries = 3,
+  }) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        final result = await attempt();
+        if (result['success'] != false) return result;
+      } catch (_) {}
+      if (i < maxRetries - 1) {
+        await Future.delayed(Duration(seconds: 1 << i)); // 1, 2, 4 seconds
+      }
+    }
+    return {'success': false, 'message': 'Failed after $maxRetries attempts. Please try again.'};
+  }
+
   Future<void> _fetchPosts({required bool reset}) async {
     if (isLocalMode) {
       await _fetchLocalPosts(reset: reset);
@@ -1037,13 +1054,13 @@ class NewsProvider extends ChangeNotifier {
     try {
       Map<String, dynamic> res;
       if (_followingFeedOnly && ApiService.isAuthenticated) {
-        res = await ApiService.getFeed(
+        res = await _retryWithBackoff(() => ApiService.getFeed(
           page: reset ? 1 : _page,
           language: selectedLanguage,
           following: true,
           days: 30,
           sourceTypes: const ['api', 'manual', 'rss', 'html', 'youtube'],
-        );
+        ));
       } else if (_followingFeedOnly) {
         final guestFollows = await PublisherFollowService.loadGuestFollows();
         if (guestFollows.isEmpty) {
@@ -1055,15 +1072,15 @@ class NewsProvider extends ChangeNotifier {
           _error = null;
           return;
         }
-        res = await ApiService.getFeed(
+        res = await _retryWithBackoff(() => ApiService.getFeed(
           page: reset ? 1 : _page,
           language: selectedLanguage,
           publishers: guestFollows.values.toList(),
           days: 30,
           sourceTypes: const ['api', 'manual', 'rss', 'html', 'youtube'],
-        );
+        ));
       } else {
-        res = await ApiService.getFeed(
+        res = await _retryWithBackoff(() => ApiService.getFeed(
           page: reset ? 1 : _page,
           categoryId: _selectedCategoryId,
           language: selectedLanguage,
@@ -1075,7 +1092,7 @@ class NewsProvider extends ChangeNotifier {
           search: null,
           days: 30,
           sourceTypes: const ['api', 'manual', 'rss', 'html', 'youtube'],
-        );
+        ));
       }
       if (res['success'] == true) {
         final rawPosts = (res['posts'] as List)
@@ -1116,7 +1133,7 @@ class NewsProvider extends ChangeNotifier {
   Future<void> _fetchLocalPosts({required bool reset}) async {
     try {
       final page = reset ? 1 : _page;
-      final res = await ApiService.getLocalNews(
+      final res = await _retryWithBackoff(() => ApiService.getLocalNews(
         lat: _preferredLat,
         lng: _preferredLng,
         radiusKm: 75,
@@ -1128,7 +1145,7 @@ class NewsProvider extends ChangeNotifier {
         politicsScope: localScopeForApi,
         language: selectedLanguage,
         page: page,
-      );
+      ));
       if (res['success'] == true) {
         final rawPosts = (res['posts'] as List)
             .map((p) => NewsPost.fromJson(Map<String, dynamic>.from(p as Map)))
@@ -1169,7 +1186,17 @@ class NewsProvider extends ChangeNotifier {
   void updatePost(String postId, {int? likes, bool? liked}) {
     final index = _posts.indexWhere((p) => p.id == postId);
     if (index == -1) return;
-    // Posts are immutable — rebuild with updated values via fromJson
+
+    final post = _posts[index];
+    if (likes != null && post.likes != likes) {
+      // Update likes count
+      _posts[index] = NewsPost.fromJson({
+        ...post.toJson(),
+        'likes': likes,
+      });
+    }
+    // liked is local state - handled by UI widgets
+
     notifyListeners();
   }
 

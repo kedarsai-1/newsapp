@@ -49,6 +49,11 @@ import 'screens/user/ai_chat_screen.dart';
 import 'screens/user/bookmarks_screen.dart';
 import 'screens/user/profile_screen.dart';
 import 'screens/user/privacy_policy_screen.dart';
+import 'screens/user/history_screen.dart';
+import 'screens/user/language_settings_screen.dart';
+import 'screens/user/layout_mode_screen.dart';
+import 'screens/user/terms_of_service_screen.dart';
+import 'screens/user/contact_us_screen.dart';
 import 'utils/i18n.dart';
 import 'screens/reporter/reporter_dashboard_screen.dart';
 import 'screens/reporter/reporter_profile_screen.dart';
@@ -437,6 +442,41 @@ GoRouter createAppRouter(BuildContext context) {
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
               child: const PrivacyPolicyScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/history',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const HistoryScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/language',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const LanguageSettingsScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/layout-mode',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const LayoutModeScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/terms-of-service',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const TermsOfServiceScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/contact',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const ContactUsScreen(),
             ),
           ),
         ],

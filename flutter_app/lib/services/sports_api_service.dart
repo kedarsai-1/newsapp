@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
+import 'api_service.dart';
 
 /// Sports / cricket API — all calls go through our backend (CricAPI key hidden).
 abstract final class SportsApiService {
@@ -13,11 +13,10 @@ abstract final class SportsApiService {
   static const String codeSportsApiMissing = 'SPORTS_API_MISSING';
 
   static Future<Map<String, String>> _headers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString(AppConstants.tokenKey);
     return {
       'Accept': 'application/json',
-      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      if (ApiService.token != null && ApiService.token!.isNotEmpty)
+        'Authorization': 'Bearer ${ApiService.token}',
     };
   }
 
@@ -36,7 +35,7 @@ abstract final class SportsApiService {
           'code': codeSportsApiMissing,
           'statusCode': 404,
           'message':
-              'Sports API is not on the server yet. Redeploy your Railway service with the latest backend code (includes /api/sports routes).',
+              'Sports feature is not available. Please update the app.',
         };
       }
 
@@ -53,7 +52,7 @@ abstract final class SportsApiService {
           'code': res.statusCode == 404 ? codeSportsApiMissing : null,
           'statusCode': res.statusCode,
           'message': res.statusCode == 404
-              ? 'Sports API not found. Redeploy Railway with the latest server code.'
+              ? 'Sports feature is not available. Please update the app.'
               : 'Server returned an error page instead of JSON.',
         };
       }
@@ -74,13 +73,13 @@ abstract final class SportsApiService {
       return {
         'success': false,
         'message':
-            'Invalid response from ${AppConstants.apiConnectionHint}. Redeploy the backend if you only see this on Cricket.',
+            'Invalid response from the server. Please try again.',
       };
     } catch (e) {
       return {
         'success': false,
         'message':
-            'Cannot reach ${AppConstants.apiConnectionHint}. Check Railway is running and assets/.env has API_BASE_URL=https://your-app.up.railway.app/api',
+            'Cannot reach the server. Check your connection and try again.',
       };
     }
   }

@@ -86,6 +86,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         _loading = true;
         _loadError = null;
         _notFound = false;
+        _isOffline = false;
       });
     }
     final loggedIn = context.read<AuthProvider>().isLoggedIn;
@@ -102,6 +103,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           context.read<NewsProvider>().markPostAsSeen(widget.postId);
           _loadError = null;
           _notFound = false;
+          _isOffline = false;
         } else {
           _post = null;
           final msg = postRes['message']?.toString().trim();
@@ -280,9 +282,14 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
               ),
             ),
             for (final r in _reportReasons)
-              ListTile(
-                title: Text(r),
-                onTap: () => Navigator.pop(ctx, r),
+              Semantics(
+                label: r,
+                hint: 'Double tap to activate',
+                button: true,
+                child: ListTile(
+                  title: Text(r),
+                  onTap: () => Navigator.pop(ctx, r),
+                ),
               ),
           ],
         ),
@@ -808,93 +815,168 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                   : null,
               actions: [
                 if (post.sourceUrl?.trim().isNotEmpty == true)
-                  _glassActionIcon(
-                    context: context,
-                    tooltip: 'Read original article',
-                    icon: Icon(Icons.open_in_new_rounded, color: actionIconColor),
-                    onPressed: _openSourceArticle,
+                  Semantics(
+                    label: 'Open source article',
+                    hint: 'Double tap to activate',
+                    button: true,
+                    child: _glassActionIcon(
+                      context: context,
+                      tooltip: 'Read original article',
+                      icon: Icon(Icons.open_in_new_rounded, color: actionIconColor),
+                      onPressed: _openSourceArticle,
+                    ),
                   ),
-                PopupMenuButton<double>(
-                  tooltip: 'Text size',
-                  icon: _glassActionShell(
-                    context: context,
-                    child: Icon(Icons.text_fields_rounded, color: actionIconColor),
+                Semantics(
+                  label: 'Text size',
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: PopupMenuButton<double>(
+                    tooltip: 'Text size',
+                    icon: _glassActionShell(
+                      context: context,
+                      child: Icon(Icons.text_fields_rounded, color: actionIconColor),
+                    ),
+                    onSelected: (v) => setState(() => _readScale = v),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: 0.92, child: Text('Smaller')),
+                      const PopupMenuItem(value: 1.0, child: Text('Default')),
+                      const PopupMenuItem(value: 1.1, child: Text('Larger')),
+                      const PopupMenuItem(value: 1.22, child: Text('Largest')),
+                    ],
                   ),
-                  onSelected: (v) => setState(() => _readScale = v),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 0.92, child: Text('Smaller')),
-                    const PopupMenuItem(value: 1.0, child: Text('Default')),
-                    const PopupMenuItem(value: 1.1, child: Text('Larger')),
-                    const PopupMenuItem(value: 1.22, child: Text('Largest')),
-                  ],
                 ),
-                _glassActionIcon(
-                  context: context,
-                  icon: Icon(_liked ? Icons.favorite : Icons.favorite_border,
-                      color: _liked ? fx.liked : fx.heroActionFg),
-                  onPressed: _toggleLike,
+                Semantics(
+                  label: 'Like article',
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: _glassActionIcon(
+                    context: context,
+                    icon: Icon(_liked ? Icons.favorite : Icons.favorite_border,
+                        color: _liked ? fx.liked : fx.heroActionFg),
+                    onPressed: _toggleLike,
+                  ),
                 ),
-                _glassActionIcon(
-                  context: context,
-                  icon: Icon(
-                      _bookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: _bookmarked ? p.primary : actionIconColor),
-                  onPressed: _toggleBookmark,
+                Semantics(
+                  label: 'Bookmark article',
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: _glassActionIcon(
+                    context: context,
+                    icon: Icon(
+                        _bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                        color: _bookmarked ? p.primary : actionIconColor),
+                    onPressed: _toggleBookmark,
+                  ),
                 ),
-                _glassActionIcon(
-                  context: context,
-                  icon: Icon(Icons.share_outlined, color: actionIconColor),
-                  onPressed: _shareArticle,
+                Semantics(
+                  label: 'Share article',
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: _glassActionIcon(
+                    context: context,
+                    icon: Icon(Icons.share_outlined, color: actionIconColor),
+                    onPressed: _shareArticle,
+                  ),
                 ),
-                _glassActionIcon(
-                  context: context,
-                  tooltip: 'Report',
-                  icon: Icon(Icons.flag_outlined, color: actionIconColor),
-                  onPressed: _reportArticle,
+                Semantics(
+                  label: 'Report article',
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: _glassActionIcon(
+                    context: context,
+                    tooltip: 'Report',
+                    icon: Icon(Icons.flag_outlined, color: actionIconColor),
+                    onPressed: _reportArticle,
+                  ),
                 ),
-                _glassActionIcon(
-                  context: context,
-                  tooltip: _comments.isEmpty
-                      ? 'Comment'
+                Semantics(
+                  label: _comments.isEmpty
+                      ? 'Open comments'
                       : '${_comments.length} comments',
-                  icon: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Icon(Icons.chat_bubble_outline, color: actionIconColor),
-                      if (_comments.isNotEmpty)
-                        Positioned(
-                          right: -2,
-                          top: -2,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 1,
-                            ),
-                            constraints: const BoxConstraints(minWidth: 14),
-                            decoration: BoxDecoration(
-                              color: p.primary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              _comments.length > 99
-                                  ? '99+'
-                                  : '${_comments.length}',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: fx.onImage,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: _glassActionIcon(
+                    context: context,
+                    tooltip: _comments.isEmpty
+                        ? 'Comment'
+                        : '${_comments.length} comments',
+                    icon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(Icons.chat_bubble_outline, color: actionIconColor),
+                        if (_comments.isNotEmpty)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 1,
+                              ),
+                              constraints: const BoxConstraints(minWidth: 14),
+                              decoration: BoxDecoration(
+                                color: p.primary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _comments.length > 99
+                                    ? '99+'
+                                    : '${_comments.length}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: fx.onImage,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
+                    onPressed: _focusCommentField,
+                    onLongPress: _scrollToComments,
                   ),
-                  onPressed: _focusCommentField,
-                  onLongPress: _scrollToComments,
                 ),
               ],
             ),
+            if (_isOffline)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: fx.accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: fx.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.wifi_off_rounded, size: 18, color: fx.accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'You are viewing cached article data.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: fx.heroFg,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _load,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: fx.accent,
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             SliverToBoxAdapter(
               child: Padding(
                 padding: AppSpacing.page,
@@ -1032,34 +1114,48 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 runSpacing: 6,
                                 children: [
                                   if (post.displaySourceName.trim().isNotEmpty)
-                                    ActionChip(
-                                      avatar: Icon(
-                                        _followingPublisher
-                                            ? Icons.notifications_active_rounded
-                                            : Icons.rss_feed_rounded,
-                                        size: 18,
+                                    Semantics(
+                                      label: _followingPublisher
+                                          ? 'Unfollow ${post.displaySourceName}'
+                                          : 'Follow ${post.displaySourceName}',
+                                      hint: 'Double tap to activate',
+                                      button: true,
+                                      child: ActionChip(
+                                        avatar: Icon(
+                                          _followingPublisher
+                                              ? Icons.notifications_active_rounded
+                                              : Icons.rss_feed_rounded,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          _followingPublisher
+                                              ? I18n.t(context, 'action_following')
+                                              : I18n.t(context, 'action_follow_publisher'),
+                                        ),
+                                        onPressed: _toggleFollowPublisher,
                                       ),
-                                      label: Text(
-                                        _followingPublisher
-                                            ? I18n.t(context, 'action_following')
-                                            : I18n.t(context, 'action_follow_publisher'),
-                                      ),
-                                      onPressed: _toggleFollowPublisher,
                                     ),
                                   if (TtsService.instance.isSupported)
-                                    ActionChip(
-                                      avatar: Icon(
-                                        _ttsSpeaking
-                                            ? Icons.stop_circle_outlined
-                                            : Icons.volume_up_rounded,
-                                        size: 18,
+                                    Semantics(
+                                      label: _ttsSpeaking
+                                          ? 'Stop listening'
+                                          : 'Listen to article',
+                                      hint: 'Double tap to activate',
+                                      button: true,
+                                      child: ActionChip(
+                                        avatar: Icon(
+                                          _ttsSpeaking
+                                              ? Icons.stop_circle_outlined
+                                              : Icons.volume_up_rounded,
+                                          size: 18,
+                                        ),
+                                        label: Text(
+                                          _ttsSpeaking
+                                              ? I18n.t(context, 'action_stop_listen')
+                                              : I18n.t(context, 'action_listen'),
+                                        ),
+                                        onPressed: _toggleListen,
                                       ),
-                                      label: Text(
-                                        _ttsSpeaking
-                                            ? I18n.t(context, 'action_stop_listen')
-                                            : I18n.t(context, 'action_listen'),
-                                      ),
-                                      onPressed: _toggleListen,
                                     ),
                                 ],
                               ),
@@ -1165,33 +1261,38 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                               ),
                             ),
                             // Likes Chip
-                            GestureDetector(
-                              onTap: _toggleLike,
-                              child: GlassCard(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                radius: 12,
-                                color: fx.heroSurfaceSubtle,
-                                borderColor: fx.heroSurfaceMuted,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _liked ? Icons.favorite : Icons.favorite_border,
-                                      size: 15,
-                                      color: _liked
-                                          ? fx.liked
-                                          : (fx.heroFgMuted),
-                                    ),
-                                    SizedBox(width: 6),
-                                    Text(
-                                      '${post.likes} likes',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: fx.heroFg,
+                            Semantics(
+                              label: 'Like article',
+                              hint: 'Double tap to activate',
+                              button: true,
+                              child: GestureDetector(
+                                onTap: _toggleLike,
+                                child: GlassCard(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  radius: 12,
+                                  color: fx.heroSurfaceSubtle,
+                                  borderColor: fx.heroSurfaceMuted,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _liked ? Icons.favorite : Icons.favorite_border,
+                                        size: 15,
+                                        color: _liked
+                                            ? fx.liked
+                                            : (fx.heroFgMuted),
                                       ),
-                                    ),
-                                  ],
+                                      SizedBox(width: 6),
+                                      Text(
+                                        '${post.likes} likes',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: fx.heroFg,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -1199,52 +1300,59 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                         ),
 
                         SizedBox(height: AppSpacing.s16),
-                        GestureDetector(
-                          onTap: _comments.isEmpty
-                              ? _focusCommentField
-                              : _scrollToComments,
-                          child: GlassCard(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.s16,
-                              vertical: AppSpacing.s12,
-                            ),
-                            radius: 16,
-                            color: fx.heroSurfaceSubtle,
-                            borderColor: fx.heroSurfaceMuted,
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.forum_outlined,
-                                  size: 20,
-                                  color: p.primary,
-                                ),
-                                SizedBox(width: AppSpacing.s12),
-                                Expanded(
-                                  child: Text(
-                                    _comments.isEmpty
-                                        ? 'Be the first to comment'
-                                        : '${_comments.length} comment${_comments.length == 1 ? '' : 's'}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: fx.heroFg,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  _comments.isEmpty ? 'Comment' : 'View all',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                        Semantics(
+                          label: _comments.isEmpty
+                              ? 'Be the first to comment'
+                              : '${_comments.length} comment${_comments.length == 1 ? '' : 's'}',
+                          hint: 'Double tap to activate',
+                          button: true,
+                          child: GestureDetector(
+                            onTap: _comments.isEmpty
+                                ? _focusCommentField
+                                : _scrollToComments,
+                            child: GlassCard(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.s16,
+                                vertical: AppSpacing.s12,
+                              ),
+                              radius: 16,
+                              color: fx.heroSurfaceSubtle,
+                              borderColor: fx.heroSurfaceMuted,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.forum_outlined,
+                                    size: 20,
                                     color: p.primary,
                                   ),
-                                ),
-                                Icon(
-                                  Icons.chevron_right,
-                                  size: 20,
-                                  color: p.primary,
-                                ),
-                              ],
+                                  SizedBox(width: AppSpacing.s12),
+                                  Expanded(
+                                    child: Text(
+                                      _comments.isEmpty
+                                          ? 'Be the first to comment'
+                                          : '${_comments.length} comment${_comments.length == 1 ? '' : 's'}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: fx.heroFg,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    _comments.isEmpty ? 'Comment' : 'View all',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: p.primary,
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    size: 20,
+                                    color: p.primary,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

@@ -25,6 +25,7 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.news_app"
@@ -32,8 +33,13 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+
+        // Set appropriate version info for production
+        versionCode = 1
+        versionName = "1.0.0"
+
+        // MultiDex support for large apps
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -41,6 +47,20 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+
+            // Enable shrinking and resource optimization for release builds
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+
+            // Enable R8 for code optimization (successor to ProGuard)
+            isEnableR8 = true
+
+            // Specify proguard rules file
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
@@ -50,5 +70,6 @@ flutter {
 }
 
 dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -56,6 +56,44 @@ class _FeedListViewState extends State<FeedListView>
     final itemCount =
         widget.posts.length + (widget.loadingMore ? 1 : 0) + (header != null ? 1 : 0);
 
+    // Empty state: show only when there are no posts and we are not actively loading.
+    if (widget.posts.isEmpty && !widget.loadingMore) {
+      final fx = FeedXpressoTheme.fx(context);
+      return ColoredBox(
+        color: fx.background,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            if (header != null) header,
+            const SizedBox(height: 80),
+            Icon(Icons.feed_outlined, size: 56, color: fx.textHint),
+            const SizedBox(height: 16),
+            Text(
+              'No stories yet',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSans(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: fx.title,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Pull down to refresh or check back later.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.notoSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: fx.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      );
+    }
+
     final fx = FeedXpressoTheme.fx(context);
     return ColoredBox(
       color: fx.background,

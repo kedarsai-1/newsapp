@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../widgets/dailyhunt/dailyhunt_category_tab_bar.dart';
 import '../../widgets/dailyhunt/dailyhunt_feed_card.dart';
 import '../../widgets/dailyhunt/dailyhunt_feed_shimmer.dart';
@@ -129,83 +130,152 @@ class _DailyhuntHomeScreenState extends State<DailyhuntHomeScreen> {
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
     final items = _itemsForCategory(_categoryIndex);
-    return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Scaffold(
+      backgroundColor: fx.background,
+      body: Column(
+        children: [
+          // Header with glass morphism effect
+          Container(
+            decoration: BoxDecoration(
+              color: fx.glassSurface,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+              border: Border.all(color: fx.glassBorder, width: 1),
+            ),
+            child: Column(
               children: [
+                // Header content
                 DailyhuntHomeAppBar(
                   onProfileTap: () => XpressoSideMenu.open(context),
                   onNotificationTap: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No new notifications'),
+                      SnackBar(
+                        content: Text(
+                          'No new notifications',
+                          style: GoogleFonts.notoSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: fx.title,
+                          ),
+                        ),
                         behavior: SnackBarBehavior.floating,
-                        width: 320,
-                        duration: Duration(milliseconds: 1400),
+                        width: 280,
+                        backgroundColor: fx.surfaceElevated,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: fx.divider, width: 0.5),
+                        ),
+                        duration: const Duration(milliseconds: 1400),
                       ),
                     );
                   },
                 ),
-                Divider(
-                  height: 1,
-                  thickness: 0.5,
-                  color: fx.divider,
-                ),
-                DailyhuntCategoryTabBar(
-                  categories: DailyhuntHomeScreen.categories,
-                  selectedIndex: _categoryIndex,
-                  onSelected: _onCategoryChanged,
-                ),
-                Expanded(
-                  child: ColoredBox(
-                    color: fx.background,
-                    child: RefreshIndicator(
-                    color: fx.accent,
-                    backgroundColor: fx.background,
-                    edgeOffset: 4,
-                    onRefresh: _onRefresh,
-                    child: _loading
-                        ? const SingleChildScrollView(
-                            physics: FeedListTuning.scrollPhysics,
-                            child: DailyhuntFeedShimmer(itemCount: 6),
-                          )
-                        : FeedListTuning.clampingScroll(
-                            child: ListView.builder(
-                            physics: FeedListTuning.scrollPhysics,
-                            cacheExtent: FeedListTuning.cacheExtent,
-                            addAutomaticKeepAlives: false,
-                            addRepaintBoundaries: false,
-                            padding: FeedListTuning.listPadding.copyWith(
-                              bottom: 16,
-                            ),
-                            itemCount: items.length,
-                            itemBuilder: (context, index) {
-                              final s = items[index];
-                              return DailyhuntFeedCard(
-                                key: ValueKey(s.id),
-                                imageUrl: s.imageUrl,
-                                headline: s.headline,
-                                summary: s.summary,
-                                sourceName: s.sourceName,
-                                publishedAt: s.publishedAt,
-                                likeCount: s.likeCount,
-                                onTap: () {},
-                                onShare: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Share sheet (wire up)'),
-                                      behavior: SnackBarBehavior.floating,
-                                      width: 320,
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                          ),
+                // Category Tab Bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: fx.glassSurface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: fx.glassBorder, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: fx.accent.withValues(alpha: 0.08),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: DailyhuntCategoryTabBar(
+                      categories: DailyhuntHomeScreen.categories,
+                      selectedIndex: _categoryIndex,
+                      onSelected: _onCategoryChanged,
                     ),
                   ),
                 ),
+                const SizedBox(height: 4),
               ],
+            ),
+          ),
+
+          // Content area
+          Expanded(
+            child: ColoredBox(
+              color: fx.background,
+              child: RefreshIndicator(
+                color: fx.accent,
+                backgroundColor: fx.surfaceElevated,
+                edgeOffset: 4,
+                onRefresh: _onRefresh,
+                child: _loading
+                    ? SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: List.generate(6, (index) =>
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: fx.glassSurface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: fx.glassBorder, width: 1),
+                                  ),
+                                  height: 200,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        cacheExtent: 1000,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final s = items[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: DailyhuntFeedCard(
+                              key: ValueKey(s.id),
+                              imageUrl: s.imageUrl,
+                              headline: s.headline,
+                              summary: s.summary,
+                              sourceName: s.sourceName,
+                              publishedAt: s.publishedAt,
+                              likeCount: s.likeCount,
+                              onTap: () {},
+                              onShare: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Share functionality coming soon',
+                                      style: GoogleFonts.notoSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: fx.title,
+                                      ),
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                    width: 280,
+                                    backgroundColor: fx.surfaceElevated,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: BorderSide(color: fx.divider, width: 0.5),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

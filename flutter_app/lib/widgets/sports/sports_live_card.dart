@@ -41,14 +41,18 @@ class SportsLiveCard extends StatelessWidget {
           side: BorderSide(color: fx.divider, width: 0.5),
         ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: EdgeInsets.all(pad),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
+        child: Semantics(
+          label: '${a?.shortName ?? ''} ${b != null ? 'vs ${b.shortName}' : ''} ${match.status.toString().split('.').last} match',
+          hint: 'Double tap to activate',
+          button: true,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsets.all(pad),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 Row(
                   children: [
                     if (isLive) ...[

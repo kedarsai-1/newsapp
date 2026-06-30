@@ -72,7 +72,12 @@ class _EnhancedDailyhuntFeedArticleCardState extends State<EnhancedDailyhuntFeed
 
   static String? _countLabel(int n) {
     if (n <= 0) return null;
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}k';
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000) {
+      final k = n / 1000;
+      // Show "1k" not "1.0k"
+      return k == k.roundToDouble() ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
+    }
     return '$n';
   }
 

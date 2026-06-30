@@ -273,10 +273,15 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                   style: TextStyle(color: st.body),
                 ),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () =>
-                      context.read<ShortsProvider>().refresh(language: lang),
-                  child: Text(I18n.t(context, 'action_try_again')),
+                Semantics(
+                  label: 'Try again',
+                  hint: 'Double tap to activate',
+                  button: true,
+                  child: FilledButton(
+                    onPressed: () =>
+                        context.read<ShortsProvider>().refresh(language: lang),
+                    child: Text(I18n.t(context, 'action_try_again')),
+                  ),
                 ),
               ],
             ),
@@ -345,11 +350,16 @@ class _ShortsNewsScreenState extends State<ShortsNewsScreen>
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: () => context
-                            .read<ShortsProvider>()
-                            .refresh(language: lang),
-                        child: Text(I18n.t(context, 'action_refresh')),
+                      Semantics(
+                        label: 'Refresh shorts feed',
+                        hint: 'Double tap to activate',
+                        button: true,
+                        child: TextButton(
+                          onPressed: () => context
+                              .read<ShortsProvider>()
+                              .refresh(language: lang),
+                          child: Text(I18n.t(context, 'action_refresh')),
+                        ),
                       ),
                     ],
                   ),

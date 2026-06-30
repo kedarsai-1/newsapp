@@ -18,6 +18,7 @@ import 'providers/theme_provider.dart';
 import 'screens/onboarding/dailyhunt_splash_screen.dart';
 import 'screens/onboarding/onboarding_interests_screen.dart';
 import 'screens/onboarding/onboarding_language_screen.dart';
+import 'screens/onboarding/enhanced_onboarding_language_screen.dart';
 import 'screens/onboarding/onboarding_location_screen.dart';
 import 'screens/onboarding/onboarding_notifications_screen.dart';
 import 'screens/onboarding/onboarding_welcome_screen.dart';
@@ -27,7 +28,10 @@ import 'screens/auth/register_screen.dart';
 import 'screens/user/feed_screen.dart' show FeedScreen;
 import 'theme/xpresso_app_theme.dart';
 import 'widgets/feed/feed_xpresso_theme.dart';
+import 'widgets/feed/enhanced_theme.dart';
+import 'widgets/feed/feed_xpresso_palette_enhanced.dart';
 import 'widgets/dailyhunt/xpresso_bottom_nav_bar.dart';
+import 'widgets/dailyhunt/enhanced_xpresso_bottom_nav_bar.dart';
 import 'widgets/dailyhunt/xpresso_menu_scope.dart';
 import 'widgets/dailyhunt/xpresso_side_menu.dart';
 import 'screens/user/shorts_news_screen.dart';
@@ -268,7 +272,7 @@ GoRouter createAppRouter(BuildContext context) {
         path: '/onboarding/language',
         pageBuilder: (context, state) => _onboardingFadePage(
           state: state,
-          child: const OnboardingLanguageScreen(),
+          child: const EnhancedOnboardingLanguageScreen(),
         ),
       ),
       GoRoute(
@@ -696,6 +700,13 @@ class _UserShellState extends State<UserShell> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _shortsPrefetched = false;
 
+  FeedXpressoPaletteEnhanced _getEnhancedPalette(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return isDark
+        ? FeedXpressoPaletteEnhanced.dark
+        : FeedXpressoPaletteEnhanced.light;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -766,55 +777,29 @@ class _UserShellState extends State<UserShell> {
           ),
           bottomNavigationBar: hideBottomNav
               ? null
-              : XpressoBottomNavBar(
-        selectedIndex: idx,
-        onSelected: (i) {
-          switch (i) {
-            case 0:
-              _goIfNeeded(context, loc, '/feed');
-              return;
-            case 1:
-              _goIfNeeded(context, loc, '/shorts');
-              return;
-            case 2:
-              _goIfNeeded(context, loc, '/categories');
-              return;
-            case 3:
-              _goIfNeeded(context, loc, '/bookmarks');
-              return;
-            case 4:
-              _goIfNeeded(context, loc, '/settings');
-              return;
-          }
-        },
-        destinations: [
-          XpressoNavDestination(
-            icon: Icons.dynamic_feed_outlined,
-            selectedIcon: Icons.dynamic_feed_rounded,
-            label: I18n.t(context, 'tab_feed'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.view_stream_outlined,
-            selectedIcon: Icons.view_stream_rounded,
-            label: I18n.t(context, 'tab_shorts'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.grid_view_outlined,
-            selectedIcon: Icons.grid_view_rounded,
-            label: I18n.t(context, 'feed_categories'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.bookmark_outline,
-            selectedIcon: Icons.bookmark_rounded,
-            label: I18n.t(context, 'tab_saved'),
-          ),
-          XpressoNavDestination(
-            icon: Icons.person_outline,
-            selectedIcon: Icons.person_rounded,
-            label: I18n.t(context, 'tab_settings'),
-          ),
-        ],
-          ),
+              : EnhancedXpressoBottomNavBar(
+                  currentIndex: idx,
+                  onTap: (i) {
+                    switch (i) {
+                      case 0:
+                        _goIfNeeded(context, loc, '/feed');
+                        return;
+                      case 1:
+                        _goIfNeeded(context, loc, '/shorts');
+                        return;
+                      case 2:
+                        _goIfNeeded(context, loc, '/categories');
+                        return;
+                      case 3:
+                        _goIfNeeded(context, loc, '/bookmarks');
+                        return;
+                      case 4:
+                        _goIfNeeded(context, loc, '/settings');
+                        return;
+                    }
+                  },
+                  palette: _getEnhancedPalette(context),
+                ),
         ),
     );
   }

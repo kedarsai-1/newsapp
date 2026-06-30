@@ -103,9 +103,9 @@ abstract final class FeedXpressoTheme {
   static Color get navInactiveIcon => _dark.navInactiveIcon;
   static Color get navInactiveLabel => _dark.navInactiveLabel;
   static Color get navActiveIndicator => _dark.navActiveIndicator;
-  static const double navBarHeight = 46;
-  static const double navIconSize = 20;
-  static const double navLabelSize = 9;
+  static const double navBarHeight = 64;
+  static const double navIconSize = 22;
+  static const double navLabelSize = 11;
   static const double navIndicatorWidth = 22;
   static const double navIndicatorHeight = 2.5;
 

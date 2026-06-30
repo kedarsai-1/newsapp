@@ -113,7 +113,7 @@ class _XpressoNavItem extends StatelessWidget {
               Container(
                 width: FeedXpressoTheme.navIndicatorWidth,
                 height: FeedXpressoTheme.navIndicatorHeight,
-                margin: const EdgeInsets.only(bottom: 3),
+                margin: const EdgeInsets.only(bottom: 4),
                 decoration: BoxDecoration(
                   color: fx.navActiveIndicator,
                   borderRadius: BorderRadius.circular(2),
@@ -126,13 +126,13 @@ class _XpressoNavItem extends StatelessWidget {
                 ),
               )
             else
-              SizedBox(height: 5),
+              SizedBox(height: 6),
             Icon(
               selected ? destination.selectedIcon : destination.icon,
               size: FeedXpressoTheme.navIconSize,
               color: iconColor,
             ),
-            SizedBox(height: 2),
+            SizedBox(height: 4),
             Text(
               destination.label,
               maxLines: 1,
@@ -141,7 +141,7 @@ class _XpressoNavItem extends StatelessWidget {
                 fontSize: FeedXpressoTheme.navLabelSize,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 color: labelColor,
-                height: 1,
+                height: 1.2,
               ),
             ),
           ],

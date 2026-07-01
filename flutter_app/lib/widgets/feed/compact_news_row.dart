@@ -175,6 +175,7 @@ class _CompactNewsRowState extends State<CompactNewsRow> {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -542,8 +543,7 @@ class _CompactFeedActionState extends State<CompactFeedAction> {
           ),
         ),
       ),
+      ),
     );
-  }
-}
   }
 }

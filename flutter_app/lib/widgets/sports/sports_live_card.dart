@@ -132,6 +132,7 @@ class SportsLiveCard extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 

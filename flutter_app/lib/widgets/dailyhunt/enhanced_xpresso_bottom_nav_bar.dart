@@ -257,6 +257,7 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
           );
         },
       ),
+      ),
     );
   }
 

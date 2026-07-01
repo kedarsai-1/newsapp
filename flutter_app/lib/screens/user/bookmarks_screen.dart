@@ -1042,10 +1042,11 @@ class _SavedListTile extends StatelessWidget {
                           const BoxConstraints(minWidth: 32, minHeight: 32),
                       tooltip: 'Remove',
                       onPressed: onRemove,
-                    icon: Icon(
-                      Icons.bookmark_remove_rounded,
-                      size: 20,
-                      color: fx.iconFgMuted,
+                      icon: Icon(
+                        Icons.bookmark_remove_rounded,
+                        size: 20,
+                        color: fx.iconFgMuted,
+                      ),
                     ),
                   ),
                 )

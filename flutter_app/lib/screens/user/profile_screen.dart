@@ -761,7 +761,7 @@ class _QuickActionCardState extends State<_QuickActionCard> {
           ),
         ),
       ),
-    );
+      ),
     );
   }
 }

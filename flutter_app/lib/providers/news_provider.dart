@@ -1191,7 +1191,7 @@ class NewsProvider extends ChangeNotifier {
     if (likes != null && post.likes != likes) {
       // Update likes count
       _posts[index] = NewsPost.fromJson({
-        ...post.toJson(),
+        ...post.toJsonMap(),
         'likes': likes,
       });
     }

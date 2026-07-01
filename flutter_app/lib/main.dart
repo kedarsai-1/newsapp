@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'services/auth_provider.dart';
+import 'services/history_service.dart';
 import 'providers/news_provider.dart';
 import 'providers/onboarding_draft_provider.dart';
 import 'providers/shorts_provider.dart';
@@ -582,6 +583,7 @@ class NewsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SportsProvider()),
         ChangeNotifierProvider(create: (_) => ReporterProvider()),
         ChangeNotifierProvider(create: (_) => AdminProvider()),
+        ChangeNotifierProvider(create: (_) => HistoryService()..init()),
       ],
       child: const _AuthenticatedAppShell(),
     );

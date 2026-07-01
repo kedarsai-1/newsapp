@@ -12,11 +12,13 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
+import '../../services/history_service.dart';
 import '../../services/publisher_follow_service.dart';
 import '../../services/tts_service.dart';
 import '../../services/article_cache.dart';
 import '../../constants.dart';
 import '../../users/media_widgets.dart';
+import '../../utils/feed_image_url.dart';
 import '../../widgets/location_label.dart';
 import '../../utils/article_detail_text.dart';
 import '../../utils/i18n.dart';
@@ -63,6 +65,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   bool _ttsSpeaking = false;
   bool _isOffline = false;
   double _readScale = 1.0;
+  List<String> _imageCandidates = [];
+  int _imageCandidateIndex = 0;
   final _commentCtrl = TextEditingController();
   final _commentFocus = FocusNode();
   final _scrollCtrl = ScrollController();
@@ -79,6 +83,20 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     if (!mounted) return;
     setState(() => _ttsSpeaking = TtsService.instance.isSpeaking);
   }
+
+  void _onImageUnavailable() {
+    final next = _imageCandidateIndex + 1;
+    if (next < _imageCandidates.length) {
+      setState(() {
+        _imageCandidateIndex = next;
+      });
+    }
+  }
+
+  String? get _currentImageUrl =>
+      _imageCandidates.isNotEmpty && _imageCandidateIndex < _imageCandidates.length
+          ? _imageCandidates[_imageCandidateIndex]
+          : null;
 
   Future<void> _load() async {
     if (mounted) {
@@ -101,9 +119,13 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
         if (postRes['success'] == true && postRes['post'] != null) {
           _post = NewsPost.fromJson(postRes['post']);
           context.read<NewsProvider>().markPostAsSeen(widget.postId);
+          context.read<HistoryService>().markAsSeen(widget.postId);
+          context.read<HistoryService>().enrichPost(_post!);
           _loadError = null;
           _notFound = false;
           _isOffline = false;
+          _imageCandidates = feedImageUrlCandidatesForPost(_post!);
+          _imageCandidateIndex = 0;
         } else {
           _post = null;
           final msg = postRes['message']?.toString().trim();
@@ -140,6 +162,8 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
           _post = cachedPost;
           _isOffline = true;
           _loading = false;
+          _imageCandidates = feedImageUrlCandidatesForPost(cachedPost);
+          _imageCandidateIndex = 0;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -686,9 +710,11 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
       );
     }
     final post = _post!;
+    final currentImg = _currentImageUrl;
+    // Show hero image if we have a non-YouTube, non-logo candidate
     final showHeroImage = !post.isYoutube &&
-        post.hasImages &&
-        !_looksLikeLogoUrl(post.firstImage!.url);
+        currentImg != null &&
+        !_looksLikeLogoUrl(currentImg);
 
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(
@@ -730,47 +756,10 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
                                 borderRadius: const BorderRadius.vertical(
                                   bottom: Radius.circular(24),
                                 ),
-                                child: CachedNetworkImage(
-                                  imageUrl: AppConstants.imageUrlForDisplay(
-                                    post.firstImage!.url,
-                                    articleReferer: post.sourceUrl,
-                                  ),
-                                  imageBuilder: (context, provider) {
-                                    final isLogo =
-                                        _looksLikeLogoUrl(post.firstImage!.url);
-                                    return Container(
-                                      color: Colors.transparent,
-                                      padding: isLogo
-                                          ? const EdgeInsets.all(14)
-                                          : EdgeInsets.zero,
-                                      alignment: Alignment.center,
-                                      child: Image(
-                                        image: provider,
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                        fit: isLogo
-                                            ? BoxFit.contain
-                                            : BoxFit.cover,
-                                        alignment: Alignment.center,
-                                        filterQuality: FilterQuality.high,
-                                      ),
-                                    );
-                                  },
-                                  memCacheWidth: kIsWeb ? null : 2200,
-                                  fadeInDuration:
-                                      const Duration(milliseconds: 280),
-                                  placeholder: (_, __) => Container(
-                                    color: Colors.transparent,
-                                    alignment: Alignment.center,
-                                  ),
-                                  errorWidget: (_, __, ___) => Container(
-                                    color: Colors.transparent,
-                                    alignment: Alignment.center,
-                                    child: Icon(
-                                        Icons.image_not_supported_outlined,
-                                        color: p.textHint,
-                                        size: 48),
-                                  ),
+                                child: _DetailHeroImage(
+                                  post: post,
+                                  currentUrl: currentImg,
+                                  onUnavailable: _onImageUnavailable,
                                 ),
                               ),
                               // Ensures top-right actions/back button are always readable.
@@ -1528,6 +1517,95 @@ extension NewPostMap on NewsPost {
           'sourcePublishedAt': sourcePublishedAt!.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
       };
+}
+
+/// Handles hero image rendering with multi-candidate fallback for article detail.
+class _DetailHeroImage extends StatefulWidget {
+  final NewsPost post;
+  final String? currentUrl;
+  final VoidCallback? onUnavailable;
+
+  const _DetailHeroImage({
+    required this.post,
+    this.currentUrl,
+    this.onUnavailable,
+  });
+
+  @override
+  State<_DetailHeroImage> createState() => _DetailHeroImageState();
+}
+
+class _DetailHeroImageState extends State<_DetailHeroImage> {
+  bool _failed = false;
+
+  void _reportUnavailable() {
+    if (_failed) return;
+    _failed = true;
+    widget.onUnavailable?.call();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DetailHeroImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentUrl != widget.currentUrl) {
+      _failed = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.currentUrl == null || widget.currentUrl!.trim().isEmpty || _failed) {
+      return Container(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Center(
+          child: Icon(
+            Icons.image_not_supported_outlined,
+            color: Theme.of(context).colorScheme.outline,
+            size: 48,
+          ),
+        ),
+      );
+    }
+
+    final url = AppConstants.imageUrlForDisplay(
+      widget.currentUrl,
+      articleReferer: widget.post.sourceUrl,
+    );
+    final isLogo = _looksLikeLogoUrl(widget.currentUrl!);
+
+    return CachedNetworkImage(
+      imageUrl: url,
+      memCacheWidth: kIsWeb ? null : 2200,
+      fadeInDuration: const Duration(milliseconds: 280),
+      placeholder: (_, __) => Container(color: Colors.transparent),
+      errorWidget: (_, __, ___) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _reportUnavailable());
+        return Container(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Center(
+            child: Icon(
+              Icons.image_not_supported_outlined,
+              color: Theme.of(context).colorScheme.outline,
+              size: 48,
+            ),
+          ),
+        );
+      },
+      imageBuilder: (context, provider) => Container(
+        color: Colors.transparent,
+        padding: isLogo ? const EdgeInsets.all(14) : EdgeInsets.zero,
+        alignment: Alignment.center,
+        child: Image(
+          image: provider,
+          width: double.infinity,
+          height: double.infinity,
+          fit: isLogo ? BoxFit.contain : BoxFit.cover,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
+    );
+  }
 }
 
 class _GlassActionIconButton extends StatefulWidget {

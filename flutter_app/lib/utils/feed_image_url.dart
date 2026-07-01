@@ -3,43 +3,58 @@ import '../models/models.dart';
 import 'feed_failed_image_cache.dart';
 
 /// Logos, favicons, and site placeholders — not valid feed hero images.
+/// This conservative check only blocks clear non-content images so that
+/// legitimate publisher images whose CDN paths contain words like "logo"
+/// or "default" are not silently dropped. Domain-aware checks (Google hosts,
+/// placeholder paths) are applied separately in _collectFeedImageCandidate.
 bool isUnusableFeedImageUrl(String? url) {
   if (url == null) return true;
   final u = url.trim().toLowerCase();
   if (u.isEmpty) return true;
+
+  // Must look like an actual image file — SVG/ICO are never feed images.
+  if (u.endsWith('.svg') || u.endsWith('.ico')) return true;
+
+  // Tracking pixels, ad slots, and third-party asset hosts.
   if (u.contains('clearbit.com')) return true;
   if (u.contains('/s2/favicons')) return true;
-  if (u.contains('favicon') ||
-      u.contains('/logo') ||
-      u.contains('/logos/') ||
-      u.contains('sprite') ||
-      RegExp(r'[/_.-]icon\.(jpg|jpeg|png|webp|gif)').hasMatch(u) ||
-      u.contains('/icons/') ||
-      u.contains('placeholder') ||
-      u.contains('/theme/images/') ||
-      RegExp(r'/default[_-]?og[_-]?image').hasMatch(u) ||
-      RegExp(r'/default[/-]').hasMatch(u) ||
-      u.contains('avatar') ||
-      u.contains('/profile/') ||
-      u.contains('1x1') ||
-      u.contains('pixel') ||
-      u.contains('scorecardresearch.com') ||
-      u.contains('doubleclick.net') ||
-      u.contains('googletagmanager.com') ||
-      u.contains('google-analytics.com') ||
-      u.endsWith('.svg') ||
-      u.endsWith('.ico')) {
+  if (u.contains('scorecardresearch.com')) return true;
+  if (u.contains('doubleclick.net')) return true;
+  if (u.contains('googletagmanager.com')) return true;
+  if (u.contains('google-analytics.com')) return true;
+  if (u.contains('1x1') || u.contains('pixel')) return true;
+
+  // Favicon / icon file patterns — but avoid catching legitimate paths.
+  if (u.contains('/favicon') && !u.contains('/favicon')) return true;
+  if (RegExp(r'[/_.-]icon[_-]?\d+\.(jpg|jpeg|png|webp|gif)').hasMatch(u)) return true;
+
+  return false;
+}
+
+/// Block Google-hosted assets and placeholder paths unless the image originates
+/// from the same domain as the article itself (some publishers use Google CDN).
+bool _isBlockedByDomain(String url, String? articleSourceUrl) {
+  final u = url.toLowerCase();
+  final blocked = [
+    'news.google.com',
+    'gstatic.com',
+    'googleusercontent.com',
+    '/theme/images/',
+    'placeholder',
+    '/default_og_image',
+    '/default_og-image',
+  ];
+  if (blocked.any((p) => u.contains(p))) {
+    if (articleSourceUrl != null) {
+      try {
+        final imgHost = Uri.tryParse(url)?.host ?? '';
+        final srcHost = Uri.tryParse(articleSourceUrl)?.host ?? '';
+        if (imgHost.isNotEmpty && srcHost.isNotEmpty && imgHost == srcHost) return false;
+      } catch (_) {}
+    }
     return true;
   }
-  if (!RegExp(r'\.(jpg|jpeg|png|webp|gif|avif)(\?|$)').hasMatch(u) &&
-      RegExp(r'[?&]cj=1(&|$)').hasMatch(u)) {
-    return true;
-  }
-  if (u.contains('news.google.com') ||
-      u.contains('gstatic.com') ||
-      u.contains('googleusercontent.com')) {
-    return true;
-  }
+  // Block tiny dimension images only when we can't fall back to another URL.
   final sizePattern = RegExp(r'[/_-](\d{2,3})x(\d{2,3})[/_.]');
   final match = sizePattern.firstMatch(u);
   if (match != null) {
@@ -58,6 +73,11 @@ void _collectFeedImageCandidate(
 ) {
   final trimmed = (raw ?? '').trim();
   if (trimmed.isEmpty || isUnusableFeedImageUrl(trimmed)) return;
+
+  // Second pass: block Google/placeholder domains unless the image is from the
+  // article's own origin (a publisher hosting on Google infrastructure).
+  if (_isBlockedByDomain(trimmed, post.sourceUrl)) return;
+
   final display = AppConstants.imageUrlForDisplay(
     trimmed,
     articleReferer: post.sourceUrl,

@@ -35,11 +35,19 @@ const {
 const { publisherKeyFromName } = require('../utils/publisherKey');
 const { publisherMatchClause, buildPublishersOrFilter } = require('../utils/publisherFeedFilter');
 
-/** Upstream image missing — return 404 so Flutter errorWidget / fallback runs. */
+/** Upstream image missing — return a 1×1 transparent GIF placeholder.
+ *  CachedNetworkImage on Flutter renders this as an invisible image, giving
+ *  the layout a clean blank slot rather than a broken-image icon. */
 function sendImageFailure(res, status = 404) {
   res.setHeader('Cache-Control', 'public, max-age=60');
   res.setHeader('X-Image-Cache', 'MISS');
-  return res.status(status).type('text/plain').send('Image unavailable');
+  res.setHeader('X-Image-Fallback', 'placeholder');
+  // 1×1 transparent GIF — a valid image the client can display silently.
+  const transparentGif = Buffer.from(
+    'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    'base64',
+  );
+  return res.status(status).type('image/gif').send(transparentGif);
 }
 
 async function fetchImageBuffer(url, headers, signal) {

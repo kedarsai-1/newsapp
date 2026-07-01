@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/models.dart';
+import '../../utils/feed_image_url.dart';
 import '../../widgets/feed/feed_xpresso_palette_enhanced.dart';
 import '../../widgets/feed/feed_image_cache.dart';
 import 'feed_xpresso_theme.dart';
@@ -52,7 +53,7 @@ class _EnhancedDailyhuntFeedArticleCardState extends State<EnhancedDailyhuntFeed
   void _syncFromPost() {
     _liked = widget.liked;
     _saved = widget.saved;
-    _imageCandidates = [widget.post.firstImage?.url].whereType<String>().where((url) => url.trim().isNotEmpty).toList();
+    _imageCandidates = feedImageUrlCandidatesForPost(widget.post);
     _imageCandidateIndex = 0;
     _imageUrl = _imageCandidates.isNotEmpty ? _imageCandidates.first : '';
   }

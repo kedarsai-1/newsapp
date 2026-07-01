@@ -35,6 +35,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
   }
 
   @override
@@ -84,7 +87,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     final fx = FeedXpressoTheme.fx(context);
     final bottomInset = FeedXpressoTheme.feedBottomInset(context);
     final user = context.watch<AuthProvider>().user;
-    final isLoggedIn = user != null;
+    final newsProvider = context.watch<NewsProvider>();
+    final seenCount = newsProvider.seenPostCount;
+    final savedCount = newsProvider.savedCount;
+    final topicsCount = newsProvider.categories.length;
 
     return Scaffold(
       backgroundColor: fx.background,
@@ -131,6 +137,9 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: _ProfileCard(
               user: user,
               fx: fx,
+              seenCount: seenCount,
+              savedCount: savedCount,
+              topicsCount: topicsCount,
               onEdit: () => _editProfile(context, user?.name ?? ''),
               onSignIn: () => context.push('/login'),
               onSignOut: () async {
@@ -169,6 +178,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 child: TabBar(
                   controller: _tabController,
+                  onTap: (_) => setState(() {}),
                   indicator: BoxDecoration(
                     color: fx.accent,
                     borderRadius: BorderRadius.circular(10),
@@ -197,57 +207,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
 
           // ── Tab Content ───────────────────────────────────────
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                // General tab
-                _GeneralTab(
-                  fx: fx,
-                  breakingAlerts: _breakingAlerts,
-                  dailyDigest: _dailyDigest,
-                  recommendedAlerts: _recommendedAlerts,
-                  onBreakingChanged: (v) async {
-                    setState(() => _breakingAlerts = v);
-                    await _syncPushTopics();
-                  },
-                  onDailyDigestChanged: (v) async {
-                    setState(() => _dailyDigest = v);
-                    await _syncPushTopics();
-                  },
-                  onRecommendedChanged: (v) =>
-                      setState(() => _recommendedAlerts = v),
-                ),
-
-                // Content tab
-                _ContentTab(
-                  fx: fx,
-                  onReplayOnboarding: () async {
-                    context.read<OnboardingDraftProvider>().reset();
-                    await context.read<NewsProvider>().resetOnboarding();
-                    if (!context.mounted) return;
-                    context.go('/onboarding/language');
-                  },
-                  onClearCache: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.remove(_translatedCacheKey);
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(I18n.t(context, 'snack_translated_cleared')),
-                        behavior: SnackBarBehavior.floating,
-                        width: 280,
-                        duration: const Duration(milliseconds: 1200),
-                      ),
-                    );
-                  },
-                ),
-
-                // About tab
-                _AboutTab(fx: fx),
-              ],
-            ),
+          // Render active tab in the main scroll view so all settings
+          // (including notifications) remain reachable on every screen size.
+          SliverToBoxAdapter(
+            child: _buildActiveTabContent(fx),
           ),
 
           // Bottom spacer
@@ -258,6 +221,53 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
   }
+
+  Widget _buildActiveTabContent(dynamic fx) {
+    switch (_tabController.index) {
+      case 1:
+        return _ContentTab(
+          fx: fx,
+          onReplayOnboarding: () async {
+            context.read<OnboardingDraftProvider>().reset();
+            await context.read<NewsProvider>().resetOnboarding();
+            if (!context.mounted) return;
+            context.go('/onboarding/language');
+          },
+          onClearCache: () async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove(_translatedCacheKey);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(I18n.t(context, 'snack_translated_cleared')),
+                behavior: SnackBarBehavior.floating,
+                width: 280,
+                duration: const Duration(milliseconds: 1200),
+              ),
+            );
+          },
+        );
+      case 2:
+        return _AboutTab(fx: fx);
+      case 0:
+      default:
+        return _GeneralTab(
+          fx: fx,
+          breakingAlerts: _breakingAlerts,
+          dailyDigest: _dailyDigest,
+          recommendedAlerts: _recommendedAlerts,
+          onBreakingChanged: (v) async {
+            setState(() => _breakingAlerts = v);
+            await _syncPushTopics();
+          },
+          onDailyDigestChanged: (v) async {
+            setState(() => _dailyDigest = v);
+            await _syncPushTopics();
+          },
+          onRecommendedChanged: (v) => setState(() => _recommendedAlerts = v),
+        );
+    }
+  }
 }
 
 // ─── Profile Card ─────────────────────────────────────────────────────────────
@@ -265,6 +275,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 class _ProfileCard extends StatelessWidget {
   final dynamic user;
   final dynamic fx;
+  final int seenCount;
+  final int savedCount;
+  final int topicsCount;
   final VoidCallback onEdit;
   final VoidCallback onSignIn;
   final VoidCallback onSignOut;
@@ -272,6 +285,9 @@ class _ProfileCard extends StatelessWidget {
   const _ProfileCard({
     required this.user,
     required this.fx,
+    required this.seenCount,
+    required this.savedCount,
+    required this.topicsCount,
     required this.onEdit,
     required this.onSignIn,
     required this.onSignOut,
@@ -420,17 +436,17 @@ class _ProfileCard extends StatelessWidget {
                 Row(
                   children: [
                     _ProfileStat(
-                      value: '127',
+                      value: '$seenCount',
                       label: 'Read',
                       icon: Icons.auto_stories_rounded,
                     ),
                     _ProfileStat(
-                      value: '23',
+                      value: '$savedCount',
                       label: 'Saved',
                       icon: Icons.bookmark_rounded,
                     ),
                     _ProfileStat(
-                      value: '3',
+                      value: '$topicsCount',
                       label: 'Topics',
                       icon: Icons.category_rounded,
                     ),

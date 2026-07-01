@@ -125,6 +125,9 @@ class NewsProvider extends ChangeNotifier {
   String? get error => _error;
   String? get breakingError => _breakingError;
   String? get categoriesError => _categoriesError;
+  int get seenPostCount => _seenPostIds.length;
+  int get savedCount => _savedCount;
+  int get historyCount => _seenPostIds.length;
   bool get prefsLoaded => _prefsLoaded;
   bool get languageOnboardingCompleted => _languageOnboardingCompleted;
 
@@ -145,6 +148,8 @@ class NewsProvider extends ChangeNotifier {
   bool _languageOnboardingCompleted = false;
   bool _hasStoredFeedLanguagePreference = false;
   final Set<String> _seenPostIds = {};
+  int _savedCount = 0;
+  static const String _savedCountPrefKey = 'saved_article_count';
 
   /// Raw onboarding pick (en/te/hi/ta/…) — used when feed filter is "all".
   String? _onboardingUiLanguage;
@@ -331,6 +336,7 @@ class NewsProvider extends ChangeNotifier {
     _seenPostIds
       ..clear()
       ..addAll(prefs.getStringList(_seenPostsKey) ?? const []);
+    _savedCount = prefs.getInt(_savedCountPrefKey) ?? 0;
 
     final layoutStr = prefs.getString(_layoutModePrefKey);
     if (layoutStr != null) {
@@ -416,6 +422,14 @@ class NewsProvider extends ChangeNotifier {
     _languageOnboardingCompleted = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_languageOnboardingKey, false);
+    notifyListeners();
+  }
+
+  /// Updates and persists the saved articles count for the profile screen.
+  Future<void> setSavedCount(int count) async {
+    _savedCount = count;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_savedCountPrefKey, count);
     notifyListeners();
   }
 

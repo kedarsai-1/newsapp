@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../../models/models.dart';
+import '../../providers/news_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_provider.dart';
 import '../../widgets/feed/feed_xpresso_theme.dart';
@@ -57,12 +58,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
     final res = await ApiService.getBookmarks();
     if (!mounted) return;
+    final bookmarks = res['success'] == true
+        ? (res['bookmarks'] as List).map((p) => NewsPost.fromJson(p)).toList()
+        : <NewsPost>[];
+    context.read<NewsProvider>().setSavedCount(bookmarks.length);
     setState(() {
-      if (res['success'] == true) {
-        _bookmarks = (res['bookmarks'] as List)
-            .map((p) => NewsPost.fromJson(p))
-            .toList();
-      }
+      _bookmarks = bookmarks;
       _loading = false;
     });
   }
@@ -90,6 +91,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     if (!mounted) return;
     setState(() {
       _bookmarks.removeWhere((p) => p.id == post.id);
+      context.read<NewsProvider>().setSavedCount(_bookmarks.length);
       if (_selectedCategoryId != null &&
           _bookmarks.every((p) => p.category?.id != _selectedCategoryId)) {
         _selectedCategoryId = null;
@@ -119,6 +121,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     if (!mounted) return;
     setState(() {
       _bookmarks.removeWhere((p) => _selectedIds.contains(p.id));
+      context.read<NewsProvider>().setSavedCount(_bookmarks.length);
       _selectedIds.clear();
       _selectMode = false;
     });

@@ -22,7 +22,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+        jvmTarget = "17"
     }
 
     
@@ -52,9 +52,6 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
-
-            // Enable R8 for code optimization (successor to ProGuard)
-            isEnableR8 = true
 
             // Specify proguard rules file
             proguardFiles(

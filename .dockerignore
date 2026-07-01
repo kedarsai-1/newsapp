@@ -1,0 +1,16 @@
+.git
+.gitignore
+**/.dart_tool
+**/build
+**/node_modules
+flutter_app/build
+newsapp-release.apk
+.claude
+**/*.backup
+REDESIGN_PLAN.md
+e2e
+.cursor
+**/.env
+!docker/.env.example
+!flutter_app/assets/.env.example
+!flutter_app/assets/env.*.template

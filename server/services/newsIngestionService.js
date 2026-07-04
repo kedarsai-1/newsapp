@@ -88,6 +88,19 @@ function getIngestLockState(lockKey) {
   return ingestStateByLock.get(lockKey);
 }
 
+function isGlobalIngestMutexEnabled() {
+  return process.env.INGEST_GLOBAL_MUTEX === 'true';
+}
+
+/** True when any ingest lock (including global) is active, optionally excluding one key. */
+function isAnyIngestRunning(excludeLockKey = null) {
+  if (ingestState.isRunning && excludeLockKey !== 'global') return true;
+  for (const [key, state] of ingestStateByLock.entries()) {
+    if (key !== excludeLockKey && state.isRunning) return true;
+  }
+  return false;
+}
+
 const { setIngestionSocket, emitFeedUpdated } = require('./feedSocket');
 
 /** Hyperlocal city feeds must run before state-wide AP/TG local buckets (dedupe keeps first insert). */
@@ -640,6 +653,15 @@ async function runIngestion({
       success: false,
       skipped: true,
       message: `Ingestion already running (${lockKey}).`,
+      state: lockState,
+    };
+  }
+
+  if (isGlobalIngestMutexEnabled() && isAnyIngestRunning(lockKey)) {
+    return {
+      success: false,
+      skipped: true,
+      message: 'Ingestion deferred — another language pipeline is running (INGEST_GLOBAL_MUTEX).',
       state: lockState,
     };
   }

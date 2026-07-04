@@ -16,8 +16,37 @@ class AppConstants {
   /// Default local API port — macOS Monterey+ reserves 5000 for AirPlay Receiver.
   static const int defaultApiPort = 5001;
 
+  static String? _runtimeApiBaseUrl;
+  static String? _runtimeSocketUrl;
+  static String? _runtimeShareWebBaseUrl;
+
+  /// Called by [ApiRuntimeConfig] when a live production origin is discovered.
+  static void applyRuntimeApiConfig({
+    required String apiBaseUrl,
+    String? socketUrl,
+    String? shareWebBaseUrl,
+  }) {
+    var api = apiBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    if (!api.endsWith('/api')) api = '$api/api';
+    _runtimeApiBaseUrl = api;
+    if (socketUrl != null && socketUrl.trim().isNotEmpty) {
+      _runtimeSocketUrl = socketUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    }
+    if (shareWebBaseUrl != null && shareWebBaseUrl.trim().isNotEmpty) {
+      _runtimeShareWebBaseUrl =
+          shareWebBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    }
+  }
+
   /// Base API URL including `/api` suffix, e.g. `https://host.com/api` or `http://127.0.0.1:5001/api`.
   static String get baseUrl {
+    if (_runtimeApiBaseUrl != null && _runtimeApiBaseUrl!.isNotEmpty) {
+      return _runtimeApiBaseUrl!;
+    }
+    return _envBaseUrl();
+  }
+
+  static String _envBaseUrl() {
     final v = dotenv.env['API_BASE_URL']?.trim();
     if (v != null && v.isNotEmpty) return v;
     final port = int.tryParse(dotenv.env['API_PORT'] ?? '') ?? defaultApiPort;
@@ -35,6 +64,9 @@ class AppConstants {
   }
 
   static String get socketUrl {
+    if (_runtimeSocketUrl != null && _runtimeSocketUrl!.isNotEmpty) {
+      return _runtimeSocketUrl!;
+    }
     final v = dotenv.env['SOCKET_URL']?.trim();
     if (v != null && v.isNotEmpty) return v;
     final port = int.tryParse(dotenv.env['API_PORT'] ?? '') ?? defaultApiPort;
@@ -63,8 +95,11 @@ class AppConstants {
 
   static String get appName => dotenv.env['APP_NAME'] ?? 'NewsNow';
 
-  /// Public web origin for short share links (e.g. http://147.93.169.3).
+  /// Public web origin for short share links (e.g. http://187.127.189.109).
   static String get shareWebBaseUrl {
+    if (_runtimeShareWebBaseUrl != null && _runtimeShareWebBaseUrl!.isNotEmpty) {
+      return _runtimeShareWebBaseUrl!;
+    }
     final v = dotenv.env['SHARE_WEB_BASE_URL']?.trim();
     if (v != null && v.isNotEmpty) {
       return v.replaceAll(RegExp(r'/+$'), '');

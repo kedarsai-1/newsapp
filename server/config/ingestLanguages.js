@@ -107,7 +107,7 @@ function getIngestBudgetMs(language) {
 
 /** Default staggered news cron per language (offsets avoid Ollama/API pile-up). */
 function defaultNewsCronForLanguage(language) {
-  const offsets = { en: 0, hi: 5, te: 10, ta: 3, kn: 8, bn: 13, ml: 18 };
+  const offsets = { en: 0, hi: 5, te: 10, ta: 3, kn: 8, bn: 13, ml: 11 };
   const offset = offsets[normalizeLanguage(language)] ?? 0;
   if (offset === 0) return process.env.SCRAPER_CRON || '*/15 * * * *';
   return `${offset}-59/15 * * * *`;

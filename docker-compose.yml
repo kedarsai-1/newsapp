@@ -43,8 +43,6 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-news_app}?schema=public
       REDIS_URL: redis://redis:6379
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      SHARE_WEB_BASE_URL: ${PUBLIC_ORIGIN:-http://localhost}
-      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
       TRUST_PROXY: "true"
       HOST: 0.0.0.0
       PORT: 5001
@@ -58,6 +56,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - newsapp_media:/var/www/newsapp-media/ingest
     ports:
       - "${API_PORT:-5001}:5001"
     extra_hosts:
@@ -74,6 +74,9 @@ services:
     depends_on:
       api:
         condition: service_started
+    volumes:
+      - newsapp_media:/var/www/newsapp-media/ingest:ro
+      - ./docker/download:/usr/share/nginx/html/download:ro
     ports:
       - "${WEB_PORT:-80}:80"
 
@@ -93,3 +96,4 @@ volumes:
   postgres_data:
   redis_data:
   ollama_data:
+  newsapp_media:

@@ -45,6 +45,36 @@ List<MediaItem> _bodyMediaForGallery(NewsPost post) {
   return rest.isNotEmpty ? rest : list;
 }
 
+bool looksLikeLogoUrl(String url) {
+  final u = url.toLowerCase();
+  if (u.contains('logo') ||
+      u.contains('favicon') ||
+      u.contains('/s2/favicons') ||
+      u.contains('clearbit.com/logo') ||
+      u.contains('icon') ||
+      u.contains('sprite') ||
+      u.contains('placeholder') ||
+      u.contains('default') ||
+      u.contains('avatar') ||
+      u.contains('profile') ||
+      u.contains('1x1') ||
+      u.contains('pixel') ||
+      u.endsWith('.svg') ||
+      u.endsWith('.ico')) {
+    return true;
+  }
+  final sizePattern = RegExp(r'[/_-](\d{2,3})x(\d{2,3})[/_.]');
+  final match = sizePattern.firstMatch(u);
+  if (match != null) {
+    final w = int.tryParse(match.group(1) ?? '') ?? 0;
+    final h = int.tryParse(match.group(2) ?? '') ?? 0;
+    if (w > 0 && h > 0 && w <= 256 && h <= 256) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class ArticleDetailScreen extends StatefulWidget {
   final String postId;
   const ArticleDetailScreen({super.key, required this.postId});
@@ -507,38 +537,6 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     super.dispose();
   }
 
-  bool _looksLikeLogoUrl(String url) {
-    final u = url.toLowerCase();
-    // URL pattern checks for logos/icons
-    if (u.contains('logo') ||
-        u.contains('favicon') ||
-        u.contains('/s2/favicons') ||
-        u.contains('clearbit.com/logo') ||
-        u.contains('icon') ||
-        u.contains('sprite') ||
-        u.contains('placeholder') ||
-        u.contains('default') ||
-        u.contains('avatar') ||
-        u.contains('profile') ||
-        u.contains('1x1') ||
-        u.contains('pixel') ||
-        u.endsWith('.svg') ||
-        u.endsWith('.ico')) {
-      return true;
-    }
-    // Check for small dimension indicators in URL (e.g., 180x180, 64x64)
-    final sizePattern = RegExp(r'[/_-](\d{2,3})x(\d{2,3})[/_.]');
-    final match = sizePattern.firstMatch(u);
-    if (match != null) {
-      final w = int.tryParse(match.group(1) ?? '') ?? 0;
-      final h = int.tryParse(match.group(2) ?? '') ?? 0;
-      if (w > 0 && h > 0 && w <= 256 && h <= 256) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   List<Widget> _paragraphs(String text, TextStyle style, BuildContext context) {
     final p = context.palette;
     final fx = context.fx;
@@ -714,7 +712,7 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
     // Show hero image if we have a non-YouTube, non-logo candidate
     final showHeroImage = !post.isYoutube &&
         currentImg != null &&
-        !_looksLikeLogoUrl(currentImg);
+        !looksLikeLogoUrl(currentImg);
 
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(
@@ -1571,7 +1569,7 @@ class _DetailHeroImageState extends State<_DetailHeroImage> {
       widget.currentUrl,
       articleReferer: widget.post.sourceUrl,
     );
-    final isLogo = _looksLikeLogoUrl(widget.currentUrl!);
+    final isLogo = looksLikeLogoUrl(widget.currentUrl!);
 
     return CachedNetworkImage(
       imageUrl: url,

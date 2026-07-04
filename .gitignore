@@ -63,3 +63,7 @@ coverage/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json.example
+
+# ── Local runtime / build artifacts ───────────────────────────
+newsapp-media/
+docker/download/*.apk

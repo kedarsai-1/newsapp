@@ -25,7 +25,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY server/package.json server/package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 COPY server/ ./
 RUN npx prisma generate
@@ -49,6 +49,7 @@ CMD ["node", "server.js"]
 FROM nginx:1.27-alpine AS web
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/app-config.json /usr/share/nginx/html/app-config.json
 COPY --from=web-build /src/flutter_app/build/web /usr/share/nginx/html
 
 EXPOSE 80

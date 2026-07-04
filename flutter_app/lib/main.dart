@@ -64,6 +64,7 @@ import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/pending_posts_screen.dart';
 import 'screens/admin/manage_users_screen.dart';
 import 'services/push_notifications.dart';
+import 'services/api_runtime_config.dart';
 import 'theme/indic_fonts.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -108,6 +109,7 @@ class _RouterRefreshListenable extends ChangeNotifier {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: 'assets/.env');
+  await ApiRuntimeConfig.ensureResolved();
   try {
     await PushNotifications.bootstrap();
   } catch (e, st) {

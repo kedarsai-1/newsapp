@@ -14,6 +14,20 @@ String? articleDetailBodyText(NewsPost post) {
     return _youtubeFallback(post);
   }
 
+  // When ingest AI summary failed, storage may hold only part of the article while body has the full text.
+  if (summary.isNotEmpty && body.length > summary.length + 200) {
+    final sumNorm = summary.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final bodyNorm = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final coversSmallShareOfBody =
+        sumNorm.length < bodyNorm.length * 0.55;
+    final thinLedeOnly = coversSmallShareOfBody &&
+        (bodyNorm.startsWith(sumNorm) ||
+            bodyNorm.contains(sumNorm));
+    if (thinLedeOnly) {
+      return _cleanArticleBody(body, post.language);
+    }
+  }
+
   final candidate = summary.isNotEmpty ? summary : body;
   if (candidate.isEmpty) return null;
 
@@ -22,6 +36,26 @@ String? articleDetailBodyText(NewsPost post) {
     return extracted ?? candidate;
   }
   return candidate;
+}
+
+String _cleanArticleBody(String text, String lang) {
+  var t = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  // Drop common publisher chrome that sometimes survives extraction.
+  t = t.replaceFirst(
+    RegExp(
+      r'^(?:Home|Bhakthi|Politics|Crime|Education|Jobs|Sports)\s+',
+      caseSensitive: false,
+    ),
+    '',
+  );
+  t = t.replaceFirst(
+    RegExp(r'^Published Date\s*:.*?(?=\p{Script=Telugu}|\p{Script=Devanagari})', unicode: true),
+    '',
+  );
+  if (t.length > 2200) {
+    return '${t.substring(0, 2200).trim()}…';
+  }
+  return t;
 }
 
 String _youtubeFallback(NewsPost post) {

@@ -54,7 +54,7 @@ class EnhancedXpressoBottomNavBar extends StatelessWidget {
                 palette: palette,
               ),
               _EnhancedNavItem(
-                icon: Icons.view_stream_rounded,
+                icon: Icons.play_circle_outlined,
                 label: 'Shorts',
                 isSelected: currentIndex == 1,
                 onTap: () => onTap(1),
@@ -62,20 +62,20 @@ class EnhancedXpressoBottomNavBar extends StatelessWidget {
               ),
               _EnhancedNavItem(
                 icon: Icons.grid_view_rounded,
-                label: 'Categories',
+                label: 'Topics',
                 isSelected: currentIndex == 2,
                 onTap: () => onTap(2),
                 palette: palette,
               ),
               _EnhancedNavItem(
-                icon: Icons.bookmark_rounded,
+                icon: Icons.bookmark_outline_rounded,
                 label: 'Saved',
                 isSelected: currentIndex == 3,
                 onTap: () => onTap(3),
                 palette: palette,
               ),
               _EnhancedNavItem(
-                icon: Icons.person_rounded,
+                icon: Icons.person_outline_rounded,
                 label: 'Profile',
                 isSelected: currentIndex == 4,
                 onTap: () => onTap(4),
@@ -112,7 +112,6 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
-  bool _isPressed = false;
 
   @override
   void initState() {
@@ -141,16 +140,13 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
       selected: widget.isSelected,
       child: GestureDetector(
         onTapDown: (_) {
-          setState(() => _isPressed = true);
           _controller.forward();
           HapticFeedback.selectionClick();
         },
         onTapUp: (_) {
-          setState(() => _isPressed = false);
           _controller.reverse();
         },
         onTapCancel: () {
-          setState(() => _isPressed = false);
           _controller.reverse();
         },
         onTap: widget.onTap,
@@ -263,7 +259,7 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
 
   IconData _filledIcon(IconData outlined) {
     if (outlined == Icons.dynamic_feed_outlined) return Icons.dynamic_feed_rounded;
-    if (outlined == Icons.view_stream_outlined) return Icons.view_stream_rounded;
+    if (outlined == Icons.play_circle_outlined) return Icons.play_circle_rounded;
     if (outlined == Icons.grid_view_outlined) return Icons.grid_view_rounded;
     if (outlined == Icons.bookmark_outline) return Icons.bookmark_rounded;
     if (outlined == Icons.person_outline) return Icons.person_rounded;
@@ -272,7 +268,7 @@ class _EnhancedNavItemState extends State<_EnhancedNavItem>
 
   IconData _outlinedIcon(IconData filled) {
     if (filled == Icons.dynamic_feed_rounded) return Icons.dynamic_feed_outlined;
-    if (filled == Icons.view_stream_rounded) return Icons.view_stream_outlined;
+    if (filled == Icons.play_circle_rounded) return Icons.play_circle_outlined;
     if (filled == Icons.grid_view_rounded) return Icons.grid_view_outlined;
     if (filled == Icons.bookmark_rounded) return Icons.bookmark_outline;
     if (filled == Icons.person_rounded) return Icons.person_outline;

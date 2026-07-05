@@ -26,7 +26,7 @@ import 'screens/onboarding/onboarding_welcome_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_verify_screen.dart';
 import 'screens/auth/register_screen.dart';
-import 'screens/user/feed_screen.dart' show FeedScreen;
+import 'screens/user/way2news_feed_screen.dart';
 import 'theme/xpresso_app_theme.dart';
 import 'widgets/feed/feed_xpresso_theme.dart';
 import 'widgets/feed/enhanced_theme.dart';
@@ -215,6 +215,7 @@ GoRouter createAppRouter(BuildContext context) {
       final goingToAdmin = loc.startsWith('/admin');
       final goingToReporter = loc.startsWith('/reporter');
       final goingToUserRoute = loc == '/feed' ||
+          loc == '/way2news' ||
           loc == '/shorts' ||
           loc == '/political-reels' ||
           loc == '/home' ||
@@ -343,8 +344,17 @@ GoRouter createAppRouter(BuildContext context) {
         routes: [
           GoRoute(
             path: '/feed',
-            pageBuilder: (context, state) =>
-                _smoothAppPage(state: state, child: const FeedScreen()),
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const Way2NewsFeedScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/way2news',
+            pageBuilder: (context, state) => _smoothAppPage(
+              state: state,
+              child: const Way2NewsFeedScreen(),
+            ),
           ),
           GoRoute(
             path: '/shorts',

@@ -38,6 +38,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color inputFill;
   final Color inputBorder;
   final Color snackBarBg;
+  final Color divider;
+  final Color shimmerBase;
+  final Color shimmerHighlight;
 
   const AppPalette({
     required this.primary,
@@ -75,6 +78,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.inputFill,
     required this.inputBorder,
     required this.snackBarBg,
+    required this.divider,
+    required this.shimmerBase,
+    required this.shimmerHighlight,
   });
 
   /// Dark “editorial” theme — deep ink, mint accent, soft aurora gradient.
@@ -123,6 +129,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     navSelected: Color(0xFF34D399),
     navUnselected: Color(0x99FFFFFF),
     categoryChipBg: Color(0x2634D399),
+    divider: Color(0x33FFFFFF),
+    shimmerBase: Color(0x1AFFFFFF),
+    shimmerHighlight: Color(0x26FFFFFF),
   );
 
   /// Dailyhunt Xpresso — pure black, grey accents, no color UI.
@@ -162,6 +171,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     navSelected: Color(0xFFCCCCCC),
     navUnselected: Color(0xFF454545),
     categoryChipBg: Color(0xFF1A1A1A),
+    divider: Color(0x1AFFFFFF),
+    shimmerBase: Color(0xFF1A1A1A),
+    shimmerHighlight: Color(0xFF2A2A2A),
   );
 
   /// Light theme: airy paper, crisp emerald accent.
@@ -207,6 +219,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     inputFill: Color(0xFFF3F4F6),
     inputBorder: Color(0xFFE5E7EB),
     snackBarBg: Color(0xFF1E293B),
+    divider: Color(0xFFE5E7EB),
+    shimmerBase: Color(0xFFF0F0F0),
+    shimmerHighlight: Color(0xFFE8E8E8),
   );
 
   @override
@@ -252,6 +267,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
       inputFill: inputFill,
       inputBorder: inputBorder,
       snackBarBg: snackBarBg,
+      divider: divider,
+      shimmerBase: shimmerBase,
+      shimmerHighlight: shimmerHighlight,
     );
   }
 
@@ -299,6 +317,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
       inputFill: Color.lerp(inputFill, other.inputFill, t)!,
       inputBorder: Color.lerp(inputBorder, other.inputBorder, t)!,
       snackBarBg: Color.lerp(snackBarBg, other.snackBarBg, t)!,
+      divider: Color.lerp(divider, other.divider, t)!,
+      shimmerBase: Color.lerp(shimmerBase, other.shimmerBase, t)!,
+      shimmerHighlight:
+          Color.lerp(shimmerHighlight, other.shimmerHighlight, t)!,
     );
   }
 }

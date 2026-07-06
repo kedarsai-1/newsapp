@@ -122,24 +122,37 @@ async function summarize(text, feedLang = 'en') {
 const EXTRACTIVE_BOILERPLATE = /^(?:edition|report|live|updated|breaking|watch|listen|video|gallery|in pictures)\b/i;
 const EXTRACTIVE_JUNK_LINE = /youtube|facebook|twitter|instagram|subscribe|follow us|getty images|pa media|cookie|sign up|newsletter/i;
 
+function extractiveSummaryTargetChars(maxLen = SUMMARY_STORAGE_MAX_CHARS) {
+  return Math.min(
+    maxLen,
+    Math.max(600, Number(process.env.EXTRACTIVE_SUMMARY_TARGET_CHARS || 1100)),
+  );
+}
+
+function extractiveSummaryMaxSentences() {
+  return Math.max(4, Math.min(12, Number(process.env.EXTRACTIVE_SUMMARY_MAX_SENTENCES || 10)));
+}
+
 function pickExtractiveSentences(text, maxLen = SUMMARY_STORAGE_MAX_CHARS) {
   const sentences = String(text || '')
-    .split(/(?<=[.!?।])\s+|[\n\r]+/)
+    .split(/(?<=[.!?।॥\u0964\u0965])\s+|[\n\r]+/)
     .map((s) => s.replace(/\s+/g, ' ').trim())
     .filter((s) => s.length >= 24 && !EXTRACTIVE_JUNK_LINE.test(s))
     .filter((s) => !EXTRACTIVE_BOILERPLATE.test(s));
 
   if (!sentences.length) return '';
 
+  const target = extractiveSummaryTargetChars(maxLen);
+  const maxSentences = extractiveSummaryMaxSentences();
   const picked = [];
   let total = 0;
   for (const sentence of sentences) {
-    if (picked.length >= 3) break;
+    if (picked.length >= maxSentences) break;
     const nextLen = total + (picked.length ? 1 : 0) + sentence.length;
     if (picked.length > 0 && nextLen > maxLen) break;
     picked.push(sentence);
     total = nextLen;
-    if (total >= Math.min(maxLen, 280)) break;
+    if (picked.length >= 2 && total >= target) break;
   }
 
   const joined = picked.join(' ').trim();

@@ -44,4 +44,20 @@ describe('extractiveSummaryNative', () => {
     assert.match(out, /306 runs|O'Neill|Taunton/i);
     assert.doesNotMatch(out, /^Edition/i);
   });
+
+  it('keeps multiple sentences for long indic articles (not just the lede)', () => {
+    const raw = (
+      'లేపాక్షి ఆలయం పేరు వినగానే వేలాడే స్తంభం గుర్తుకు వస్తుంది. '
+      + 'ఆంధ్రప్రదేశ్లోని శ్రీ సత్యసాయి జిల్లాలో ఈ విజయనగర కాలం నాటి ఆలయం ప్రసిద్ధి చెందింది. '
+      + 'ప్రతి సంవత్సరం వేలాది మంది భక్తులు ఈ ఆలయాన్ని సందర్శిస్తారు. '
+      + 'ఆలయంలోని ఒక స్తంభం నేలను పూర్తిగా తాకకుండా కనిపిస్తుంది. '
+      + 'కాగితం లేదా వస్త్రాన్ని సులభంగా తీసుకెళ్లవచ్చని సందర్శకులు చూపిస్తారు. '
+      + 'బ్రిటిష్ కాలంలో స్తంభాన్ని కదిలించే ప్రయత్నం జరిగినట్లు ఒక కథ ఉంది. '
+      + 'విజయనగర కాలంలో వీరన్న, విరూపన్నల ఆధ్వర్యంలో నిర్మించినట్లు చరిత్ర చెబుతోంది.'
+    );
+    const out = extractiveSummaryNative(raw);
+    assert.ok(out.length >= 400, `expected richer extractive summary, got ${out.length} chars`);
+    assert.match(out, /కాగితం|వస్త్ర/i);
+    assert.match(out, /బ్రిటిష్/i);
+  });
 });

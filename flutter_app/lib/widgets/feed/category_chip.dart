@@ -41,8 +41,8 @@ class _CategoryChipState extends State<CategoryChip>
   late AnimationController _colorController;
   late Animation<double> _scaleAnimation;
   late Animation<Color?> _colorAnimation;
-
   bool _isHovered = false;
+
 
   @override
   void initState() {

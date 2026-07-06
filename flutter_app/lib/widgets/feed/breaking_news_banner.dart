@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import '../../models/models.dart';
 import '../../utils/i18n.dart';
 import '../../theme/app_palette.dart';
-import 'breaking_banner_shared.dart';
 
 /// Premium breaking news banner with smooth page transitions.
 ///
@@ -36,7 +35,6 @@ class _BreakingNewsBannerState extends State<BreakingNewsBanner>
   late PageController _pageController;
   Timer? _timer;
   int _currentIndex = 0;
-  bool _isPressed = false;
 
   @override
   void initState() {

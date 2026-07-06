@@ -26,6 +26,7 @@ import 'screens/onboarding/onboarding_welcome_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/otp_verify_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/user/feed_screen.dart';
 import 'screens/user/way2news_feed_screen.dart';
 import 'theme/xpresso_app_theme.dart';
 import 'widgets/feed/feed_xpresso_theme.dart';
@@ -346,7 +347,7 @@ GoRouter createAppRouter(BuildContext context) {
             path: '/feed',
             pageBuilder: (context, state) => _smoothAppPage(
               state: state,
-              child: const Way2NewsFeedScreen(),
+              child: const FeedScreen(),
             ),
           ),
           GoRoute(

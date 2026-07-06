@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -356,7 +357,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   void _openArticle(NewsPost post) {
     context.read<NewsProvider>().markPostAsSeen(post.id);
-    context.push('/article/${post.id}');
+    // Home feed keeps story consumption in-context.
+    HapticFeedback.selectionClick();
   }
 
   Future<void> _refreshFeed({
@@ -375,6 +377,126 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   static (String emoji, List<Color> colors) _categoryStyle(String slug) =>
       FeedXpressoPalette.categoryGradient(slug);
+
+  String _greetingLine() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning 👋';
+    if (hour < 17) return 'Good Afternoon 👋';
+    return 'Good Evening 👋';
+  }
+
+  Widget _metaChip({
+    required IconData icon,
+    required String label,
+    required FeedXpressoPalette fx,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: fx.chipInactiveBg.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fx.textSecondary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: fx.textSecondary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonalizedHeader(NewsProvider news) {
+    final fx = FeedXpressoTheme.fx(context);
+    final location = news.selectedLocalScope == 'all'
+        ? 'Your area'
+        : news.selectedLocalScope.toUpperCase();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _greetingLine(),
+            style: TextStyle(
+              color: fx.title,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Here's what's happening today",
+            style: TextStyle(
+              color: fx.textSecondary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _metaChip(icon: Icons.wb_sunny_outlined, label: '30°C', fx: fx),
+              _metaChip(icon: Icons.location_on_outlined, label: location, fx: fx),
+              _metaChip(icon: Icons.auto_awesome_outlined, label: 'For You', fx: fx),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryBar(NewsProvider news) {
+    final fx = FeedXpressoTheme.fx(context);
+    final selectedIndex = _chipIndexForProvider(news);
+    return SizedBox(
+      height: 48,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: _kFeedTabs.length,
+        itemBuilder: (context, index) {
+          final selected = selectedIndex == index;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () => _selectCategoryChip(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: selected ? fx.accent.withValues(alpha: 0.18) : fx.chipInactiveBg,
+                ),
+                child: Text(
+                  _kFeedTabs[index].$1,
+                  style: TextStyle(
+                    color: selected ? fx.accent : fx.textSecondary,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Widget _activeCategoryBanner(NewsProvider news) {
     if (news.selectedCategoryId == null) return const SizedBox.shrink();
@@ -748,17 +870,20 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                     listHeader: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildPersonalizedHeader(context.read<NewsProvider>()),
+                        _buildCategoryBar(context.read<NewsProvider>()),
                         if (breakingPosts.isNotEmpty)
                           BreakingBanner(
                             breakingPosts: breakingPosts,
                             onTap: _openArticle,
                           ),
-                        FeedHighlightsRail(
-                          breaking: breakingPosts,
-                          trending: trendingPosts,
-                          loading: breakingLoading,
-                          onOpen: _openArticle,
-                        ),
+                        if (trendingPosts.isNotEmpty || breakingLoading)
+                          FeedHighlightsRail(
+                            breaking: breakingPosts,
+                            trending: trendingPosts,
+                            loading: breakingLoading,
+                            onOpen: _openArticle,
+                          ),
                       ],
                     ),
                     onShare: _share,
@@ -855,10 +980,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         RepaintBoundary(
-          child: _DailyhuntFeedAppBar(
-            onMenuPressed: news.layoutMode == AppLayoutMode.sidebarPanel && useMobileLayout
-                ? () => setState(() => _sidebarOpen = !_sidebarOpen)
-                : null,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _headerCollapse,
+            builder: (context, collapse, _) => _DailyhuntFeedAppBar(
+              collapse: collapse,
+              onMenuPressed: news.layoutMode == AppLayoutMode.sidebarPanel && useMobileLayout
+                  ? () => setState(() => _sidebarOpen = !_sidebarOpen)
+                  : null,
+            ),
           ),
         ),
         Expanded(
@@ -1128,11 +1257,16 @@ class _RegionChipBarData {
 
 class _DailyhuntFeedAppBar extends StatelessWidget {
   final VoidCallback? onMenuPressed;
-  const _DailyhuntFeedAppBar({this.onMenuPressed});
+  final double collapse;
+  const _DailyhuntFeedAppBar({this.onMenuPressed, this.collapse = 0});
 
   @override
   Widget build(BuildContext context) {
     final fx = FeedXpressoTheme.fx(context);
+    final bgAlpha = (collapse * 0.92).clamp(0.0, 0.92);
+    final locationCode = context.select<NewsProvider, String>(
+      (n) => n.selectedLocalScope.toUpperCase(),
+    );
     return ColoredBox(
       color: Colors.transparent,
       child: Column(
@@ -1140,104 +1274,68 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
         children: [
           SafeArea(
             bottom: false,
-            child: SizedBox(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
               height: kToolbarHeight,
+              decoration: BoxDecoration(
+                color: fx.background.withValues(alpha: bgAlpha),
+              ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   children: [
-                    Semantics(
-                      label: onMenuPressed != null
-                          ? I18n.t(context, 'feed_filter_topics')
-                          : 'Open profile menu',
-                      button: true,
-                      child: IconButton(
-                        tooltip: onMenuPressed != null
-                            ? I18n.t(context, 'feed_filter_topics')
-                            : 'Menu',
-                        onPressed: onMenuPressed ?? () => XpressoSideMenu.open(context),
-                        icon: onMenuPressed != null
-                            ? Icon(
-                                Icons.menu_open_rounded,
-                                size: 24,
-                                color: fx.accent,
-                              )
-                            : Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: fx.divider.withValues(alpha: 0.8),
-                                    width: 0.5,
-                                  ),
-                                ),
-                                child: CircleAvatar(
-                                  radius: 17,
-                                  backgroundColor: fx.iconSurface,
-                                  child: Icon(
-                                    Icons.person_rounded,
-                                    size: 19,
-                                    color: fx.iconFg,
-                                  ),
-                                ),
-                              ),
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        color: fx.accent.withValues(alpha: 0.16),
                       ),
+                      child: Icon(Icons.article_rounded, size: 18, color: fx.accent),
                     ),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.center,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 30,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    fx.accent.withValues(alpha: 0.35),
-                                    fx.iconSurface,
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: fx.accent.withValues(alpha: 0.45),
-                                  width: 0.5,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: Icon(
-                                Icons.article_rounded,
-                                color: fx.accent,
-                                size: 17,
-                              ),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(999),
+                          onTap: () {},
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: fx.chipInactiveBg.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(999),
                             ),
-                            SizedBox(width: 8),
-                            Text(
-                              AppConstants.appName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: fx.screenTitleStyle.copyWith(
-                                fontSize: 18,
-                                letterSpacing: -0.5,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '$locationCode · ${AppConstants.appName}',
+                                  style: TextStyle(
+                                    color: fx.title,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: fx.iconFg),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                     Semantics(
-                      label: 'Open AI news assistant',
+                      label: 'Search stories',
                       button: true,
                       child: IconButton(
-                        tooltip: 'AI News Assistant',
-                        onPressed: () => context.push('/ai-chat'),
+                        tooltip: 'Search',
+                        onPressed: () {},
                         icon: Icon(
-                          Icons.auto_awesome_rounded,
-                          color: fx.accent,
+                          Icons.search_rounded,
+                          color: fx.iconFg,
                         ),
                       ),
                     ),
@@ -1262,12 +1360,26 @@ class _DailyhuntFeedAppBar extends StatelessWidget {
                         ),
                       ),
                     ),
+                    GestureDetector(
+                      onTap: onMenuPressed ?? () => XpressoSideMenu.open(context),
+                      child: Container(
+                        width: 30,
+                        height: 30,
+                        margin: const EdgeInsets.only(left: 4, right: 2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: fx.iconSurface,
+                          border: Border.all(color: fx.divider.withValues(alpha: 0.7)),
+                        ),
+                        child: Icon(Icons.person_rounded, size: 16, color: fx.iconFg),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-          Divider(height: 1, thickness: 1, color: fx.onImage.withOpacity(0.08)),
+          Divider(height: 1, thickness: 1, color: fx.onImage.withValues(alpha: 0.08)),
         ],
       ),
     );

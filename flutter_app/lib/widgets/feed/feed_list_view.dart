@@ -3,9 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/models.dart';
 import '../../providers/news_provider.dart';
-import 'dailyhunt_feed_article_card.dart';
 import 'feed_image_cache.dart';
 import 'feed_list_tuning.dart';
+import 'news_card.dart';
 import 'feed_xpresso_theme.dart';
 
 /// Scrollable feed list — isolated from [NewsProvider] rebuilds above the list.
@@ -47,6 +47,16 @@ class FeedListView extends StatefulWidget {
 
 class _FeedListViewState extends State<FeedListView>
     with AutomaticKeepAliveClientMixin {
+  final Map<String, bool> _expandedByPostId = {};
+
+  bool _isExpanded(String postId) => _expandedByPostId[postId] == true;
+
+  void _toggleExpanded(String postId) {
+    setState(() {
+      _expandedByPostId[postId] = !(_expandedByPostId[postId] ?? false);
+    });
+  }
+
   @override
   bool get wantKeepAlive => true;
 
@@ -120,16 +130,17 @@ class _FeedListViewState extends State<FeedListView>
               return const FeedListLoadingFooter();
             }
             final post = widget.posts[index];
-            return DailyhuntFeedArticleCard(
-              key: ValueKey(post.id),
-              post: post,
-              isRead: widget.isPostSeen(post.id),
-              liked: widget.likedByPostId[post.id] ?? false,
-              saved: widget.bookmarkedByPostId[post.id] ?? false,
-              onOpen: () => widget.onOpen(post),
-              onLike: () => widget.onLike(post),
-              onShare: () => widget.onShare(post),
-              onBookmark: () => widget.onBookmark(post),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: NewsCard(
+                key: ValueKey(post.id),
+                post: post,
+                isExpanded: _isExpanded(post.id),
+                onTap: () => widget.onOpen(post),
+                onAIExpand: () => _toggleExpanded(post.id),
+                onShare: () => widget.onShare(post),
+                onBookmark: () => widget.onBookmark(post),
+              ),
             );
           },
           ),
